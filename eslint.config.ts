@@ -8,10 +8,12 @@ export default isentinel(
 		rules: {
 			"max-lines": "off",
 			"max-lines-per-function": "off",
+			"sonar/cognitive-complexity": "off",
+			"sonar/no-duplicate-string": "off",
 		},
 		type: "package",
 	},
 	{
-		ignores: ["src/rules/example-rule/**"],
+		ignores: ["fixtures/**"],
 	},
 );

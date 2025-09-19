@@ -1,3 +1,8 @@
+# Enforce naming conventions for everything across a codebase
+
+💭 This rule requires
+[type information](https://typescript-eslint.io/linting/typed-linting).
+
 <!-- end auto-generated rule header -->
 <!-- Do not manually modify this header. Run: `pnpm eslint-docs` -->
 
@@ -31,14 +36,11 @@ function goodExample() {
 (If the rule has options, describe them here using a table or list. Otherwise,
 remove this section.)
 
-<!-- begin auto-generated rule options list -->
-<!-- end auto-generated rule options list -->
-
 Example configuration with options:
 
 ```json
 {
-	"roblox-ts/example-rule": [
+	"roblox-ts/naming-convention": [
 		"error",
 		{
 			/* optionName: optionValue */

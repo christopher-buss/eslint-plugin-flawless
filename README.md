@@ -170,6 +170,14 @@ pnpm eslint-docs
 ```
 
 <!-- begin auto-generated rules list -->
+
+💭 Requires
+[type information](https://typescript-eslint.io/linting/typed-linting).
+
+| Name                                                              | Description                                                 | 💭  |
+| :---------------------------------------------------------------- | :---------------------------------------------------------- | :-- |
+| [naming-convention](src/rules/naming-convention/documentation.md) | Enforce naming conventions for everything across a codebase | 💭  |
+
 <!-- end auto-generated rules list -->
 
 ## Contributing

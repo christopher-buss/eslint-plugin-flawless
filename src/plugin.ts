@@ -3,6 +3,7 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
+import { namingConvention } from "./rules/naming-convention/rule";
 
 export const PLUGIN_NAME = packageName.replace(/^eslint-plugin-/, "");
 
@@ -27,7 +28,9 @@ export const plugin = {
 		name: PLUGIN_NAME,
 		version: packageVersion,
 	},
-	rules: {},
+	rules: {
+		"naming-convention": namingConvention,
+	},
 } satisfies TSESLint.FlatConfig.Plugin;
 
 export const allRules = getRules(PLUGIN_NAME, plugin.rules);
