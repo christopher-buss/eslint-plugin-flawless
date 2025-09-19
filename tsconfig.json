@@ -1,0 +1,4 @@
+{
+	"extends": "@isentinel/tsconfig/typescript",
+	"exclude": ["src/rules/example-rule/**.*"]
+}

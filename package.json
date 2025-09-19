@@ -1,0 +1,84 @@
+{
+	"name": "eslint-plugin-template-placeholder",
+	"version": "0.0.0",
+	"description": "Your ESLint plugin description",
+	"keywords": ["eslint", "eslint-plugin", "typescript-eslint"],
+	"homepage": "https://github.com/christopher-buss/eslint-plugin-template#readme",
+	"bugs": "https://github.com/christopher-buss/eslint-plugin-template/issues",
+	"repository": {
+		"url": "git+https://github.com/christopher-buss/eslint-plugin-template.git",
+		"type": "git"
+	},
+	"license": "MIT",
+	"author": "Christopher Buss <christopher.buss@pm.me> (https://github.com/christopher-buss)",
+	"sideEffects": false,
+	"type": "module",
+	"exports": {
+		".": "./dist/index.mjs",
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsdown --clean --dts",
+		"create-rule": "tsx scripts/create-rule.ts",
+		"dev": "tsdown --stub",
+		"eslint-docs": "eslint-doc-generator",
+		"posteslint-docs": "nr lint --cache --fix \"**/*.md\"",
+		"lint": "eslint --cache",
+		"lint:ci": "eslint --cache --cache-strategy content",
+		"prepublishOnly": "nr build",
+		"release": "bumpp",
+		"start": "tsx src/index.ts",
+		"test": "vitest",
+		"typecheck": "tsc --noEmit"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+	},
+	"lint-staged": {
+		"*": "eslint --fix --cache"
+	},
+	"dependencies": {
+		"@typescript-eslint/utils": "catalog:cli"
+	},
+	"devDependencies": {
+		"@antfu/ni": "catalog:cli",
+		"@isentinel/eslint-config": "catalog:cli",
+		"@isentinel/tsconfig": "catalog:types",
+		"@types/node": "catalog:types",
+		"@typescript-eslint/eslint-plugin": "catalog:cli",
+		"@typescript-eslint/parser": "catalog:cli",
+		"@vitest/eslint-plugin": "catalog:testing",
+		"bumpp": "catalog:cli",
+		"eslint": "catalog:cli",
+		"eslint-doc-generator": "catalog:utils",
+		"eslint-plugin-eslint-plugin": "catalog:testing",
+		"eslint-plugin-n": "catalog:testing",
+		"eslint-plugin-pnpm": "catalog:cli",
+		"eslint-vitest-rule-tester": "catalog:testing",
+		"jiti": "catalog:cli",
+		"lint-staged": "catalog:cli",
+		"publint": "catalog:testing",
+		"simple-git-hooks": "catalog:cli",
+		"ts-api-utils": "catalog:cli",
+		"tsdown": "catalog:cli",
+		"tsx": "catalog:cli",
+		"typescript": "catalog:cli",
+		"unplugin-unused": "catalog:testing",
+		"vitest": "catalog:testing"
+	},
+	"peerDependencies": {
+		"eslint": ">=9.15.0"
+	},
+	"packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	}
+}
