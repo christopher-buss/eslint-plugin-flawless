@@ -217,6 +217,56 @@ function create(
 		);
 	}
 
+	/**
+	 * Determines if a VariableDeclarator represents an object-style enum declaration.
+	 *
+	 * Object-style enums are const assertions applied to object expressions, commonly
+	 * used as an alternative to TypeScript enums. Examples:
+	 * - `const Colors = { RED: 'red', BLUE: 'blue' } as const`
+	 * - `const Status = <const>{ OK: 200, ERROR: 500 }`.
+	 *
+	 * @param node - The VariableDeclarator AST node to check.
+	 * @param parent - The parent VariableDeclaration node.
+	 * @returns True if this represents an object-style enum declaration.
+	 */
+	function isObjectStyleEnumDeclaration(
+		node: TSESTree.VariableDeclarator,
+		parent: TSESTree.VariableDeclaration,
+	): boolean {
+		// Must be a const declaration
+		if (parent.kind !== "const") {
+			return false;
+		}
+
+		if (!node.init) {
+			return false;
+		}
+
+		// Check for const assertion: `as const`
+		if (
+			node.init.type === AST_NODE_TYPES.TSAsExpression &&
+			node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+			node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+			node.init.typeAnnotation.typeName.name === "const" &&
+			node.init.expression.type === AST_NODE_TYPES.ObjectExpression
+		) {
+			return true;
+		}
+
+		// Check for type assertion: `<const>`
+		if (
+			node.init.type === AST_NODE_TYPES.TSTypeAssertion &&
+			node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+			node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+			node.init.typeAnnotation.typeName.name === "const" &&
+			node.init.expression.type === AST_NODE_TYPES.ObjectExpression
+		) {
+			return true;
+		}
+
+		return false;
+	}
+
 	const selectors: {
 		readonly [k in keyof TSESLint.RuleListener]: Readonly<{
 			handler: (
@@ -660,6 +710,9 @@ function create(
 					baseModifiers.add(Modifier.global);
 				}
 
+				// Check if this is an object-style enum (const assertion)
+				const isObjectStyleEnum = isObjectStyleEnumDeclaration(node, parent);
+
 				for (const id of identifiers) {
 					const modifiers = new Set(baseModifiers);
 
@@ -680,7 +733,13 @@ function create(
 						modifiers.add(Modifier.async);
 					}
 
-					validator(id, modifiers);
+					// Use the appropriate validator based on whether it's an
+					// object-style enum
+					if (isObjectStyleEnum) {
+						validators.objectStyleEnum(id, modifiers);
+					} else {
+						validator(id, modifiers);
+					}
 				}
 			},
 			validator: validators.variable,

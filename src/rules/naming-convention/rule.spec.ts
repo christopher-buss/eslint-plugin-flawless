@@ -978,6 +978,61 @@ const valid: Array<ValidTestCase> = [
 			},
 		],
 	},
+	// objectStyleEnum tests
+	{
+		code: `
+        const COLORS = { RED: 'red', BLUE: 'blue' } as const;
+        const STATUS_CODES = { OK: 200, NOT_FOUND: 404 } as const;
+        const API_ENDPOINTS = { USER: '/api/user', ORDER: '/api/order' } as const;
+      `,
+		options: [
+			{
+				format: ["UPPER_CASE"],
+				selector: "objectStyleEnum",
+			},
+		],
+	},
+	{
+		code: `
+        const Colors = { Red: 'red', Blue: 'blue' } as const;
+        const StatusCodes = { Ok: 200, NotFound: 404 } as const;
+      `,
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: "objectStyleEnum",
+			},
+		],
+	},
+	{
+		code: `
+        const colors = { red: 'red', blue: 'blue' } as const;
+        const statusCodes = { ok: 200, notFound: 404 } as const;
+      `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "objectStyleEnum",
+			},
+		],
+	},
+	{
+		code: `
+        export const GLOBAL_COLORS = { RED: 'red', BLUE: 'blue' } as const;
+        const localColors = { red: 'red', blue: 'blue' } as const;
+      `,
+		options: [
+			{
+				format: ["UPPER_CASE"],
+				modifiers: ["exported"],
+				selector: "objectStyleEnum",
+			},
+			{
+				format: ["camelCase"],
+				selector: "objectStyleEnum",
+			},
+		],
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -2242,6 +2297,57 @@ const invalid: Array<InvalidTestCase> = [
 			{
 				format: ["PascalCase"],
 				selector: ["import"],
+			},
+		],
+	},
+	{
+		code: `
+        const colors = { RED: 'red', BLUE: 'blue' } as const;
+        const statusCodes = { OK: 200, NOT_FOUND: 404 } as const;
+      `,
+		errors: [
+			{
+				data: {
+					formats: "UPPER_CASE",
+					name: "colors",
+					type: "Object Style Enum",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				data: {
+					formats: "UPPER_CASE",
+					name: "statusCodes",
+					type: "Object Style Enum",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{
+				format: ["UPPER_CASE"],
+				selector: "objectStyleEnum",
+			},
+		],
+	},
+	{
+		code: `
+        const colors = { RED: 'red', BLUE: 'blue' } as const;
+      `,
+		errors: [
+			{
+				data: {
+					formats: "UPPER_CASE",
+					name: "colors",
+					type: "Object Style Enum",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{
+				format: ["UPPER_CASE"],
+				selector: "objectStyleEnum",
 			},
 		],
 	},

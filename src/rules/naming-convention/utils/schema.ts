@@ -201,6 +201,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 			]),
 			...selectorSchema("function", false, ["exported", "global", "unused", "async"]),
 			...selectorSchema("parameter", true, ["destructured", "unused"]),
+			...selectorSchema("objectStyleEnum", false, ["const", "exported", "global", "unused"]),
 
 			...selectorSchema("memberLike", false, [
 				"abstract",

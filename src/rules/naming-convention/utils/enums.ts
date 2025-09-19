@@ -6,28 +6,29 @@ export const Selector = {
 	variable: 1,
 	function: 2,
 	parameter: 4,
+	objectStyleEnum: 8,
 
 	// memberLike
-	parameterProperty: 8,
-	classicAccessor: 16,
-	enumMember: 32,
-	classMethod: 64,
-	objectLiteralMethod: 128,
-	typeMethod: 256,
-	classProperty: 512,
-	objectLiteralProperty: 1024,
-	typeProperty: 2048,
-	autoAccessor: 4096,
+	parameterProperty: 16,
+	classicAccessor: 32,
+	enumMember: 64,
+	classMethod: 128,
+	objectLiteralMethod: 256,
+	typeMethod: 512,
+	classProperty: 1024,
+	objectLiteralProperty: 2048,
+	typeProperty: 4096,
+	autoAccessor: 8192,
 
 	// typeLike
-	class: 8192,
-	interface: 16384,
-	typeAlias: 32768,
-	enum: 65536,
-	typeParameter: 131072,
+	class: 16384,
+	interface: 32768,
+	typeAlias: 65536,
+	enum: 131072,
+	typeParameter: 262144,
 
 	// other
-	import: 262144,
+	import: 524288,
 } as const;
 
 export type SelectorString = keyof typeof Selector;
@@ -36,12 +37,12 @@ export type SelectorType = (typeof Selector)[keyof typeof Selector];
 export const MetaSelector = {
 	/* eslint-disable no-inline-comments -- Comments improve readability here */
 	default: -1,
-	variableLike: 7, // 0 | 1 | 2 | 4
-	memberLike: 8184, // 0 | 512 | 1024 | 2048 | 8 | 32 | 64 | 128 | 256 | 16 | 4096
-	typeLike: 253952, // 0 | 8192 | 16384 | 32768 | 65536 | 131072
-	method: 448, // 0 | 64 | 128 | 256
-	property: 3584, // 0 | 512 | 1024 | 2048
-	accessor: 4112, // 0 | 16 | 4096
+	variableLike: 15, // 0 | 1 | 2 | 4 | 8
+	memberLike: 16368, // 0 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192
+	typeLike: 507904, // 0 | 16384 | 32768 | 65536 | 131072 | 262144
+	method: 896, // 0 | 128 | 256 | 512
+	property: 7168, // 0 | 1024 | 2048 | 4096
+	accessor: 8224, // 0 | 32 | 8192
 	/* eslint-enable no-inline-comments */
 } as const;
 
