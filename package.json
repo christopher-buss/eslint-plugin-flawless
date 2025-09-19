@@ -1,12 +1,12 @@
 {
-	"name": "eslint-plugin-template-placeholder",
+	"name": "eslint-plugin-flawless",
 	"version": "0.0.0",
 	"description": "Your ESLint plugin description",
 	"keywords": ["eslint", "eslint-plugin", "typescript-eslint"],
-	"homepage": "https://github.com/christopher-buss/eslint-plugin-template#readme",
-	"bugs": "https://github.com/christopher-buss/eslint-plugin-template/issues",
+	"homepage": "https://github.com/christopher-buss/eslint-plugin-flawless#readme",
+	"bugs": "https://github.com/christopher-buss/eslint-plugin-flawless/issues",
 	"repository": {
-		"url": "git+https://github.com/christopher-buss/eslint-plugin-template.git",
+		"url": "git+https://github.com/christopher-buss/eslint-plugin-flawless.git",
 		"type": "git"
 	},
 	"license": "MIT",
