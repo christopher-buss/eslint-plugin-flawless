@@ -1033,6 +1033,86 @@ const valid: Array<ValidTestCase> = [
 			},
 		],
 	},
+	// Interface implementation should allow any naming format
+	{
+		code: `
+        interface ILogEventSink {
+          Emit(message: any): void;
+          Process(data: string): string;
+        }
+
+        class LogEventOutputSink implements ILogEventSink {
+          public Emit(message: any): void {
+            console.log(message);
+          }
+
+          public Process(data: string): string {
+            return data.toUpperCase();
+          }
+        }
+      `,
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
+			},
+		],
+	},
+	// Multiple interface implementation
+	{
+		code: `
+        interface IDisposable {
+          Dispose(): void;
+        }
+
+        interface ILogger {
+          LogInfo(message: string): void;
+          LogError(error: Error): void;
+        }
+
+        class FileLogger implements IDisposable, ILogger {
+          public Dispose(): void {}
+          public LogInfo(message: string): void {}
+          public LogError(error: Error): void {}
+
+          // Regular methods should still follow naming rules
+          private formatMessage(msg: string): string {
+            return msg;
+          }
+        }
+      `,
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
+			},
+		],
+	},
+	// Interface with generic methods
+	{
+		code: `
+        interface IRepository<T> {
+          GetById(id: string): T | null;
+          SaveEntity(entity: T): void;
+        }
+
+        class UserRepository implements IRepository<User> {
+          public GetById(id: string): User | null {
+            return null;
+          }
+
+          public SaveEntity(entity: User): void {
+            // save logic
+          }
+        }
+      `,
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
+			},
+		],
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -2348,6 +2428,64 @@ const invalid: Array<InvalidTestCase> = [
 			{
 				format: ["UPPER_CASE"],
 				selector: "objectStyleEnum",
+			},
+		],
+	},
+	// Regular class methods should still fail naming validation
+	{
+		code: `
+        class RegularClass {
+          public ProcessData(data: string): string {
+            return data;
+          }
+
+          private FormatMessage(msg: string): string {
+            return msg.toLowerCase();
+          }
+        }
+      `,
+		errors: [
+			{
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
+			},
+		],
+	},
+	// Class implementing interface - only non-interface methods should fail
+	{
+		code: `
+        interface IProcessor {
+          ProcessData(data: string): string;
+        }
+
+        class DataProcessor implements IProcessor {
+          public ProcessData(data: string): string {
+            return this.FormatData(data);
+          }
+
+          // This method is NOT from interface - should fail
+          private FormatData(data: string): string {
+            return data.toLowerCase();
+          }
+        }
+      `,
+		errors: [
+			{
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
 			},
 		],
 	},

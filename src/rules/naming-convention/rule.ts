@@ -267,6 +267,98 @@ function create(
 		return false;
 	}
 
+	/**
+	 * Checks if a method name exists in any of the implemented interfaces.
+	 *
+	 * @param implementsList - List of implemented interfaces.
+	 * @param methodName - Name of the method to check.
+	 * @param checker - TypeScript type checker.
+	 * @param services - Parser services.
+	 * @returns True if the method name is found in any interface.
+	 */
+	function checkInterfacesForMethod(
+		implementsList: Array<TSESTree.TSClassImplements>,
+		methodName: string,
+		checker: import("typescript").TypeChecker,
+		services: ReturnType<typeof getParserServices>,
+	): boolean {
+		for (const implementsClause of implementsList) {
+			const interfaceType = checker.getTypeAtLocation(
+				services.esTreeNodeToTSNodeMap.get(implementsClause),
+			);
+			const interfaceSymbol = interfaceType.getSymbol();
+
+			if (!interfaceSymbol) {
+				continue;
+			}
+
+			const interfaceMembers = checker.getPropertiesOfType(interfaceType);
+
+			for (const member of interfaceMembers) {
+				if (member.name === methodName) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Determines if a class method is implementing an interface method.
+	 *
+	 * @param node - The class method node to check.
+	 * @returns True if the method is implementing an interface method.
+	 */
+	function isImplementingInterfaceMethod(
+		node:
+			| TSESTree.MethodDefinitionNonComputedName
+			| TSESTree.PropertyDefinitionNonComputedName
+			| TSESTree.TSAbstractMethodDefinitionNonComputedName
+			| TSESTree.TSAbstractPropertyDefinitionNonComputedName,
+	): boolean {
+		const services = getParserServices(context, true);
+		if (!services.program) {
+			return false;
+		}
+
+		const checker = services.program.getTypeChecker();
+
+		// Find the class that contains this method
+		let parentClass: null | TSESTree.ClassDeclaration | TSESTree.ClassExpression = null;
+		let current: TSESTree.Node | undefined = node.parent as TSESTree.Node | undefined;
+
+		while (current) {
+			if (
+				current.type === AST_NODE_TYPES.ClassDeclaration ||
+				current.type === AST_NODE_TYPES.ClassExpression
+			) {
+				parentClass = current;
+				break;
+			}
+
+			current = current.parent;
+		}
+
+		if (!parentClass?.implements || parentClass.implements.length === 0) {
+			return false;
+		}
+
+		// Get the method name
+		let methodName: null | string = null;
+		if (node.key.type === AST_NODE_TYPES.Identifier) {
+			methodName = node.key.name;
+		} else if (node.key.type === AST_NODE_TYPES.Literal) {
+			methodName = String(node.key.value);
+		}
+
+		if (methodName === null) {
+			return false;
+		}
+
+		return checkInterfacesForMethod(parentClass.implements, methodName, checker, services);
+	}
+
 	const selectors: {
 		readonly [k in keyof TSESLint.RuleListener]: Readonly<{
 			handler: (
@@ -342,6 +434,12 @@ function create(
 					| TSESTree.TSAbstractPropertyDefinitionNonComputedName,
 				validator,
 			): void => {
+				// Skip naming validation if this method is implementing an
+				// interface method
+				if (isImplementingInterfaceMethod(node)) {
+					return;
+				}
+
 				const modifiers = getMemberModifiers(node);
 
 				if (isAsyncMemberOrProperty(node)) {
