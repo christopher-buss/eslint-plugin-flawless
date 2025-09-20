@@ -1,6 +1,6 @@
 {
 	"name": "eslint-plugin-flawless",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Your ESLint plugin description",
 	"keywords": ["eslint", "eslint-plugin", "typescript-eslint"],
 	"homepage": "https://github.com/christopher-buss/eslint-plugin-flawless#readme",
