@@ -11,6 +11,10 @@ shellEmulator: true
 packages:
   - "src/*"
 
+overrides:
+  eslint-plugin-flawless: link:.
+  eslint-plugin-yml: catalog:testing
+
 catalogs:
   cli:
     "@antfu/ni": 30.2.0
@@ -21,7 +25,7 @@ catalogs:
     "@typescript-eslint/type-utils": 8.62.1
     "@typescript-eslint/utils": 8.62.1
     bumpp: 11.1.0
-    eslint: 9.35.0
+    eslint: 9.39.4
     eslint-plugin-pnpm: 1.6.1
     jiti: 2.7.0
     lint-staged: 17.0.8
@@ -34,10 +38,12 @@ catalogs:
     "@vitest/eslint-plugin": 1.6.20
     eslint-plugin-eslint-plugin: 7.4.1
     eslint-plugin-n: 18.2.1
+    eslint-plugin-yml: 3.5.0
     eslint-vitest-rule-tester: 3.1.0
     publint: 0.3.21
     unplugin-unused: 0.5.7
     vitest: 4.1.9
+    yaml-eslint-parser: 2.0.0
   types:
     "@isentinel/tsconfig": 1.2.0
     "@types/node": 24.0.13

@@ -4,6 +4,7 @@ import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
 import { namingConvention } from "./rules/naming-convention/rule";
+import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
 
 export const PLUGIN_NAME = packageName.replace(/^eslint-plugin-/, "");
 
@@ -30,6 +31,7 @@ export const plugin = {
 	},
 	rules: {
 		"naming-convention": namingConvention,
+		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
 	},
 } satisfies TSESLint.FlatConfig.Plugin;
 

@@ -66,6 +66,7 @@
 		"eslint-plugin-eslint-plugin": "catalog:testing",
 		"eslint-plugin-n": "catalog:testing",
 		"eslint-plugin-pnpm": "catalog:cli",
+		"eslint-plugin-yml": "catalog:testing",
 		"eslint-vitest-rule-tester": "catalog:testing",
 		"jiti": "catalog:cli",
 		"lint-staged": "catalog:cli",
@@ -76,7 +77,8 @@
 		"tsx": "catalog:cli",
 		"typescript": "catalog:cli",
 		"unplugin-unused": "catalog:testing",
-		"vitest": "catalog:testing"
+		"vitest": "catalog:testing",
+		"yaml-eslint-parser": "catalog:testing"
 	},
 	"peerDependencies": {
 		"eslint": ">=9.15.0"

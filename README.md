@@ -171,12 +171,15 @@ pnpm eslint-docs
 
 <!-- begin auto-generated rules list -->
 
-💭 Requires
-[type information](https://typescript-eslint.io/linting/typed-linting).
+🔧 Automatically fixable by the
+[`--fix` CLI option](https://eslint.org/docs/user-guide/command-line-interface#--fix).\
+💭
+Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 
-| Name                                                              | Description                                                 | 💭  |
-| :---------------------------------------------------------------- | :---------------------------------------------------------- | :-- |
-| [naming-convention](src/rules/naming-convention/documentation.md) | Enforce naming conventions for everything across a codebase | 💭  |
+| Name                                                                                | Description                                                     | 🔧  | 💭  |
+| :---------------------------------------------------------------------------------- | :-------------------------------------------------------------- | :-- | :-- |
+| [naming-convention](src/rules/naming-convention/documentation.md)                   | Enforce naming conventions for everything across a codebase     |     | 💭  |
+| [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md) | Enforce blank lines around top-level YAML block collection keys | 🔧  |     |
 
 <!-- end auto-generated rules list -->
 

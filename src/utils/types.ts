@@ -1,0 +1,8 @@
+import type { YAMLSourceCode } from "eslint-plugin-yml";
+
+import type { RuleContextWithSourceCode } from "../util";
+
+export type YamlContext<
+	MessageIds extends string,
+	Options extends ReadonlyArray<unknown>,
+> = RuleContextWithSourceCode<MessageIds, Options, YAMLSourceCode>;
