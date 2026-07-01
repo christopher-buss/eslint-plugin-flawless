@@ -48,6 +48,7 @@
 		"*": "eslint --fix --cache"
 	},
 	"dependencies": {
+		"@eslint-react/core": "catalog:cli",
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
 		"@typescript-eslint/utils": "catalog:cli",
