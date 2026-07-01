@@ -50,7 +50,8 @@
 	"dependencies": {
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
-		"@typescript-eslint/utils": "catalog:cli"
+		"@typescript-eslint/utils": "catalog:cli",
+		"toml-eslint-parser": "catalog:testing"
 	},
 	"devDependencies": {
 		"@antfu/ni": "catalog:cli",
@@ -66,6 +67,7 @@
 		"eslint-plugin-eslint-plugin": "catalog:testing",
 		"eslint-plugin-n": "catalog:testing",
 		"eslint-plugin-pnpm": "catalog:cli",
+		"eslint-plugin-toml": "catalog:testing",
 		"eslint-plugin-yml": "catalog:testing",
 		"eslint-vitest-rule-tester": "catalog:testing",
 		"jiti": "catalog:cli",

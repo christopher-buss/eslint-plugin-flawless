@@ -4,7 +4,7 @@ export default defineConfig({
 	clean: true,
 	deps: {
 		alwaysBundle: ["ts-api-utils"],
-		neverBundle: ["@typescript-eslint/utils", "typescript"],
+		neverBundle: ["@typescript-eslint/utils", "toml-eslint-parser", "typescript"],
 	},
 	entry: ["src/index.ts"],
 	fixedExtension: true,

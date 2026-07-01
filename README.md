@@ -179,6 +179,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | Name                                                                                | Description                                                     | 🔧  | 💭  |
 | :---------------------------------------------------------------------------------- | :-------------------------------------------------------------- | :-- | :-- |
 | [naming-convention](src/rules/naming-convention/documentation.md)                   | Enforce naming conventions for everything across a codebase     |     | 💭  |
+| [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                         | Enforce a configured sort order for TOML keys and tables        | 🔧  |     |
 | [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md) | Enforce blank lines around top-level YAML block collection keys | 🔧  |     |
 
 <!-- end auto-generated rules list -->

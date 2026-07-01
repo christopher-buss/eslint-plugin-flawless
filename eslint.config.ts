@@ -27,6 +27,17 @@ export default isentinel(
 		},
 	},
 	{
+		files: ["**/mise.toml", "**/.mise.toml", "**/.config/mise/config.toml"],
+		rules: {
+			"flawless/toml-sort-keys": [
+				"error",
+				{ order: ["env", "vars", "settings", "tools"], pathPattern: "^$" },
+				{ order: ["experimental", "lockfile"], pathPattern: "^settings$" },
+				{ order: { natural: true, type: "asc" }, pathPattern: ".*" },
+			],
+		},
+	},
+	{
 		// Documentation code fences intentionally show incorrect YAML samples.
 		files: ["**/*.md/**"],
 		rules: {

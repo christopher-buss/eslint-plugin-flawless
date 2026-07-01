@@ -67,12 +67,18 @@ catalogs:
     eslint-plugin-n:
       specifier: 18.2.1
       version: 18.2.1
+    eslint-plugin-toml:
+      specifier: 1.4.0
+      version: 1.4.0
     eslint-vitest-rule-tester:
       specifier: 3.1.0
       version: 3.1.0
     publint:
       specifier: 0.3.21
       version: 0.3.21
+    toml-eslint-parser:
+      specifier: 1.0.3
+      version: 1.0.3
     unplugin-unused:
       specifier: 0.5.7
       version: 0.5.7
@@ -111,6 +117,9 @@ importers:
       '@typescript-eslint/utils':
         specifier: catalog:cli
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
+      toml-eslint-parser:
+        specifier: catalog:testing
+        version: 1.0.3
     devDependencies:
       '@antfu/ni':
         specifier: catalog:cli
@@ -151,6 +160,9 @@ importers:
       eslint-plugin-pnpm:
         specifier: catalog:cli
         version: 1.6.1(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-toml:
+        specifier: catalog:testing
+        version: 1.4.0(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-yml:
         specifier: 3.5.0
         version: 3.5.0(eslint@9.39.4(jiti@2.7.0))
@@ -2405,6 +2417,12 @@ packages:
 
   eslint-plugin-toml@1.1.1:
     resolution: {integrity: sha512-Gg7wxVIYe2bJ1GqcOxmkVqdd1ScE2U3Ia3Q7RLgBhV9NVhAfkFaAOCRwRAAJ2TkbM/dQmXvNuFmAPx4y5XqIHA==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+    peerDependencies:
+      eslint: '>=9.38.0'
+
+  eslint-plugin-toml@1.4.0:
+    resolution: {integrity: sha512-3ErTnfUjXq/23f72XeyRcE0Y4Sd/ME1lsZeezczqpn2R4tE7+Sgco/NUKDXm0xAMz15tzcRz/9RfJRm6AqRO+A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
     peerDependencies:
       eslint: '>=9.38.0'
@@ -5920,6 +5938,17 @@ snapshots:
       '@eslint/core': 1.2.1
       '@eslint/plugin-kit': 0.6.1
       '@ota-meshi/ast-token-store': 0.2.3
+      debug: 4.4.3
+      eslint: 9.39.4(jiti@2.7.0)
+      toml-eslint-parser: 1.0.3
+    transitivePeerDependencies:
+      - supports-color
+
+  eslint-plugin-toml@1.4.0(eslint@9.39.4(jiti@2.7.0)):
+    dependencies:
+      '@eslint/core': 1.2.1
+      '@eslint/plugin-kit': 0.7.2
+      '@ota-meshi/ast-token-store': 0.3.0
       debug: 4.4.3
       eslint: 9.39.4(jiti@2.7.0)
       toml-eslint-parser: 1.0.3
