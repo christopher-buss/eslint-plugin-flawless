@@ -3,6 +3,8 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
+import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
+import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
@@ -31,6 +33,8 @@ export const plugin = {
 		version: packageVersion,
 	},
 	rules: {
+		"jsx-shorthand-boolean": jsxShorthandBoolean,
+		"jsx-shorthand-fragment": jsxShorthandFragment,
 		"naming-convention": namingConvention,
 		"toml-sort-keys": tomlSortKeys,
 		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
