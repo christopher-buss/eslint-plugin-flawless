@@ -9,6 +9,7 @@ const config: GenerateOptions = {
 	ignoreDeprecatedRules: true,
 	pathRuleDoc: "./src/rules/{name}/documentation.md",
 	pathRuleList: "./README.md",
+	ruleDocSectionOptions: false,
 	ruleDocTitleFormat: "desc",
 	ruleListColumns: ["name", "description", "fixable", "hasSuggestions", "requiresTypeChecking"],
 	urlConfigs: repoUrl,

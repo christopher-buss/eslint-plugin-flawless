@@ -100,36 +100,36 @@ export function createValidator(
 
 			let name: string | undefined = originalName;
 
-			name = validateUnderscore({ config, name, node, originalName, position: "leading" });
+			name = validateUnderscore({ name, config, node, originalName, position: "leading" });
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateUnderscore({ config, name, node, originalName, position: "trailing" });
+			name = validateUnderscore({ name, config, node, originalName, position: "trailing" });
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateAffix({ config, name, node, originalName, position: "prefix" });
+			name = validateAffix({ name, config, node, originalName, position: "prefix" });
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateAffix({ config, name, node, originalName, position: "suffix" });
+			name = validateAffix({ name, config, node, originalName, position: "suffix" });
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			if (!validateCustom({ config, name, node, originalName })) {
+			if (!validateCustom({ name, config, node, originalName })) {
 				// fail
 				return;
 			}
 
-			if (!validatePredefinedFormat({ config, modifiers, name, node, originalName })) {
+			if (!validatePredefinedFormat({ name, config, modifiers, node, originalName })) {
 				// fail
 				return;
 			}
@@ -165,12 +165,12 @@ export function createValidator(
 		}
 
 		return {
+			name: originalName,
 			affixes: affixes?.join(", "),
 			count,
 			formats: formats
 				?.map((formatItem) => PredefinedFormatValueToKey[formatItem])
 				.join(", "),
-			name: originalName,
 			position,
 			processedName,
 			regex: custom?.regex.toString(),
@@ -180,8 +180,8 @@ export function createValidator(
 	}
 
 	function validateUnderscore({
-		config,
 		name,
+		config,
 		node,
 		originalName,
 		position,
@@ -293,8 +293,8 @@ export function createValidator(
 	}
 
 	function validateAffix({
-		config,
 		name,
+		config,
 		node,
 		originalName,
 		position,
@@ -337,8 +337,8 @@ export function createValidator(
 	}
 
 	function validateCustom({
-		config,
 		name,
+		config,
 		node,
 		originalName,
 	}: {
@@ -374,9 +374,9 @@ export function createValidator(
 	}
 
 	function validatePredefinedFormat({
+		name,
 		config,
 		modifiers,
-		name,
 		node,
 		originalName,
 	}: {

@@ -6,10 +6,10 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import { createEslintRule } from "src/util";
-import { collectVariables } from "src/utils/collect-variables";
 import type { ScriptTarget } from "typescript";
 
+import { createEslintRule } from "../../util";
+import { collectVariables } from "../../utils/collect-variables";
 import {
 	type Context,
 	type NamingSelector,
@@ -200,9 +200,9 @@ function create(
 	): boolean {
 		return Boolean(
 			"value" in propertyOrMemberNode &&
-				propertyOrMemberNode.value &&
-				"async" in propertyOrMemberNode.value &&
-				propertyOrMemberNode.value.async,
+			propertyOrMemberNode.value &&
+			"async" in propertyOrMemberNode.value &&
+			propertyOrMemberNode.value.async,
 		);
 	}
 
@@ -210,10 +210,10 @@ function create(
 	function isAsyncVariableIdentifier(id: TSESTree.Identifier): boolean {
 		return Boolean(
 			("async" in id.parent && id.parent.async) ||
-				("init" in id.parent &&
-					id.parent.init &&
-					"async" in id.parent.init &&
-					id.parent.init.async),
+			("init" in id.parent &&
+				id.parent.init &&
+				"async" in id.parent.init &&
+				id.parent.init.async),
 		);
 	}
 
@@ -326,8 +326,9 @@ function create(
 
 		// Find the class that contains this method
 		let parentClass: null | TSESTree.ClassDeclaration | TSESTree.ClassExpression = null;
-		let current: TSESTree.Node | undefined = node.parent as TSESTree.Node | undefined;
+		let current: TSESTree.Node | undefined = node.parent;
 
+		// eslint-disable-next-line ts/no-unnecessary-condition, ts/strict-boolean-expressions -- Incorrect type narrowing
 		while (current) {
 			if (
 				current.type === AST_NODE_TYPES.ClassDeclaration ||
@@ -504,7 +505,7 @@ function create(
 				node: TSESTree.ClassDeclaration | TSESTree.ClassExpression,
 				validator,
 			): void => {
-				const { abstract, id } = node;
+				const { id, abstract } = node;
 				if (id === null) {
 					return;
 				}
@@ -851,7 +852,8 @@ function create(
 			return [
 				selector,
 				(node: Parameters<typeof handler>[0]): void => {
-					handler(node, validator);
+					// eslint-disable-next-line ts/no-unnecessary-type-assertion -- Breaks otherwise
+					handler(node as never, validator);
 				},
 			] as const;
 		}),
@@ -859,6 +861,7 @@ function create(
 }
 
 export const namingConvention = createEslintRule<Options, MessageIds>({
+	name: RULE_NAME,
 	create,
 	defaultOptions: camelCaseNamingConfig,
 	meta: {
@@ -873,14 +876,15 @@ export const namingConvention = createEslintRule<Options, MessageIds>({
 		schema: SCHEMA,
 		type: "suggestion",
 	},
-	name: RULE_NAME,
 });
 
 function getIdentifiersFromPattern(
 	pattern: TSESTree.DestructuringPattern,
 ): Array<TSESTree.Identifier> {
 	const identifiers: Array<TSESTree.Identifier> = [];
-	const visitor = new PatternVisitor({}, pattern, (id) => identifiers.push(id));
+	const visitor = new PatternVisitor({}, pattern, (id) => {
+		identifiers.push(id);
+	});
 	visitor.visit(pattern);
 	return identifiers;
 }

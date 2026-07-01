@@ -93,7 +93,6 @@ export const PredefinedFormat = {
 	strictCamelCase: 2,
 	PascalCase: 3,
 	StrictPascalCase: 4,
-	// eslint-disable-next-line camelcase -- Formatted in snake_case
 	snake_case: 5,
 	UPPER_CASE: 6,
 } as const;

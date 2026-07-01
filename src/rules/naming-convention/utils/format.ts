@@ -14,6 +14,10 @@ import { PredefinedFormat, type PredefinedFormatType } from "./enums";
 // that use non-english characters. https://gist.github.com/mathiasbynens/6334847
 //
 
+function isUppercaseChar(char: string): boolean {
+	return char === char.toUpperCase() && char !== char.toLowerCase();
+}
+
 function hasStrictCamelHumps(name: string, isUpper: boolean): boolean {
 	if (name.startsWith("_")) {
 		return false;
@@ -46,31 +50,6 @@ function isPascalCase(name: string): boolean {
 	return name.length === 0 || (name[0] === name[0]?.toUpperCase() && !name.includes("_"));
 }
 
-function isSnakeCase(name: string): boolean {
-	return name.length === 0 || (name === name.toLowerCase() && validateUnderscores(name));
-}
-
-function isStrictCamelCase(name: string): boolean {
-	return (
-		name.length === 0 ||
-		(name[0] === name[0]?.toLowerCase() && hasStrictCamelHumps(name, false))
-	);
-}
-
-function isStrictPascalCase(name: string): boolean {
-	return (
-		name.length === 0 || (name[0] === name[0]?.toUpperCase() && hasStrictCamelHumps(name, true))
-	);
-}
-
-function isUpperCase(name: string): boolean {
-	return name.length === 0 || (name === name.toUpperCase() && validateUnderscores(name));
-}
-
-function isUppercaseChar(char: string): boolean {
-	return char === char.toUpperCase() && char !== char.toLowerCase();
-}
-
 /**
  * Check for leading trailing and adjacent underscores.
  * @param name - The name to check.
@@ -95,6 +74,27 @@ function validateUnderscores(name: string): boolean {
 	}
 
 	return !wasUnderscore;
+}
+
+function isSnakeCase(name: string): boolean {
+	return name.length === 0 || (name === name.toLowerCase() && validateUnderscores(name));
+}
+
+function isStrictCamelCase(name: string): boolean {
+	return (
+		name.length === 0 ||
+		(name[0] === name[0]?.toLowerCase() && hasStrictCamelHumps(name, false))
+	);
+}
+
+function isStrictPascalCase(name: string): boolean {
+	return (
+		name.length === 0 || (name[0] === name[0]?.toUpperCase() && hasStrictCamelHumps(name, true))
+	);
+}
+
+function isUpperCase(name: string): boolean {
+	return name.length === 0 || (name === name.toUpperCase() && validateUnderscores(name));
 }
 
 export const FormatCheckersMap: Readonly<Record<PredefinedFormatType, (name: string) => boolean>> =

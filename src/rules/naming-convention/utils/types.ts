@@ -69,8 +69,8 @@ export interface NormalizedSelector {
 	trailingUnderscore: undefined | UnderscoreOptionType;
 	types: Array<TypeModifierType> | undefined;
 }
-export type ParsedOptions = Record<SelectorString, ValidatorFunction>;
 export type ValidatorFunction = (
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,
 	modifiers?: Set<ModifierType>,
 ) => void;
+export type ParsedOptions = Record<SelectorString, ValidatorFunction>;

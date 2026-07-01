@@ -122,19 +122,19 @@ class UnusedVariablesVisitor extends Visitor {
 	}
 
 	protected TSParameterProperty(node: TSESTree.TSParameterProperty): void {
-		let identifier: TSESTree.Identifier | undefined;
-
-		if (node.parameter.type === AST_NODE_TYPES.AssignmentPattern) {
-			if (node.parameter.left.type === AST_NODE_TYPES.Identifier) {
+		let identifier: TSESTree.Identifier;
+		switch (node.parameter.type) {
+			case AST_NODE_TYPES.AssignmentPattern: {
 				identifier = node.parameter.left;
+				break;
 			}
-		} else if (node.parameter.type === AST_NODE_TYPES.Identifier) {
-			identifier = node.parameter;
+			case AST_NODE_TYPES.Identifier: {
+				identifier = node.parameter;
+				break;
+			}
 		}
 
-		if (identifier) {
-			this.markVariableAsUsed(identifier);
-		}
+		this.markVariableAsUsed(identifier);
 	}
 
 	private collectUnusedVariables({

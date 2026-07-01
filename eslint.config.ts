@@ -8,6 +8,8 @@ export default isentinel(
 		rules: {
 			"max-lines": "off",
 			"max-lines-per-function": "off",
+			"package-json/require-bin": "off",
+			"package-json/restrict-top-level-properties": "off",
 			"sonar/cognitive-complexity": "off",
 			"sonar/no-duplicate-string": "off",
 		},

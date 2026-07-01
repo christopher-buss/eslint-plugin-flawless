@@ -2,11 +2,13 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
 	clean: true,
+	deps: {
+		alwaysBundle: ["ts-api-utils"],
+		neverBundle: ["@typescript-eslint/utils", "typescript"],
+	},
 	entry: ["src/index.ts"],
-	external: ["@typescript-eslint/utils", "typescript"],
 	fixedExtension: true,
 	format: ["esm"],
-	noExternal: ["ts-api-utils"],
 	onSuccess() {
 		console.info("🙏 Build succeeded!");
 	},

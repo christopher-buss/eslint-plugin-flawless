@@ -571,7 +571,7 @@ const valid: Array<ValidTestCase> = [
 	{
 		code: `
         class Ignored {
-          private static abstract some_name() {}
+          private static abstract some_name();
           IgnoredDueToModifiers() {}
         }
       `,
@@ -814,12 +814,8 @@ const valid: Array<ValidTestCase> = [
           }
         }
         abstract class foo {
-          public abstract Bar() {
-            return 42;
-          }
-          public abstract async async_bar() {
-            return 42;
-          }
+          public abstract Bar();
+          public abstract async async_bar();
         }
       `,
 		options: [
@@ -1344,8 +1340,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "camelCase",
 					name: "unused_foo",
+					formats: "camelCase",
 					type: "Variable",
 				},
 				line: 2,
@@ -1353,8 +1349,8 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{
 				data: {
-					formats: "camelCase",
 					name: "_unused_foo",
+					formats: "camelCase",
 					processedName: "unused_foo",
 					type: "Variable",
 				},
@@ -1363,8 +1359,8 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{
 				data: {
-					formats: "camelCase",
 					name: "foo_bar",
+					formats: "camelCase",
 					type: "Function",
 				},
 				line: 4,
@@ -1416,8 +1412,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "strictCamelCase",
 					name: "Property Name",
+					formats: "strictCamelCase",
 					type: "Object Literal Property",
 				},
 				line: 3,
@@ -1724,7 +1720,7 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		code: `
         class Ignored {
-          private static abstract some_name() {}
+          private static abstract some_name();
           IgnoredDueToModifiers() {}
         }
       `,
@@ -1899,32 +1895,32 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "asyncBar",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar2",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar3",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "ASYNC_BAR",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
@@ -1972,24 +1968,24 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar",
+					formats: "snake_case",
 					type: "Object Literal Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar2",
+					formats: "snake_case",
 					type: "Object Literal Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar3",
+					formats: "snake_case",
 					type: "Object Literal Method",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2028,16 +2024,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "AsyncBar1",
+					formats: "snake_case",
 					type: "Variable",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "asyncBar5",
+					formats: "snake_case",
 					type: "Variable",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2072,16 +2068,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "asyncBar2",
+					formats: "snake_case",
 					type: "Function",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "ASYNC_BAR4",
+					formats: "snake_case",
 					type: "Function",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2111,8 +2107,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "someAttributeOverride",
+					formats: "snake_case",
 					type: "Class Property",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2145,8 +2141,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "someMethodOverride",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2180,16 +2176,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "snake_case",
 					name: "someGetterOverride",
+					formats: "snake_case",
 					type: "Classic Accessor",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "someSetterOverride",
+					formats: "snake_case",
 					type: "Classic Accessor",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2221,16 +2217,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "camelCase",
 					name: "first_private_field",
+					formats: "camelCase",
 					type: "Class Property",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "secondPrivateField",
+					formats: "snake_case",
 					type: "Class Property",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2262,16 +2258,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "camelCase",
 					name: "first_private_method",
+					formats: "camelCase",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "snake_case",
 					name: "secondPrivateMethod",
+					formats: "snake_case",
 					type: "Class Method",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2294,8 +2290,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "PascalCase",
 					name: "fooBar",
+					formats: "PascalCase",
 					type: "Import",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2318,8 +2314,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "camelCase",
 					name: "FooBar",
+					formats: "camelCase",
 					type: "Import",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2342,8 +2338,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "camelCase",
 					name: "foo_bar",
+					formats: "camelCase",
 					type: "Import",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2366,8 +2362,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "PascalCase",
 					name: "foo",
+					formats: "PascalCase",
 					type: "Import",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2388,16 +2384,16 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "UPPER_CASE",
 					name: "colors",
+					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
-					formats: "UPPER_CASE",
 					name: "statusCodes",
+					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2417,8 +2413,8 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					formats: "UPPER_CASE",
 					name: "colors",
+					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
 				messageId: "doesNotMatchFormat",
@@ -2492,8 +2488,8 @@ const invalid: Array<InvalidTestCase> = [
 ];
 
 run({
-	invalid,
 	name: RULE_NAME,
+	invalid,
 	rule: namingConvention,
 	valid,
 });

@@ -2,7 +2,11 @@
 	"name": "eslint-plugin-flawless",
 	"version": "0.1.0",
 	"description": "Your ESLint plugin description",
-	"keywords": ["eslint", "eslint-plugin", "typescript-eslint"],
+	"keywords": [
+		"eslint",
+		"eslint-plugin",
+		"typescript-eslint"
+	],
 	"homepage": "https://github.com/christopher-buss/eslint-plugin-flawless#readme",
 	"bugs": "https://github.com/christopher-buss/eslint-plugin-flawless/issues",
 	"repository": {
@@ -20,7 +24,9 @@
 	"main": "./dist/index.mjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"scripts": {
 		"build": "tsdown --clean --dts",
 		"create-rule": "tsx scripts/create-rule.ts",
@@ -75,12 +81,11 @@
 	"peerDependencies": {
 		"eslint": ">=9.15.0"
 	},
-	"packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
+	"packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=24.12.0"
 	},
 	"publishConfig": {
-		"access": "public",
 		"provenance": true
 	}
 }

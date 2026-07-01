@@ -1,5 +1,7 @@
 # Enforce naming conventions for everything across a codebase
 
+📝 Enforce naming conventions for everything across a codebase.
+
 💭 This rule requires
 [type information](https://typescript-eslint.io/linting/typed-linting).
 

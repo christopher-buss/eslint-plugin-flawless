@@ -9,7 +9,7 @@ export default {
 };
 
 export type RuleOptions = {
-	[K in keyof RuleDefinitions]: RuleDefinitions[K]["defaultOptions"];
+	[K in keyof RuleDefinitions]: NonNullable<RuleDefinitions[K]["defaultOptions"]>;
 };
 
 export type Rules = {
