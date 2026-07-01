@@ -8,6 +8,7 @@ import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
+import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
 
@@ -40,6 +41,7 @@ export const plugin = {
 		"naming-convention": namingConvention,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
+		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"toml-sort-keys": tomlSortKeys,
 		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
 	},
