@@ -31,7 +31,7 @@ const rootDirectory = resolve(directoryName, "..");
 const rulesDirectory = join(rootDirectory, "src", "rules");
 const templateDirectory = join(rootDirectory, "scripts", "template");
 const ruleDirectoryPath = join(rulesDirectory, ruleName);
-const indexPath = join(rootDirectory, "src", "index.ts");
+const pluginPath = join(rootDirectory, "src", "plugin.ts");
 
 // --- Create Rule Directory ---
 if (existsSync(ruleDirectoryPath)) {
@@ -60,57 +60,58 @@ for (const templateFileName of templateFiles) {
 	console.log(`Created file: ${resolvedFilePath}`);
 }
 
-// --- Update src/index.ts ---
+// --- Register the rule in src/plugin.ts ---
 try {
-	let indexContent = readFileSync(indexPath, "utf-8");
+	let pluginContent = readFileSync(pluginPath, "utf-8");
 
-	const importStatement = `import { ${ruleNameCamelCase} } from "./rules/${ruleName}/rule";\n`;
-	const lastImportMatch = indexContent.match(/import .* from ".*";\n(?!import)/);
-	if (lastImportMatch?.index !== undefined) {
-		indexContent =
-			indexContent.slice(0, lastImportMatch.index + lastImportMatch[0].length) +
-			importStatement +
-			indexContent.slice(lastImportMatch.index + lastImportMatch[0].length);
-	} else {
-		indexContent = importStatement + indexContent;
+	// Insert the import alphabetically among the existing rule imports.
+	const importStatement = `import { ${ruleNameCamelCase} } from "./rules/${ruleName}/rule";`;
+	const ruleImportRegex = /^import \{ [^}]+ \} from "\.\/rules\/([^"]+)\/rule";$/gm;
+	const ruleImports = [...pluginContent.matchAll(ruleImportRegex)];
+	if (ruleImports.length === 0) {
+		throw new Error("Could not find any existing rule imports.");
 	}
 
-	// Add rule to the rules object
-	const ruleEntry = `\t\t"${ruleName}": ${ruleNameCamelCase},\n`;
+	const importAfter = ruleImports.find((match) => (match[1] ?? "") > ruleName);
+	const lastImport = ruleImports[ruleImports.length - 1];
+	if (importAfter?.index !== undefined) {
+		const before = pluginContent.slice(0, importAfter.index);
+		const after = pluginContent.slice(importAfter.index);
+		pluginContent = `${before}${importStatement}\n${after}`;
+	} else if (lastImport?.index !== undefined) {
+		const insertAt = lastImport.index + lastImport[0].length;
+		const before = pluginContent.slice(0, insertAt);
+		const after = pluginContent.slice(insertAt);
+		pluginContent = `${before}\n${importStatement}${after}`;
+	}
+
+	// Rebuild the `rules` object with the new entry, kept alphabetical.
 	const rulesObjectRegex = /rules: {\s*([\s\S]*?)\s*},/m;
-	const rulesMatch = indexContent.match(rulesObjectRegex);
-
-	if (rulesMatch) {
-		const existingRules = rulesMatch[1];
-		if (existingRules === undefined) {
-			throw new Error("No existing rules found.");
-		}
-
-		// Find the correct alphabetical position
-		const lines = existingRules.trim().split("\n");
-		let insertIndex = lines.length;
-		for (const [index, line] of lines.entries()) {
-			const lineRuleNameMatch = line.match(/"([^"]+)"/);
-			if (lineRuleNameMatch?.[1] !== undefined && lineRuleNameMatch[1] > ruleName) {
-				insertIndex = index;
-				break;
-			}
-		}
-
-		lines.splice(insertIndex, 0, ruleEntry.trim());
-		const updatedRules = `\n${lines.join("\n")}\n\t`;
-		indexContent = indexContent.replace(existingRules, updatedRules);
-
-		writeFileSync(indexPath, indexContent);
-		console.log(`Updated: ${indexPath}`);
-	} else {
-		console.error(
-			`Could not find the 'rules' object in ${indexPath}. Please add the rule manually.`,
-		);
+	const rulesMatch = pluginContent.match(rulesObjectRegex);
+	const existingRules = rulesMatch?.[1];
+	if (rulesMatch === null || existingRules === undefined) {
+		throw new Error("Could not find the 'rules' object.");
 	}
+
+	const entries = new Map<string, string>();
+	for (const [, name, identifier] of existingRules.matchAll(/"([^"]+)": (\w+),/g)) {
+		if (name !== undefined && identifier !== undefined) {
+			entries.set(name, identifier);
+		}
+	}
+
+	entries.set(ruleName, ruleNameCamelCase);
+	const rebuilt = [...entries.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([name, identifier]) => `\t\t"${name}": ${identifier},`)
+		.join("\n");
+	pluginContent = pluginContent.replace(rulesMatch[0], `rules: {\n${rebuilt}\n\t},`);
+
+	writeFileSync(pluginPath, pluginContent);
+	console.log(`Updated: ${pluginPath}`);
 } catch (err) {
-	console.error(`Error updating ${indexPath}:`, err);
-	console.error(`Please add the following manually to ${indexPath}:`);
+	console.error(`Error updating ${pluginPath}:`, err);
+	console.error(`Please add the following manually to ${pluginPath}:`);
 	console.error(`  Import: import { ${ruleNameCamelCase} } from "./rules/${ruleName}/rule";`);
 	console.error(`  Rule entry: "${ruleName}": ${ruleNameCamelCase},`);
 }
@@ -120,5 +121,10 @@ console.log("Next steps:");
 console.log("1. Implement the rule logic in", join(ruleDirectoryPath, "rule.ts"));
 console.log("2. Write tests in", join(ruleDirectoryPath, "rule.spec.ts"));
 console.log("3. Update the documentation in", join(ruleDirectoryPath, "documentation.md"));
-console.log("4. Run `pnpm eslint-docs` to update the README.");
-console.log("5. Consider adding the rule to the recommended config in src/index.ts if applicable.");
+console.log("4. Run `pnpm lint --fix` to tidy the generated files.");
+console.log(
+	"5. Run `pnpm build` then `pnpm eslint-docs` to update the README (docs read from dist).",
+);
+console.log(
+	"6. Consider adding the rule to the recommended config in src/configs/index.ts if applicable.",
+);
