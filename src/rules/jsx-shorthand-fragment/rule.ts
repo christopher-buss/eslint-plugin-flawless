@@ -1,46 +1,151 @@
-import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
+import {
+	AST_NODE_TYPES,
+	type JSONSchema,
+	type TSESLint,
+	type TSESTree,
+} from "@typescript-eslint/utils";
 
 import { createEslintRule } from "../../util";
 
 export const RULE_NAME = "jsx-shorthand-fragment";
 
-const MESSAGE_ID = "useNamedFragment";
+const MESSAGE_ID_NAMED = "useNamedFragment";
+const MESSAGE_ID_SHORTHAND = "useShorthandFragment";
 
-export type MessageIds = typeof MESSAGE_ID;
+export type MessageIds = typeof MESSAGE_ID_NAMED | typeof MESSAGE_ID_SHORTHAND;
 
-export type Options = [fragmentName?: string];
+export interface JsxShorthandFragmentOptions {
+	/**
+	 * The identifier used for the named fragment element in `"element"` mode
+	 * (e.g. `"Fragment"` or `"React.Fragment"`). Defaults to `"Fragment"`.
+	 */
+	readonly fragmentName?: string;
+	/**
+	 * Which form to enforce: `"syntax"` (shorthand `<>...</>`, the default) or
+	 * `"element"` (a named fragment such as `<Fragment>...</Fragment>`).
+	 */
+	readonly mode?: Mode;
+}
 
+export type Options = [JsxShorthandFragmentOptions?];
+
+type Mode = "element" | "syntax";
+
+const DEFAULT_MODE: Mode = "syntax";
 const DEFAULT_FRAGMENT_NAME = "Fragment";
 
 const messages = {
-	[MESSAGE_ID]: "Use the '{{name}}' component instead of fragment shorthand syntax.",
+	[MESSAGE_ID_NAMED]: "Use the '{{name}}' component instead of fragment shorthand syntax.",
+	[MESSAGE_ID_SHORTHAND]:
+		"Use the fragment shorthand syntax '<>...</>' instead of the '{{name}}' component.",
 };
 
 const schema: Array<JSONSchema.JSONSchema4> = [
 	{
-		description: "The identifier to use for the named fragment element.",
-		type: "string",
+		additionalProperties: false,
+		properties: {
+			fragmentName: {
+				description:
+					'The identifier to use for the named fragment element in "element" mode.',
+				type: "string",
+			},
+			mode: {
+				description:
+					'Which form to enforce: "syntax" (shorthand `<>...</>`, default) or "element" (a named fragment).',
+				enum: ["element", "syntax"],
+				type: "string",
+			},
+		},
+		type: "object",
 	},
 ];
+
+/**
+ * Flattens a JSX element name into a dotted string, e.g. `Fragment` or
+ * `React.Fragment`. Returns `null` for namespaced names (`<a:b>`) which cannot
+ * be a fragment.
+ *
+ * @param node - The JSX element name node.
+ * @returns The dotted name, or `null` when it is not a plain identifier chain.
+ */
+function jsxNameToString(node: TSESTree.JSXTagNameExpression): null | string {
+	if (node.type === AST_NODE_TYPES.JSXIdentifier) {
+		return node.name;
+	}
+
+	if (node.type === AST_NODE_TYPES.JSXMemberExpression) {
+		const object = jsxNameToString(node.object);
+		if (object === null) {
+			return null;
+		}
+
+		return `${object}.${node.property.name}`;
+	}
+
+	return null;
+}
 
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
-	const name = context.options[0] ?? DEFAULT_FRAGMENT_NAME;
+	const options = context.options[0] ?? {};
+	const mode = options.mode ?? DEFAULT_MODE;
+	const fragmentName = options.fragmentName ?? DEFAULT_FRAGMENT_NAME;
+
+	if (mode === "element") {
+		return {
+			JSXFragment(node: TSESTree.JSXFragment): void {
+				const { closingFragment, openingFragment } = node;
+
+				context.report({
+					data: { name: fragmentName },
+					fix: (fixer) => {
+						return [
+							fixer.replaceText(openingFragment, `<${fragmentName}>`),
+							fixer.replaceText(closingFragment, `</${fragmentName}>`),
+						];
+					},
+					messageId: MESSAGE_ID_NAMED,
+					node,
+				});
+			},
+		};
+	}
+
+	// `"syntax"` mode: rewrite the canonical fragment components (plus any
+	// configured `fragmentName`) back to the shorthand `<>...</>`.
+	const namedFragments = new Set(["Fragment", fragmentName, "React.Fragment"]);
 
 	return {
-		JSXFragment(node: TSESTree.JSXFragment): void {
-			const { closingFragment, openingFragment } = node;
+		JSXElement(node: TSESTree.JSXElement): void {
+			const { openingElement } = node;
+
+			const name = jsxNameToString(openingElement.name);
+			if (name === null || !namedFragments.has(name)) {
+				return;
+			}
+
+			// A fragment carrying a `key` or other attribute cannot be expressed
+			// with the shorthand, so it is left as the named form.
+			if (openingElement.attributes.length > 0) {
+				return;
+			}
 
 			context.report({
 				data: { name },
 				fix: (fixer) => {
+					const { closingElement } = node;
+					if (closingElement === null) {
+						// `<Fragment />` — a childless self-closing fragment.
+						return fixer.replaceText(node, "<></>");
+					}
+
 					return [
-						fixer.replaceText(openingFragment, `<${name}>`),
-						fixer.replaceText(closingFragment, `</${name}>`),
+						fixer.replaceText(openingElement, "<>"),
+						fixer.replaceText(closingElement, "</>"),
 					];
 				},
-				messageId: MESSAGE_ID,
+				messageId: MESSAGE_ID_SHORTHAND,
 				node,
 			});
 		},
@@ -50,11 +155,12 @@ function create(
 export const jsxShorthandFragment = createEslintRule<Options, MessageIds>({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [DEFAULT_FRAGMENT_NAME],
+	defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],
 	meta: {
-		defaultOptions: [DEFAULT_FRAGMENT_NAME],
+		defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],
 		docs: {
-			description: "Disallow the shorthand fragment syntax in favour of a named fragment",
+			description:
+				"Enforce a consistent fragment form: the shorthand `<>...</>` or a named fragment",
 			recommended: false,
 			requiresTypeChecking: false,
 		},

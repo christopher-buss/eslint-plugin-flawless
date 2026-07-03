@@ -176,17 +176,17 @@ pnpm eslint-docs
 💭
 Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 
-| Name                                                                                          | Description                                                             | 🔧  | 💭  |
-| :-------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------- | :-- | :-- |
-| [jsx-shorthand-boolean](src/rules/jsx-shorthand-boolean/documentation.md)                     | Disallow shorthand boolean JSX attributes                               | 🔧  |     |
-| [jsx-shorthand-fragment](src/rules/jsx-shorthand-fragment/documentation.md)                   | Disallow the shorthand fragment syntax in favour of a named fragment    | 🔧  |     |
-| [naming-convention](src/rules/naming-convention/documentation.md)                             | Enforce naming conventions for everything across a codebase             |     | 💭  |
-| [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                             |     |     |
-| [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                 |     |     |
-| [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                    | 🔧  |     |
-| [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render |     |     |
-| [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                | 🔧  |     |
-| [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys         | 🔧  |     |
+| Name                                                                                          | Description                                                                      | 🔧  | 💭  |
+| :-------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :-- | :-- |
+| [jsx-shorthand-boolean](src/rules/jsx-shorthand-boolean/documentation.md)                     | Disallow shorthand boolean JSX attributes                                        | 🔧  |     |
+| [jsx-shorthand-fragment](src/rules/jsx-shorthand-fragment/documentation.md)                   | Enforce a consistent fragment form: the shorthand `<>...</>` or a named fragment | 🔧  |     |
+| [naming-convention](src/rules/naming-convention/documentation.md)                             | Enforce naming conventions for everything across a codebase                      |     | 💭  |
+| [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                      |     |     |
+| [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                          |     |     |
+| [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                             | 🔧  |     |
+| [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render          |     |     |
+| [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                         | 🔧  |     |
+| [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys                  | 🔧  |     |
 
 <!-- end auto-generated rules list -->
 
