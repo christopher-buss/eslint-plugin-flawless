@@ -184,6 +184,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                      |     |     |
 | [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                          |     |     |
 | [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                             | 🔧  |     |
+| [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                       | 🔧  |     |
 | [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render          |     |     |
 | [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                         | 🔧  |     |
 | [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys                  | 🔧  |     |
