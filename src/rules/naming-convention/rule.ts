@@ -94,7 +94,9 @@ function create(
 	const compilerOptions = getParserServices(context, true).program?.getCompilerOptions() ?? {};
 	function handleMember(
 		validator: ValidatorFunction,
-		node:
+		{
+			key,
+		}:
 			| TSESTree.AccessorPropertyNonComputedName
 			| TSESTree.MethodDefinitionNonComputedName
 			| TSESTree.PropertyDefinitionNonComputedName
@@ -105,7 +107,6 @@ function create(
 			| TSESTree.TSPropertySignatureNonComputedName,
 		modifiers: Set<ModifierType>,
 	): void {
-		const { key } = node;
 		if (requiresQuoting(key, compilerOptions.target)) {
 			modifiers.add(Modifier.requiresQuotes);
 		}
@@ -682,8 +683,7 @@ function create(
 		// #region autoAccessor
 
 		"TSEnumMember": {
-			handler: (node: TSESTree.TSEnumMember, validator): void => {
-				const { id } = node;
+			handler: ({ id }: TSESTree.TSEnumMember, validator): void => {
 				const modifiers = new Set<ModifierType>();
 
 				if (requiresQuoting(id, compilerOptions.target)) {

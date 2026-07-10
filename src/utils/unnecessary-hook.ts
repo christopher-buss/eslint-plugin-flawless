@@ -53,10 +53,12 @@ interface HookReport<MessageIds extends string> {
  * @returns A rule `create` function.
  * @template MessageIds - The rule's message identifiers.
  */
-export function createUnnecessaryHookRule<MessageIds extends string>(
-	config: UnnecessaryHookConfig<MessageIds>,
-): (context: Readonly<TSESLint.RuleContext<MessageIds, []>>) => TSESLint.RuleListener {
-	const { hook, messageIds } = config;
+export function createUnnecessaryHookRule<MessageIds extends string>({
+	hook,
+	messageIds,
+}: UnnecessaryHookConfig<MessageIds>): (
+	context: Readonly<TSESLint.RuleContext<MessageIds, []>>,
+) => TSESLint.RuleListener {
 	// Only `useMemo` skips factories that perform real computation.
 	const skipComputation = hook === "useMemo";
 

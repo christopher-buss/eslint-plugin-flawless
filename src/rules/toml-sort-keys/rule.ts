@@ -99,8 +99,11 @@ function makeRank(order: ReadonlyArray<string>): (name: string) => number {
 	};
 }
 
-function makeFallback(config: SortOrderObject): (a: string, b: string) => number {
-	const { caseSensitive = true, natural = false, type = "asc" } = config;
+function makeFallback({
+	caseSensitive = true,
+	natural = false,
+	type = "asc",
+}: SortOrderObject): (a: string, b: string) => number {
 	const sensitivity = caseSensitive ? "variant" : "accent";
 	return (a: string, b: string): number => {
 		const result = a.localeCompare(b, "en", { numeric: natural, sensitivity });
