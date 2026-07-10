@@ -89,6 +89,19 @@ const valid: Array<ValidTestCase> = [
 	`,
 	// An unused parameter is no-unused-vars' business.
 	"function f(obj) { return 1; }",
+	// A non-null assertion or type assertion on the init is a real use.
+	ts`
+		function f(obj) {
+			const { a } = obj!;
+			return a;
+		}
+	`,
+	ts`
+		function f(obj) {
+			const { a } = obj as { a: number };
+			return a;
+		}
+	`,
 	// `await` may not appear in parameter initializers, so no signature form
 	// exists and the destructuring must stay in the body.
 	ts`
@@ -241,6 +254,130 @@ const invalid: Array<InvalidTestCase> = [
 				return a + b;
 			}
 		`,
+	},
+	// Two declarators of the same declaration merge as well.
+	{
+		code: ts`
+			function f(obj) {
+				const { a } = obj, { b } = obj;
+				return a + b;
+			}
+		`,
+		errors: [{ messageId }, { messageId }],
+		output: ts`
+			function f({ a, b }) {
+				return a + b;
+			}
+		`,
+	},
+	// A default referencing an earlier sibling binding stays legal in a
+	// parameter pattern.
+	{
+		code: ts`
+			function f(obj) {
+				const { a, b = a } = obj;
+				return b;
+			}
+		`,
+		errors: [{ messageId }],
+		output: ts`
+			function f({ a, b = a }) {
+				return b;
+			}
+		`,
+	},
+	// A plain pattern only performs property reads, so it may move past
+	// earlier statements (the documented getter caveat).
+	{
+		code: ts`
+			function f(obj) {
+				log();
+				const { a } = obj;
+				return a;
+			}
+		`,
+		errors: [{ messageId }],
+		output: ts`
+			function f({ a }) {
+				log();
+				return a;
+			}
+		`,
+	},
+	// A default value executes code; hoisting it past an earlier statement
+	// would reorder side effects, so the fix is withheld.
+	{
+		code: ts`
+			function f(obj) {
+				sideEffect();
+				const { a = compute() } = obj;
+				return a;
+			}
+		`,
+		errors: [{ messageId }],
+		output: null,
+	},
+	// ... but at the very top of the body nothing is reordered.
+	{
+		code: ts`
+			function f(obj) {
+				const { a = compute() } = obj;
+				sideEffect();
+				return a;
+			}
+		`,
+		errors: [{ messageId }],
+		output: ts`
+			function f({ a = compute() }) {
+				sideEffect();
+				return a;
+			}
+		`,
+	},
+	// A bound name referenced before the statement is in its temporal dead
+	// zone; moving the binding into the parameter list would stop it throwing.
+	{
+		code: ts`
+			function f(obj) {
+				const early = () => a;
+				const { a } = obj;
+				return [early, a];
+			}
+		`,
+		errors: [{ messageId }],
+		output: null,
+	},
+	// A setter legally takes a destructuring parameter.
+	{
+		code: ts`
+			const target = {
+				set value(obj) {
+					const { a } = obj;
+					console.log(a);
+				},
+			};
+		`,
+		errors: [{ messageId }],
+		output: ts`
+			const target = {
+				set value({ a }) {
+					console.log(a);
+				},
+			};
+		`,
+	},
+	// A body-scoped type in the pattern annotation cannot move to the
+	// signature.
+	{
+		code: ts`
+			function f(obj) {
+				type Local = { a: number };
+				const { a }: Local = obj;
+				return a;
+			}
+		`,
+		errors: [{ messageId }],
+		output: null,
 	},
 	// A later, not-yet-initialized parameter in a default blocks the fix; an
 	// earlier one does not.

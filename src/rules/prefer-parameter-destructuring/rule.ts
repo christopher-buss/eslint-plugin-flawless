@@ -351,6 +351,37 @@ function hasUseStrictDirective(body: TSESTree.BlockStatement): boolean {
 }
 
 /**
+ * Checks whether evaluating the pattern can execute arbitrary code — a default
+ * value or a computed key — as opposed to only performing property reads.
+ *
+ * @param node - The pattern node to walk.
+ * @returns `true` when the pattern contains a default value or computed key.
+ */
+function patternExecutesCode(node: TSESTree.Node): boolean {
+	if (node.type === AST_NODE_TYPES.AssignmentPattern) {
+		return true;
+	}
+
+	if (node.type === AST_NODE_TYPES.Property) {
+		return node.computed || patternExecutesCode(node.value);
+	}
+
+	if (node.type === AST_NODE_TYPES.ObjectPattern) {
+		return node.properties.some((property) => patternExecutesCode(property));
+	}
+
+	if (node.type === AST_NODE_TYPES.ArrayPattern) {
+		return node.elements.some((element) => element !== null && patternExecutesCode(element));
+	}
+
+	if (node.type === AST_NODE_TYPES.RestElement) {
+		return patternExecutesCode(node.argument);
+	}
+
+	return false;
+}
+
+/**
  * Computes the removal range for a declaration, swallowing the whole line
  * (indentation and trailing newline) when the declaration is alone on it.
  *
@@ -379,14 +410,15 @@ function statementRemovalRange(
 /**
  * Builds the autofix, or returns `null` when the rewrite is not unambiguously
  * safe: unrelated sibling declarators, unmergeable or annotated patterns,
- * duplicate or colliding binding names, or expressions that reference bindings
- * unavailable at the parameter position.
+ * duplicate or colliding binding names, expressions that reference bindings
+ * unavailable at the parameter position, side effects that would be reordered,
+ * or a defused temporal dead zone.
  *
  * @param query - The rewrite being planned.
  * @returns The fix plan, or `null` when only a report should be emitted.
  */
 function planFix(query: RewriteQuery): FixPlan | null {
-	const { identifier, node, otherParameterNames, sourceCode, statements } = query;
+	const { body, identifier, node, otherParameterNames, sourceCode, statements } = query;
 
 	// Removing a declaration removes every declarator in it, so unrelated
 	// sibling declarators (`const { a } = obj, x = 1`) block the fix.
@@ -400,6 +432,34 @@ function planFix(query: RewriteQuery): FixPlan | null {
 	}
 
 	const patterns = statements.map((statement) => statement.pattern);
+
+	// A default value or computed key executes code when the pattern evaluates.
+	// Hoisting it into the signature must not reorder it past the statements
+	// above it, so such patterns are only fixed at the very top of the body.
+	// (Plain patterns only perform property reads; see the documented caveat.)
+	if (patterns.some((pattern) => patternExecutesCode(pattern))) {
+		const leadingStatements = new Set<TSESTree.Node>(body.body.slice(0, declarations.length));
+		const isLeadingRun = declarations.every((declaration) =>
+			leadingStatements.has(declaration),
+		);
+		if (!isLeadingRun) {
+			return null;
+		}
+	}
+
+	// Moving a binding into the parameter list erases its temporal dead zone: a
+	// reference before the statement (e.g. from a hoisted closure) currently
+	// throws, but would become an ordinary read.
+	const usedBeforeDeclaration = declarations.some((declaration) => {
+		return sourceCode.getDeclaredVariables(declaration).some((declared) => {
+			return declared.references.some(
+				(reference) => reference.identifier.range[0] < declaration.range[0],
+			);
+		});
+	});
+	if (usedBeforeDeclaration) {
+		return null;
+	}
 
 	// A pattern's type annotation can move to the signature only when it is the
 	// sole pattern and the parameter is not annotated itself.

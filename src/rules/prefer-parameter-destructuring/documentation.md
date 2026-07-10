@@ -85,6 +85,12 @@ left untouched when:
   or move a rest element away from last place.
 - both the pattern and the parameter carry a type annotation (a lone pattern
   annotation moves to the signature).
+- the pattern contains a default value or computed key and the destructure is
+  not at the very top of the body — those execute code, and hoisting them into
+  the signature would reorder their side effects past the statements above.
+- a bound name is referenced before the destructuring statement (e.g. by a
+  hoisted closure) — moving the binding into the parameter list would erase its
+  temporal dead zone and turn a runtime error into an ordinary read.
 
 Two caveats are accepted rather than blocking the fix: property reads move to
 call time (observable only with getters or proxies), and `const` bindings become
