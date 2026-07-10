@@ -89,6 +89,27 @@ const valid: Array<ValidTestCase> = [
 	`,
 	// An unused parameter is no-unused-vars' business.
 	"function f(obj) { return 1; }",
+	// `await` may not appear in parameter initializers, so no signature form
+	// exists and the destructuring must stay in the body.
+	ts`
+		async function f(obj) {
+			const { a = await Promise.resolve(1) } = obj;
+			return a;
+		}
+	`,
+	ts`
+		async function pnpm(options) {
+			const { catalogs = await detectCatalogUsage(), isInEditor } = options;
+			return [catalogs, isInEditor];
+		}
+	`,
+	// Same for `yield` in a generator.
+	ts`
+		function* g(obj) {
+			const { a = yield } = obj;
+			return a;
+		}
+	`,
 	// A "use strict" directive is illegal with a non-simple parameter list.
 	ts`
 		function f(obj) {
@@ -377,17 +398,6 @@ const invalid: Array<InvalidTestCase> = [
 		code: ts`
 			function f(obj) {
 				const { a = arguments[0] } = obj;
-				return a;
-			}
-		`,
-		errors: [{ messageId }],
-		output: null,
-	},
-	// `await` may not appear in parameter initializers.
-	{
-		code: ts`
-			async function f(obj) {
-				const { a = await Promise.resolve(1) } = obj;
 				return a;
 			}
 		`,

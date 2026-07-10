@@ -187,8 +187,8 @@ function isNodeLike(value: unknown): value is TSESTree.Node {
 
 /**
  * Checks whether a pattern subtree contains `await` or `yield` (in a computed
- * key or default value). Parameter initializers may not contain either, so the
- * fix bails.
+ * key or default value). Parameter initializers may not contain either, so no
+ * signature form exists and the destructuring is not reported.
  *
  * @param root - The pattern to walk.
  * @param visitorKeys - The parser's visitor keys, used to walk without
@@ -379,8 +379,8 @@ function statementRemovalRange(
 /**
  * Builds the autofix, or returns `null` when the rewrite is not unambiguously
  * safe: unrelated sibling declarators, unmergeable or annotated patterns,
- * duplicate or colliding binding names, `await`/`yield` in the pattern, or
- * expressions that reference bindings unavailable at the parameter position.
+ * duplicate or colliding binding names, or expressions that reference bindings
+ * unavailable at the parameter position.
  *
  * @param query - The rewrite being planned.
  * @returns The fix plan, or `null` when only a report should be emitted.
@@ -432,10 +432,6 @@ function planFix(query: RewriteQuery): FixPlan | null {
 	}
 
 	if (boundNames.some((name) => otherParameterNames.has(name))) {
-		return null;
-	}
-
-	if (patterns.some((pattern) => containsAwaitOrYield(pattern, sourceCode.visitorKeys))) {
 		return null;
 	}
 
@@ -511,6 +507,15 @@ function create(context: Context): TSESLint.RuleListener {
 
 			const statements = collectDestructureStatements(variable, identifier, body);
 			if (statements === null || statements.length === 0) {
+				continue;
+			}
+
+			// `await`/`yield` may not appear in parameter initializers, so no
+			// signature form exists at all — the destructuring must stay.
+			const requiresBody = statements.some(({ pattern }) => {
+				return containsAwaitOrYield(pattern, context.sourceCode.visitorKeys);
+			});
+			if (requiresBody) {
 				continue;
 			}
 

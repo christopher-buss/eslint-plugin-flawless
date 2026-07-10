@@ -81,8 +81,6 @@ left untouched when:
 - a computed key or default value references something unavailable at the
   parameter position: a binding declared in the function body, a parameter at or
   after the rewritten one, or the function's own `arguments`.
-- the pattern contains `await` or `yield`, which may not appear in parameter
-  initializers.
 - merging would duplicate a binding name, collide with another parameter's name,
   or move a rest element away from last place.
 - both the pattern and the parameter carry a type annotation (a lone pattern
@@ -93,9 +91,14 @@ call time (observable only with getters or proxies), and `const` bindings become
 parameters, which are reassignable — the original code could not have reassigned
 them anyway.
 
-Functions whose body opens with a `"use strict"` directive are skipped entirely,
-since a destructured parameter makes the parameter list non-simple and the
-directive would become a syntax error.
+Some functions are not reported at all, because no signature form exists:
+
+- a pattern containing `await` or `yield`
+  (`const { a = await fetchDefault() } = options`), which may not appear in
+  parameter initializers.
+- functions whose body opens with a `"use strict"` directive, since a
+  destructured parameter makes the parameter list non-simple and the directive
+  would become a syntax error.
 
 ## Examples
 
