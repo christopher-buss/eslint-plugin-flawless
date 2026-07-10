@@ -85,17 +85,20 @@ left untouched when:
   or move a rest element away from last place.
 - both the pattern and the parameter carry a type annotation (a lone pattern
   annotation moves to the signature).
-- the pattern contains a default value or computed key and the destructure is
-  not at the very top of the body — those execute code, and hoisting them into
-  the signature would reorder their side effects past the statements above.
 - a bound name is referenced before the destructuring statement (e.g. by a
   hoisted closure) — moving the binding into the parameter list would erase its
   temporal dead zone and turn a runtime error into an ordinary read.
+- with [`allowSideEffectReordering: false`](#options): the pattern contains a
+  default value or computed key and the destructure is not at the very top of
+  the body — those execute code, and hoisting them into the signature reorders
+  their side effects past the statements above.
 
-Two caveats are accepted rather than blocking the fix: property reads move to
-call time (observable only with getters or proxies), and `const` bindings become
+Some caveats are accepted rather than blocking the fix: property reads move to
+call time (observable only with getters or proxies); `const` bindings become
 parameters, which are reassignable — the original code could not have reassigned
-them anyway.
+them anyway; and by default, side effects in pattern defaults and computed keys
+may move ahead of earlier statements — code should not rely on their ordering
+(opt out with `allowSideEffectReordering: false`).
 
 Some functions are not reported at all, because no signature form exists:
 
@@ -105,6 +108,25 @@ Some functions are not reported at all, because no signature form exists:
 - functions whose body opens with a `"use strict"` directive, since a
   destructured parameter makes the parameter list non-simple and the directive
   would become a syntax error.
+
+## Options
+
+<!-- begin auto-generated rule options list -->
+
+| Name                        | Description                                                                                                                                                               | Type    | Default |
+| :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------ | :------ |
+| `allowSideEffectReordering` | Whether the autofix may hoist pattern defaults and computed keys past earlier statements, reordering their side effects. Set to false to withhold the fix in those cases. | Boolean | `true`  |
+
+<!-- end auto-generated rule options list -->
+
+```json
+{
+	"flawless/prefer-parameter-destructuring": [
+		"error",
+		{ "allowSideEffectReordering": false }
+	]
+}
+```
 
 ## Examples
 

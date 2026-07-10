@@ -8,7 +8,16 @@ const MESSAGE_ID = "default";
 
 export type MessageIds = typeof MESSAGE_ID;
 
-export type Options = [];
+export type Options = [
+	{
+		/**
+		 * Whether the autofix may hoist pattern defaults and computed keys past
+		 * earlier statements, reordering their side effects. Defaults to `true`;
+		 * set to `false` to withhold the fix in those cases.
+		 */
+		allowSideEffectReordering?: boolean;
+	},
+];
 
 const messages = {
 	[MESSAGE_ID]: "Destructure parameter '{{name}}' in the function signature instead of the body.",
@@ -40,6 +49,7 @@ interface FixPlan {
 
 /** The inputs shared by the fix-planning helpers. */
 interface RewriteQuery {
+	readonly allowSideEffectReordering: boolean;
 	readonly body: TSESTree.BlockStatement;
 	readonly identifier: TSESTree.Identifier;
 	readonly node: FunctionLike;
@@ -411,14 +421,23 @@ function statementRemovalRange(
  * Builds the autofix, or returns `null` when the rewrite is not unambiguously
  * safe: unrelated sibling declarators, unmergeable or annotated patterns,
  * duplicate or colliding binding names, expressions that reference bindings
- * unavailable at the parameter position, side effects that would be reordered,
- * or a defused temporal dead zone.
+ * unavailable at the parameter position, a defused temporal dead zone, or —
+ * with `allowSideEffectReordering: false` — side effects that would be
+ * reordered.
  *
  * @param query - The rewrite being planned.
  * @returns The fix plan, or `null` when only a report should be emitted.
  */
 function planFix(query: RewriteQuery): FixPlan | null {
-	const { body, identifier, node, otherParameterNames, sourceCode, statements } = query;
+	const {
+		allowSideEffectReordering,
+		body,
+		identifier,
+		node,
+		otherParameterNames,
+		sourceCode,
+		statements,
+	} = query;
 
 	// Removing a declaration removes every declarator in it, so unrelated
 	// sibling declarators (`const { a } = obj, x = 1`) block the fix.
@@ -433,11 +452,12 @@ function planFix(query: RewriteQuery): FixPlan | null {
 
 	const patterns = statements.map((statement) => statement.pattern);
 
-	// A default value or computed key executes code when the pattern evaluates.
-	// Hoisting it into the signature must not reorder it past the statements
-	// above it, so such patterns are only fixed at the very top of the body.
-	// (Plain patterns only perform property reads; see the documented caveat.)
-	if (patterns.some((pattern) => patternExecutesCode(pattern))) {
+	// A default value or computed key executes code when the pattern evaluates,
+	// and hoisting it into the signature reorders it past the statements above
+	// it. With `allowSideEffectReordering: false`, such patterns are only fixed
+	// at the very top of the body. (Plain patterns only perform property reads;
+	// see the documented caveat.)
+	if (!allowSideEffectReordering && patterns.some((pattern) => patternExecutesCode(pattern))) {
 		const leadingStatements = new Set<TSESTree.Node>(body.body.slice(0, declarations.length));
 		const isLeadingRun = declarations.every((declaration) =>
 			leadingStatements.has(declaration),
@@ -540,9 +560,12 @@ function planFix(query: RewriteQuery): FixPlan | null {
  * {@link planFix}.
  *
  * @param context - The rule context.
+ * @param optionsWithDefault - The resolved rule options.
  * @returns The rule listener.
  */
-function create(context: Context): TSESLint.RuleListener {
+function create(context: Context, optionsWithDefault: Readonly<Options>): TSESLint.RuleListener {
+	const [{ allowSideEffectReordering = true }] = optionsWithDefault;
+
 	function checkFunction(node: FunctionLike): void {
 		const { body, params } = node;
 		if (body.type !== AST_NODE_TYPES.BlockStatement || hasUseStrictDirective(body)) {
@@ -587,6 +610,7 @@ function create(context: Context): TSESLint.RuleListener {
 			}
 
 			const plan = planFix({
+				allowSideEffectReordering,
 				body,
 				identifier,
 				node,
@@ -627,8 +651,9 @@ function create(context: Context): TSESLint.RuleListener {
 export const preferParameterDestructuring = createEslintRule<Options, MessageIds>({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
+	defaultOptions: [{ allowSideEffectReordering: true }],
 	meta: {
+		defaultOptions: [{ allowSideEffectReordering: true }],
 		docs: {
 			description: "Enforce destructuring parameters in the function signature",
 			recommended: false,
@@ -637,7 +662,19 @@ export const preferParameterDestructuring = createEslintRule<Options, MessageIds
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema: [
+			{
+				additionalProperties: false,
+				properties: {
+					allowSideEffectReordering: {
+						description:
+							"Whether the autofix may hoist pattern defaults and computed keys past earlier statements, reordering their side effects. Set to false to withhold the fix in those cases.",
+						type: "boolean",
+					},
+				},
+				type: "object",
+			},
+		],
 		type: "suggestion",
 	},
 });

@@ -305,7 +305,7 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 	},
 	// A default value executes code; hoisting it past an earlier statement
-	// would reorder side effects, so the fix is withheld.
+	// reorders side effects, which the default options accept.
 	{
 		code: ts`
 			function f(obj) {
@@ -315,6 +315,24 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
+		output: ts`
+			function f({ a = compute() }) {
+				sideEffect();
+				return a;
+			}
+		`,
+	},
+	// With allowSideEffectReordering: false the fix is withheld instead.
+	{
+		code: ts`
+			function f(obj) {
+				sideEffect();
+				const { a = compute() } = obj;
+				return a;
+			}
+		`,
+		errors: [{ messageId }],
+		options: [{ allowSideEffectReordering: false }],
 		output: null,
 	},
 	// ... but at the very top of the body nothing is reordered.
