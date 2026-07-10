@@ -111,14 +111,22 @@ function makeFallback(config: SortOrderObject): (a: string, b: string) => number
 /**
  * Builds a comparator for one table body. Explicit-order entries sort first by
  * their listed position, then unlisted entries fall back to a natural/asc sort
- * (mirroring `yaml/sort-keys`). At the top level, bare key-values are always
- * kept before any `[table]` header, since TOML would otherwise re-scope them.
+ * (mirroring `yaml/sort-keys`). The fallback compares keys as written in
+ * source, so quotes participate in the order and quoted keys (e.g.
+ * `"github:owner/repo"`) group before bare keys. At the top level, bare
+ * key-values are always kept before any `[table]` header, since TOML would
+ * otherwise re-scope them.
  *
  * @param order - The order configuration for this table's path.
  * @param isTopLevel - Whether the body is the top-level table.
+ * @param rawName - Returns an entry's key exactly as written in source.
  * @returns A comparator over two entries.
  */
-function makeComparator(order: SortOrder, isTopLevel: boolean): (a: Entry, b: Entry) => number {
+function makeComparator(
+	order: SortOrder,
+	isTopLevel: boolean,
+	rawName: (entry: Entry) => string,
+): (a: Entry, b: Entry) => number {
 	const rank = Array.isArray(order) ? makeRank(order) : undefined;
 	const fallback = makeFallback(Array.isArray(order) ? { natural: true, type: "asc" } : order);
 	return (a: Entry, b: Entry): number => {
@@ -146,7 +154,7 @@ function makeComparator(order: SortOrder, isTopLevel: boolean): (a: Entry, b: En
 			}
 		}
 
-		return fallback(nameOf(a), nameOf(b));
+		return fallback(rawName(a), rawName(b));
 	};
 }
 
@@ -275,7 +283,9 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 		}
 
 		const entries = [...body];
-		const target = [...entries].sort(makeComparator(order, isTopLevel));
+		const target = [...entries].sort(
+			makeComparator(order, isTopLevel, (entry) => sourceCode.getText(entry.key)),
+		);
 
 		let outOfPlace: Entry | undefined;
 		for (const [index, entry] of entries.entries()) {

@@ -61,6 +61,24 @@ const valid: Array<ValidTestCase> = [
 		`,
 		options,
 	},
+	// Keys compare as written: quoted keys group before bare keys, ordered
+	// case-insensitively among themselves.
+	{
+		code: unindent`
+			[tools]
+			"github:Apple/harvest" = "1.0.0"
+			"github:banana/split" = "latest"
+			"github:pear/crumble" = "latest"
+			"github:Plum/jam" = "0.5.5"
+			"github:quince/paste" = "latest"
+			"npm:corepack" = "latest"
+			bun = "latest"
+			git-lfs = "latest"
+			gitleaks = "latest"
+			node = "26"
+		`,
+		options,
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -138,6 +156,38 @@ const invalid: Array<InvalidTestCase> = [
 
 			[settings.python]
 			compile = false
+		`,
+	},
+	// Quoted keys interleaved by unquoted value regroup before bare keys, with
+	// case-insensitive order among the quoted block.
+	{
+		code: unindent`
+			[tools]
+			git-lfs = "latest"
+			"github:Apple/harvest" = "1.0.0"
+			"github:Plum/jam" = "0.5.5"
+			"github:banana/split" = "latest"
+			"github:pear/crumble" = "latest"
+			"github:quince/paste" = "latest"
+			gitleaks = "latest"
+			node = "26"
+			"npm:corepack" = "latest"
+			nub = "latest"
+		`,
+		errors: [{ messageId }],
+		options,
+		output: unindent`
+			[tools]
+			"github:Apple/harvest" = "1.0.0"
+			"github:banana/split" = "latest"
+			"github:pear/crumble" = "latest"
+			"github:Plum/jam" = "0.5.5"
+			"github:quince/paste" = "latest"
+			"npm:corepack" = "latest"
+			git-lfs = "latest"
+			gitleaks = "latest"
+			node = "26"
+			nub = "latest"
 		`,
 	},
 	// A floating comment (blank line before the key) is unattributable: report

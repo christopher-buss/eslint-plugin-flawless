@@ -30,6 +30,10 @@ an explicit `order` array fall back to a natural-ascending sort **after** the
 listed names (add a trailing `{ pathPattern: ".*", order: { type: "asc" } }`
 entry to make unlisted tables deterministic).
 
+The fallback sort compares keys **as written in source**, quotes included, so
+quoted keys (e.g. `"github:owner/repo"`) group before bare keys while letters
+still compare case-insensitively among themselves.
+
 Explicit-order matching is prefix-aware: `settings.node` matches an `order`
 entry of `settings`, so sub-tables stay grouped directly under their parent
 table and sort among themselves.
