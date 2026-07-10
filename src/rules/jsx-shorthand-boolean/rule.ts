@@ -1,6 +1,7 @@
-import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import { createEslintRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "jsx-shorthand-boolean";
 
@@ -14,11 +15,7 @@ const messages = {
 	[MESSAGE_ID]: "Set an explicit value for boolean attribute '{{name}}'.",
 };
 
-function create(
-	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
-): TSESLint.RuleListener {
-	const { sourceCode } = context;
-
+function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
 		JSXAttribute(node: TSESTree.JSXAttribute): void {
 			// A shorthand boolean attribute has no value, e.g. `<C disabled />`.
@@ -27,7 +24,7 @@ function create(
 			}
 
 			context.report({
-				data: { name: sourceCode.getText(node.name) },
+				data: { name: context.sourceCode.getText(node.name) },
 				fix: (fixer) => fixer.insertTextAfter(node.name, "={true}"),
 				messageId: MESSAGE_ID,
 				node,
@@ -36,9 +33,9 @@ function create(
 	};
 }
 
-export const jsxShorthandBoolean = createEslintRule<Options, MessageIds>({
+export const jsxShorthandBoolean = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
-	create,
+	createOnce,
 	defaultOptions: [],
 	meta: {
 		docs: {

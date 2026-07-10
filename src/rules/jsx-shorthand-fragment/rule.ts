@@ -1,11 +1,7 @@
-import {
-	AST_NODE_TYPES,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, type JSONSchema, type TSESTree } from "@typescript-eslint/utils";
 
-import { createEslintRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "jsx-shorthand-fragment";
 
@@ -85,39 +81,25 @@ function jsxNameToString(node: TSESTree.JSXTagNameExpression): null | string {
 	return null;
 }
 
-function create(
-	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
-): TSESLint.RuleListener {
-	const options = context.options[0] ?? {};
-	const mode = options.mode ?? DEFAULT_MODE;
-	const fragmentName = options.fragmentName ?? DEFAULT_FRAGMENT_NAME;
-
-	if (mode === "element") {
-		return {
-			JSXFragment(node: TSESTree.JSXFragment): void {
-				const { closingFragment, openingFragment } = node;
-
-				context.report({
-					data: { name: fragmentName },
-					fix: (fixer) => {
-						return [
-							fixer.replaceText(openingFragment, `<${fragmentName}>`),
-							fixer.replaceText(closingFragment, `</${fragmentName}>`),
-						];
-					},
-					messageId: MESSAGE_ID_NAMED,
-					node,
-				});
-			},
-		};
-	}
-
-	// `"syntax"` mode: rewrite the canonical fragment components (plus any
+function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
+	let mode: Mode;
+	// `"syntax"` mode rewrites the canonical fragment components (plus any
 	// configured `fragmentName`) back to the shorthand `<>...</>`.
-	const namedFragments = new Set(["Fragment", fragmentName, "React.Fragment"]);
+	let fragmentName: string;
+	let namedFragments: Set<string>;
 
 	return {
+		before(): void {
+			const options = context.options[0] ?? {};
+			mode = options.mode ?? DEFAULT_MODE;
+			fragmentName = options.fragmentName ?? DEFAULT_FRAGMENT_NAME;
+			namedFragments = new Set(["Fragment", fragmentName, "React.Fragment"]);
+		},
 		JSXElement(node: TSESTree.JSXElement): void {
+			if (mode !== "syntax") {
+				return;
+			}
+
 			const { openingElement } = node;
 
 			const name = jsxNameToString(openingElement.name);
@@ -149,12 +131,31 @@ function create(
 				node,
 			});
 		},
+		JSXFragment(node: TSESTree.JSXFragment): void {
+			if (mode !== "element") {
+				return;
+			}
+
+			const { closingFragment, openingFragment } = node;
+
+			context.report({
+				data: { name: fragmentName },
+				fix: (fixer) => {
+					return [
+						fixer.replaceText(openingFragment, `<${fragmentName}>`),
+						fixer.replaceText(closingFragment, `</${fragmentName}>`),
+					];
+				},
+				messageId: MESSAGE_ID_NAMED,
+				node,
+			});
+		},
 	};
 }
 
-export const jsxShorthandFragment = createEslintRule<Options, MessageIds>({
+export const jsxShorthandFragment = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
-	create,
+	createOnce,
 	defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],
 	meta: {
 		defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],

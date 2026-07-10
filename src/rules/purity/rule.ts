@@ -7,7 +7,8 @@ import {
 	type TSESTree,
 } from "@typescript-eslint/utils";
 
-import { createEslintRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "purity";
 
@@ -225,21 +226,12 @@ function isRenderContext(reactContext: ReactContext, func: FunctionNode): boolea
 	);
 }
 
-function create(
-	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
-): TSESLint.RuleListener {
-	const { sourceCode } = context;
+function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	const reactContext = context as unknown as ReactContext;
 
-	const options = context.options[0] ?? {};
-	const signatures = new Set<string>(DEFAULT_SIGNATURES);
-	for (const signature of options.additionalFunctions ?? []) {
-		signatures.add(signature);
-	}
-
-	for (const signature of options.ignore ?? []) {
-		signatures.delete(signature);
-	}
+	// Built per file in `before`, since it depends on `context.options` which
+	// must not be read in the `createOnce` body.
+	let signatures: Set<string>;
 
 	function handle(
 		node: TSESTree.CallExpression | TSESTree.NewExpression,
@@ -257,7 +249,7 @@ function create(
 			return;
 		}
 
-		if (GUARDED_GLOBALS.has(match.root.name) && isUserBinding(sourceCode, match.root)) {
+		if (GUARDED_GLOBALS.has(match.root.name) && isUserBinding(context.sourceCode, match.root)) {
 			return;
 		}
 
@@ -270,6 +262,17 @@ function create(
 	}
 
 	return {
+		before(): void {
+			const options = context.options[0] ?? {};
+			signatures = new Set<string>(DEFAULT_SIGNATURES);
+			for (const signature of options.additionalFunctions ?? []) {
+				signatures.add(signature);
+			}
+
+			for (const signature of options.ignore ?? []) {
+				signatures.delete(signature);
+			}
+		},
 		CallExpression(node: TSESTree.CallExpression): void {
 			const match = dottedCalleePath(node.callee);
 			if (match !== null) {
@@ -285,9 +288,9 @@ function create(
 	};
 }
 
-export const purity = createEslintRule<Options, MessageIds>({
+export const purity = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
-	create,
+	createOnce,
 	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],

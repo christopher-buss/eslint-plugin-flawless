@@ -1,6 +1,7 @@
 import * as core from "@eslint-react/core";
 import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../util";
 import { hasNestedCallOrNew } from "./nested-expressions";
 import { resolve } from "./resolve";
 
@@ -50,25 +51,26 @@ interface HookReport<MessageIds extends string> {
  * name resolution across imports, namespaces and `require`).
  *
  * @param config - The hook-specific configuration.
- * @returns A rule `create` function.
+ * @returns A rule `createOnce` function.
  * @template MessageIds - The rule's message identifiers.
  */
 export function createUnnecessaryHookRule<MessageIds extends string>({
 	hook,
 	messageIds,
 }: UnnecessaryHookConfig<MessageIds>): (
-	context: Readonly<TSESLint.RuleContext<MessageIds, []>>,
-) => TSESLint.RuleListener {
+	context: FlawlessRuleContext<MessageIds, []>,
+) => FlawlessRuleListener {
 	// Only `useMemo` skips factories that perform real computation.
 	const skipComputation = hook === "useMemo";
 
 	return (context) => {
-		const { sourceCode } = context;
 		const reactContext = context as unknown as ReactContext;
 		const detectHookCall = hook === "useMemo" ? core.isUseMemoCall : core.isUseCallbackCall;
 
 		return {
 			VariableDeclarator(node: TSESTree.VariableDeclarator): void {
+				// Read per file: unsafe to access in the `createOnce` body.
+				const { sourceCode } = context;
 				const { id, init } = node;
 				if (
 					id.type !== AST_NODE_TYPES.Identifier ||

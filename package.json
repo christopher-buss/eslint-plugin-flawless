@@ -19,6 +19,7 @@
 	"type": "module",
 	"exports": {
 		".": "./dist/index.mjs",
+		"./oxlint": "./dist/oxlint.mjs",
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",
@@ -49,6 +50,7 @@
 	},
 	"dependencies": {
 		"@eslint-react/core": "catalog:cli",
+		"@oxlint/plugins": "catalog:cli",
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
 		"@typescript-eslint/utils": "catalog:cli",
@@ -73,6 +75,7 @@
 		"eslint-vitest-rule-tester": "catalog:testing",
 		"jiti": "catalog:cli",
 		"lint-staged": "catalog:cli",
+		"oxlint": "catalog:testing",
 		"publint": "catalog:testing",
 		"simple-git-hooks": "catalog:cli",
 		"ts-api-utils": "catalog:cli",

@@ -1,6 +1,7 @@
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import { createEslintRule } from "../../util";
+import type { FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "prefer-parameter-destructuring";
 
@@ -560,11 +561,12 @@ function planFix(query: RewriteQuery): FixPlan | null {
  * {@link planFix}.
  *
  * @param context - The rule context.
- * @param optionsWithDefault - The resolved rule options.
  * @returns The rule listener.
  */
-function create(context: Context, optionsWithDefault: Readonly<Options>): TSESLint.RuleListener {
-	const [{ allowSideEffectReordering = true }] = optionsWithDefault;
+function createOnce(context: Context): FlawlessRuleListener {
+	// Read per file in `before`; `context.options` is unavailable in the
+	// `createOnce` body.
+	let allowSideEffectReordering = true;
 
 	function checkFunction(node: FunctionLike): void {
 		const { body, params } = node;
@@ -643,14 +645,17 @@ function create(context: Context, optionsWithDefault: Readonly<Options>): TSESLi
 
 	return {
 		ArrowFunctionExpression: checkFunction,
+		before(): void {
+			allowSideEffectReordering = context.options.at(0)?.allowSideEffectReordering ?? true;
+		},
 		FunctionDeclaration: checkFunction,
 		FunctionExpression: checkFunction,
 	};
 }
 
-export const preferParameterDestructuring = createEslintRule<Options, MessageIds>({
+export const preferParameterDestructuring = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
-	create,
+	createOnce,
 	defaultOptions: [{ allowSideEffectReordering: true }],
 	meta: {
 		defaultOptions: [{ allowSideEffectReordering: true }],

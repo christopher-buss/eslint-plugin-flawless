@@ -4,9 +4,14 @@ export default defineConfig({
 	clean: true,
 	deps: {
 		alwaysBundle: ["ts-api-utils"],
-		neverBundle: ["@typescript-eslint/utils", "toml-eslint-parser", "typescript"],
+		neverBundle: [
+			"@oxlint/plugins",
+			"@typescript-eslint/utils",
+			"toml-eslint-parser",
+			"typescript",
+		],
 	},
-	entry: ["src/index.ts"],
+	entry: ["src/index.ts", "src/oxlint.ts"],
 	fixedExtension: true,
 	format: ["esm"],
 	onSuccess() {

@@ -1,7 +1,8 @@
 import * as core from "@eslint-react/core";
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import { createEslintRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "prefer-destructuring-assignment";
 
@@ -249,15 +250,20 @@ function reportComponent(
  * @param context - The rule context.
  * @returns The rule listener.
  */
-function create(
-	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
-): TSESLint.RuleListener {
-	const { api, visitor } = core.getFunctionComponentCollector(context);
+function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
+	// Construct once to capture the (stable) context and discover the collector's
+	// visitor selector keys. `getFunctionComponentCollector` does not read the
+	// context eagerly, so calling it in the `createOnce` body is safe; a fresh
+	// collector is built per file in `before` to reset its accumulated state.
+	let collector = core.getFunctionComponentCollector(context);
+	const selectorKeys = Object.keys(collector.visitor);
 
-	return {
-		...visitor,
+	const listener: FlawlessRuleListener = {
+		"before": function (): void {
+			collector = core.getFunctionComponentCollector(context);
+		},
 		"Program:exit": function (program: TSESTree.Program): void {
-			for (const component of api.getAllComponents(program)) {
+			for (const component of collector.api.getAllComponents(program)) {
 				// Anonymous and `export default` components are skipped, matching
 				// upstream.
 				if (component.name === null || component.isExportDefaultDeclaration) {
@@ -282,11 +288,24 @@ function create(
 			}
 		},
 	};
+
+	// Delegate the collector's selector handlers to the current per-file
+	// instance.
+	const handlers = listener as Record<string, (node: TSESTree.Node) => void>;
+	for (const key of selectorKeys) {
+		handlers[key] = (node): void => {
+			(collector.visitor as Record<string, ((node: TSESTree.Node) => void) | undefined>)[
+				key
+			]?.(node);
+		};
+	}
+
+	return listener;
 }
 
-export const preferDestructuringAssignment = createEslintRule<Options, MessageIds>({
+export const preferDestructuringAssignment = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
-	create,
+	createOnce,
 	defaultOptions: [],
 	meta: {
 		docs: {

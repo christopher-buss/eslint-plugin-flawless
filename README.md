@@ -97,6 +97,28 @@ export default [
 }
 ```
 
+### oxlint (via jsPlugins)
+
+The non-type-aware rules are also published as an
+[oxlint JS plugin](https://oxc.rs/docs/guide/usage/linter/writing-js-plugins) at
+the `eslint-plugin-awesome/oxlint` entry point, so the same rules run under
+oxlint without any code duplication. Add `@oxlint/plugins` and the plugin as
+runtime dependencies, then reference it from your oxlint config:
+
+```jsonc
+// .oxlintrc.json
+{
+	"jsPlugins": ["eslint-plugin-awesome/oxlint"],
+	"rules": {
+		"awesome/my-new-rule": "error",
+	},
+}
+```
+
+The plugin key stays the same as under ESLint (`awesome`). Rules that require
+TypeScript type information or a custom parser are ESLint-only, since oxlint's
+JS plugin API supports neither.
+
 ## Development
 
 Scripts you’ll use during development:
