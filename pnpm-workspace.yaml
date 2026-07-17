@@ -31,6 +31,7 @@ catalogs:
     eslint-plugin-pnpm: 1.6.1
     jiti: 2.7.0
     lint-staged: 17.0.8
+    oxc-parser: 0.112.0
     oxfmt: 0.59.0
     simple-git-hooks: 2.13.1
     synckit: 0.11.13

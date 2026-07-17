@@ -54,7 +54,7 @@ type Context = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 
 // --- oxfmt worker bridge ----------------------------------------------------
 
-type FormatSync = (request: FormatRequest) => FormatResponse;
+type FormatSync = (requests: Array<FormatRequest>) => Array<FormatResponse>;
 
 /** `undefined` = not initialized yet; `null` = initialization failed. */
 let formatSync: FormatSync | null | undefined;
@@ -88,6 +88,37 @@ function getFormatSync(): FormatSync | null {
 	}
 
 	return formatSync;
+}
+
+// --- format cache -----------------------------------------------------------
+
+/**
+ * Worker verdicts cached across files and fix passes: a snippet formats the
+ * same way regardless of which file (or autofix iteration) asked. Bounded LRU
+ * so long sessions (editors, watch mode) cannot grow it without limit.
+ */
+const formatCache = new Map<string, FormatResponse>();
+const FORMAT_CACHE_MAX_ENTRIES = 1024;
+
+function formatCacheGet(key: string): FormatResponse | undefined {
+	const value = formatCache.get(key);
+	if (value !== undefined) {
+		formatCache.delete(key);
+		formatCache.set(key, value);
+	}
+
+	return value;
+}
+
+function formatCacheSet(key: string, value: FormatResponse): void {
+	formatCache.delete(key);
+	formatCache.set(key, value);
+	if (formatCache.size > FORMAT_CACHE_MAX_ENTRIES) {
+		const oldest = formatCache.keys().next().value;
+		if (oldest !== undefined) {
+			formatCache.delete(oldest);
+		}
+	}
 }
 
 // --- measurement helpers ----------------------------------------------------
@@ -248,7 +279,7 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		let config: Config = DEFAULTS;
 		let sourceCode: Readonly<TSESLint.SourceCode>;
 		let lines: Array<string>;
-		let formatCache: Map<string, FormatResponse>;
+		let pendingConsults: Array<TSESTree.ArrowFunctionExpression>;
 
 		/**
 		 * Effective line-length limit for emitted lines: the fixer must never
@@ -329,56 +360,88 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		}
 
 		/**
-		 * Consults oxfmt: would the formatter render this arrow (params through
-		 * body) on a single line that fits `maxLen`? Fails open (`true`) when the
-		 * worker or oxfmt is unavailable so that an unavailable formatter can
-		 * never introduce reports it would have to fight over.
-		 *
-		 * @param node - The arrow function to measure.
-		 * @returns Whether the formatted arrow fits within `maxLen`.
+		 * Resolves every deferred oxfmt consult with a single worker round-trip:
+		 * would the formatter render each arrow (params through body) on a single
+		 * line that fits `maxLen`? Arrows the formatter cannot keep on one fitting
+		 * line are reported. Fails open (no report) when the worker or oxfmt is
+		 * unavailable so that an unavailable formatter can never introduce reports
+		 * it would have to fight over.
 		 */
-		function formattedFits(node: TSESTree.ArrowFunctionExpression): boolean {
+		function resolvePendingConsults(): void {
+			if (pendingConsults.length === 0) {
+				return;
+			}
+
+			const nodes = pendingConsults;
+			pendingConsults = [];
 			const worker = getFormatSync();
 			if (worker === null) {
-				return true;
+				return;
 			}
 
-			const statement = statementOf(node);
-			const snippet = sourceCode.getText(statement);
-			const baseIndent = leadingWhitespace(lineOf(statement.loc.start.line));
-			const arrowIndex = collectArrows(statement).findIndex(
-				(arrow) => arrow.range[0] === node.range[0],
-			);
-			if (arrowIndex === -1) {
-				return true;
-			}
-
-			const cacheKey = `${arrowIndex} ${snippet}`;
-			let response = formatCache.get(cacheKey);
-			if (response === undefined) {
-				try {
-					response = worker({
-						arrowIndex,
-						code: `${snippet}\n`,
-						printWidth: printWidth(),
-						tabWidth: config.tabWidth,
-					});
-				} catch {
-					return true;
+			const consults = nodes.flatMap((node) => {
+				const statement = statementOf(node);
+				const snippet = sourceCode.getText(statement);
+				const baseIndent = leadingWhitespace(lineOf(statement.loc.start.line));
+				const arrowIndex = collectArrows(statement).findIndex(
+					(arrow) => arrow.range[0] === node.range[0],
+				);
+				if (arrowIndex === -1) {
+					return [];
 				}
 
-				formatCache.set(cacheKey, response);
+				const request: FormatRequest = {
+					arrowIndex,
+					code: `${snippet}\n`,
+					printWidth: printWidth(),
+					tabWidth: config.tabWidth,
+				};
+
+				const cacheKey = `${arrowIndex} ${request.printWidth} ${request.tabWidth} ${snippet}`;
+
+				return [{ baseIndent, cacheKey, node, request }];
+			});
+
+			const misses = new Map<string, FormatRequest>();
+			for (const consult of consults) {
+				if (formatCacheGet(consult.cacheKey) === undefined) {
+					misses.set(consult.cacheKey, consult.request);
+				}
 			}
 
-			if (response.lineText === null) {
-				return true;
+			if (misses.size > 0) {
+				let responses: Array<FormatResponse> = [];
+				try {
+					responses = worker([...misses.values()]);
+				} catch {
+					responses = [];
+				}
+
+				for (const [index, cacheKey] of [...misses.keys()].entries()) {
+					const response = responses[index];
+					if (response !== undefined) {
+						formatCacheSet(cacheKey, response);
+					}
+				}
 			}
 
-			if (!response.singleLine) {
-				return false;
-			}
+			for (const consult of consults) {
+				const response = formatCacheGet(consult.cacheKey);
+				if (response === undefined) {
+					continue;
+				}
 
-			return width(baseIndent) + width(response.lineText) <= config.maxLen;
+				if (response.lineText === null) {
+					continue;
+				}
+
+				const fits =
+					response.singleLine &&
+					width(consult.baseIndent) + width(response.lineText) <= config.maxLen;
+				if (!fits) {
+					reportExplicit(consult.node, EXPLICIT);
+				}
+			}
 		}
 
 		/**
@@ -588,11 +651,14 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 
 			const lineWidth = width(lineOf(bodyStart.loc.start.line));
 			if (lineWidth > limit()) {
-				if (config.useOxfmt !== false && formattedFits(node)) {
-					return;
+				// The formatter verdict is deferred so that all consults in the
+				// file share one worker round-trip (see resolvePendingConsults).
+				if (config.useOxfmt !== false) {
+					pendingConsults.push(node);
+				} else {
+					reportExplicit(node, EXPLICIT);
 				}
 
-				reportExplicit(node, EXPLICIT);
 				return;
 			}
 
@@ -602,18 +668,21 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		}
 
 		return {
-			ArrowFunctionExpression(node): void {
+			"ArrowFunctionExpression": function (node): void {
 				if (node.body.type === AST_NODE_TYPES.BlockStatement) {
 					checkBlockBody(node);
 				} else {
 					checkExpressionBody(node);
 				}
 			},
-			before(): void {
+			"before": function (): void {
 				config = { ...DEFAULTS, ...context.options[0] };
 				({ sourceCode } = context);
 				lines = [...sourceCode.lines];
-				formatCache = new Map();
+				pendingConsults = [];
+			},
+			"Program:exit": function (): void {
+				resolvePendingConsults();
 			},
 		};
 	},

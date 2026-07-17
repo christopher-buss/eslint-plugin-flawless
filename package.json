@@ -30,7 +30,7 @@
 	],
 	"scripts": {
 		"prebench": "nr build",
-		"bench": "eslint-rule-benchmark run",
+		"bench": "eslint-rule-benchmark run --eslint-config benchmark/eslint.config.mjs",
 		"build": "tsdown --clean --dts",
 		"create-rule": "tsx scripts/create-rule.ts",
 		"dev": "tsdown --stub",
@@ -53,10 +53,10 @@
 	"dependencies": {
 		"@eslint-react/core": "catalog:cli",
 		"@oxlint/plugins": "catalog:cli",
-		"@typescript-eslint/parser": "catalog:cli",
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
 		"@typescript-eslint/utils": "catalog:cli",
+		"oxc-parser": "catalog:cli",
 		"oxfmt": "catalog:cli",
 		"synckit": "catalog:cli",
 		"toml-eslint-parser": "catalog:testing"
@@ -67,6 +67,7 @@
 		"@isentinel/tsconfig": "catalog:types",
 		"@types/node": "catalog:types",
 		"@typescript-eslint/eslint-plugin": "catalog:cli",
+		"@typescript-eslint/parser": "catalog:cli",
 		"@vitest/eslint-plugin": "catalog:testing",
 		"bumpp": "catalog:cli",
 		"eslint": "catalog:cli",

@@ -48,6 +48,9 @@ catalogs:
     lint-staged:
       specifier: 17.0.8
       version: 17.0.8
+    oxc-parser:
+      specifier: 0.112.0
+      version: 0.112.0
     oxfmt:
       specifier: 0.59.0
       version: 0.59.0
@@ -132,9 +135,6 @@ importers:
       '@oxlint/plugins':
         specifier: catalog:cli
         version: 1.73.0
-      '@typescript-eslint/parser':
-        specifier: catalog:cli
-        version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/scope-manager':
         specifier: catalog:cli
         version: 8.62.1
@@ -144,6 +144,9 @@ importers:
       '@typescript-eslint/utils':
         specifier: catalog:cli
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
+      oxc-parser:
+        specifier: catalog:cli
+        version: 0.112.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       oxfmt:
         specifier: catalog:cli
         version: 0.59.0
@@ -169,6 +172,9 @@ importers:
       '@typescript-eslint/eslint-plugin':
         specifier: catalog:cli
         version: 8.62.1(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
+      '@typescript-eslint/parser':
+        specifier: catalog:cli
+        version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       '@vitest/eslint-plugin':
         specifier: catalog:testing
         version: 1.6.20(@typescript-eslint/eslint-plugin@8.62.1(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)(vitest@4.1.9(@types/node@24.0.13)(vite@8.1.0(@types/node@24.0.13)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))
