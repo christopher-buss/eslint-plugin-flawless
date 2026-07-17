@@ -30,22 +30,34 @@ const REACT_BUILTIN_PROPS = new Set(["children", "key", "ref"]);
  *
  * @param checker - The TypeScript type checker.
  * @param type - The props type to inspect.
+ * @param extraWrapperName - An additional alias name (the configured autofix
+ *   wrapper, such as `Immutable`) whose presence short-circuits to read-only,
+ *   so already-wrapped props are recognized in O(1) without walking members.
  * @returns `true` when the type exposes no mutable properties.
  */
-export function isTypeFullyReadonly(checker: TypeChecker, type: Type): boolean {
+export function isTypeFullyReadonly(
+	checker: TypeChecker,
+	type: Type,
+	extraWrapperName?: string,
+): boolean {
 	const aliasSymbol = type.aliasSymbol ?? type.getSymbol();
-	if (aliasSymbol && READONLY_WRAPPER_NAMES.has(aliasSymbol.getName())) {
-		return true;
+	if (aliasSymbol) {
+		const name = aliasSymbol.getName();
+		if (READONLY_WRAPPER_NAMES.has(name) || name === extraWrapperName) {
+			return true;
+		}
 	}
 
 	if (type.isUnion()) {
-		return type.types.every((unionType) => isTypeFullyReadonly(checker, unionType));
+		return type.types.every((unionType) => {
+			return isTypeFullyReadonly(checker, unionType, extraWrapperName);
+		});
 	}
 
 	if (type.isIntersection()) {
-		return type.types.every((intersectionType) =>
-			isTypeFullyReadonly(checker, intersectionType),
-		);
+		return type.types.every((intersectionType) => {
+			return isTypeFullyReadonly(checker, intersectionType, extraWrapperName);
+		});
 	}
 
 	const indexInfos: ReadonlyArray<IndexInfo> = checker.getIndexInfosOfType(type);

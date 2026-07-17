@@ -71,6 +71,47 @@ function Farewell(props: Readonly<Props>): ReactNode {
 }
 ```
 
+## Options
+
+This rule accepts an options object:
+
+```jsonc
+{
+	"flawless/prefer-read-only-props": [
+		"error",
+		{
+			// Utility type the autofix wraps props in. Default: "Readonly".
+			"wrapperType": "Immutable",
+			// Module to import `wrapperType` from when it is not global.
+			"importSource": "~/types",
+		},
+	],
+}
+```
+
+### `wrapperType`
+
+The utility type the autofix wraps props in. Defaults to the global
+`Readonly<>`, which makes only top-level properties read-only. Set it to a
+deep-readonly type such as `Immutable` when you want nested props to be
+immutable too — mutating a nested prop object or array is as much a contract
+violation as reassigning a top-level prop.
+
+The configured name is also treated as an already-read-only wrapper during
+detection, so props already annotated `Immutable<Props>` are recognized in O(1)
+via their alias symbol, without walking the (potentially recursive) type.
+
+Detection itself stays shallow: a component is reported only when a top-level
+property is mutable. A deep wrapper therefore strengthens the fix without
+forcing a rewrite of props that are already flatly read-only.
+
+### `importSource`
+
+The module to import `wrapperType` from. When set, the autofix inserts a type
+import (merging into an existing named import from the same module when one
+exists) so the emitted wrapper does not reference an undeclared type. Omit it
+for globally available wrappers like the default `Readonly`.
+
 ## Further Reading
 
 - [`@typescript-eslint/prefer-readonly-parameter-types`](https://typescript-eslint.io/rules/prefer-readonly-parameter-types)

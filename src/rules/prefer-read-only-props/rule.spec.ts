@@ -55,6 +55,22 @@ const valid: Array<ValidTestCase> = [
 		code: "const App = (props: {}) => <div />;",
 		filename,
 	},
+	// Props already wrapped in the configured deep-readonly wrapper. Verifies
+	// the alias short-circuit recognizes a mapped/conditional `Immutable<T>`.
+	{
+		code: tsx`
+			type ImmutablePrimitive = boolean | number | string | undefined;
+			type Immutable<T> = T extends ImmutablePrimitive
+				? T
+				: { readonly [K in keyof T]: Immutable<T[K]> };
+			interface Props {
+				name: string;
+			}
+			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
+		`,
+		filename,
+		options: [{ wrapperType: "Immutable" }],
+	},
 	// Not a component (lower-case name, no JSX) — must be ignored.
 	{
 		code: tsx`
@@ -177,6 +193,45 @@ const invalid: Array<InvalidTestCase> = [
 				name: string;
 			}
 			const App = memo<Readonly<Props>>((props) => <div>{props.name}</div>);
+		`,
+	},
+	// Custom wrapper with an import source: wrap and insert the type import.
+	{
+		code: tsx`
+			interface Props {
+				name: string;
+			}
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
+		output: tsx`
+			import type { Immutable } from "~/types";
+			interface Props {
+				name: string;
+			}
+			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
+		`,
+	},
+	// Custom wrapper merges into an existing named import from the same module.
+	{
+		code: tsx`
+			import { type Foo } from "~/types";
+			interface Props {
+				name: string;
+			}
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
+		output: tsx`
+			import { type Foo, type Immutable } from "~/types";
+			interface Props {
+				name: string;
+			}
+			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
 		`,
 	},
 ];

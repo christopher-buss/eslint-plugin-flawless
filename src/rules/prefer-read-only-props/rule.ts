@@ -11,7 +11,23 @@ import { isTypeFullyReadonly } from "./readonly-type";
 export const RULE_NAME = "prefer-read-only-props";
 
 type MessageIds = "preferReadOnlyProps";
-type Options = [];
+type Options = [
+	{
+		/**
+		 * Module to import the wrapper from when the autofix inserts it. Omit when
+		 * the wrapper is globally available (the default `Readonly` needs no
+		 * import).
+		 */
+		importSource?: string;
+		/**
+		 * Utility type the autofix wraps props in. Defaults to `Readonly`; set to a
+		 * deep-readonly type such as `Immutable` to enforce nested immutability.
+		 */
+		wrapperType?: string;
+	},
+];
+
+const DEFAULT_WRAPPER_TYPE = "Readonly";
 
 const messages = {
 	preferReadOnlyProps: "A function component's props should be read-only.",
@@ -167,6 +183,72 @@ function findPropsTypeNode(functionNode: TSESTree.Node): TSESTree.TypeNode | und
 	return getWrapperCallTypeArgument(functionNode);
 }
 
+/**
+ * Builds a fix that makes `name` importable from `source`, or `undefined` when
+ * it is already imported. Merges into an existing named import from the same
+ * module when possible, otherwise prepends a fresh `import type` statement.
+ *
+ * @param fixer - The rule fixer.
+ * @param sourceCode - The source code, for locating existing imports.
+ * @param name - The type name to import.
+ * @param source - The module specifier to import it from.
+ * @returns An import fix, or `undefined` when no import is needed.
+ */
+function buildImportFix(
+	fixer: TSESLint.RuleFixer,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	name: string,
+	source: string,
+): TSESLint.RuleFix | undefined {
+	const { body } = sourceCode.ast;
+
+	let matchingImport: TSESTree.ImportDeclaration | undefined;
+	for (const statement of body) {
+		if (
+			statement.type !== AST_NODE_TYPES.ImportDeclaration ||
+			statement.source.value !== source
+		) {
+			continue;
+		}
+
+		matchingImport = statement;
+		for (const specifier of statement.specifiers) {
+			if (
+				specifier.type === AST_NODE_TYPES.ImportSpecifier &&
+				specifier.imported.type === AST_NODE_TYPES.Identifier &&
+				specifier.imported.name === name
+			) {
+				return undefined;
+			}
+		}
+	}
+
+	if (matchingImport !== undefined) {
+		const named = matchingImport.specifiers.filter(
+			(specifier) => specifier.type === AST_NODE_TYPES.ImportSpecifier,
+		);
+		const lastNamed = named.at(-1);
+		if (lastNamed !== undefined) {
+			const prefix = matchingImport.importKind === "type" ? "" : "type ";
+			return fixer.insertTextAfter(lastNamed, `, ${prefix}${name}`);
+		}
+	}
+
+	const insertText = `import type { ${name} } from "${source}";\n`;
+	const firstStatement = body.find(
+		(statement) => statement.type === AST_NODE_TYPES.ImportDeclaration,
+	);
+	if (firstStatement !== undefined) {
+		return fixer.insertTextBefore(firstStatement, insertText);
+	}
+
+	if (body[0] !== undefined) {
+		return fixer.insertTextBefore(body[0], insertText);
+	}
+
+	return fixer.insertTextBeforeRange([0, 0], insertText);
+}
+
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
@@ -177,6 +259,9 @@ function create(
 
 	const checker = services.program.getTypeChecker();
 	const { sourceCode } = context;
+	const options = context.options.at(0) ?? {};
+	const wrapperType = options.wrapperType ?? DEFAULT_WRAPPER_TYPE;
+	const { importSource } = options;
 	const collector = core.getFunctionComponentCollector(context);
 
 	function getParameterType(parameter: TSESTree.Parameter): Type {
@@ -198,7 +283,7 @@ function create(
 		}
 
 		const propsType = getParameterType(firstParameter);
-		if (isTypeFullyReadonly(checker, propsType)) {
+		if (isTypeFullyReadonly(checker, propsType, wrapperType)) {
 			return;
 		}
 
@@ -207,11 +292,27 @@ function create(
 			fix:
 				typeNode === undefined
 					? undefined
-					: (fixer): TSESLint.RuleFix => {
-							return fixer.replaceText(
-								typeNode,
-								`Readonly<${sourceCode.getText(typeNode)}>`,
-							);
+					: (fixer): Array<TSESLint.RuleFix> => {
+							const fixes = [
+								fixer.replaceText(
+									typeNode,
+									`${wrapperType}<${sourceCode.getText(typeNode)}>`,
+								),
+							];
+
+							if (importSource !== undefined) {
+								const importFix = buildImportFix(
+									fixer,
+									sourceCode,
+									wrapperType,
+									importSource,
+								);
+								if (importFix !== undefined) {
+									fixes.push(importFix);
+								}
+							}
+
+							return fixes;
 						},
 			messageId: "preferReadOnlyProps",
 			node: functionNode,
@@ -235,8 +336,9 @@ function create(
 export const preferReadOnlyProps = createEslintRule<Options, MessageIds>({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
+	defaultOptions: [{}],
 	meta: {
+		defaultOptions: [{}],
 		docs: {
 			description: "Enforce that function component props are read-only",
 			recommended: false,
@@ -245,7 +347,24 @@ export const preferReadOnlyProps = createEslintRule<Options, MessageIds>({
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema: [
+			{
+				additionalProperties: false,
+				properties: {
+					importSource: {
+						description:
+							"Module to import `wrapperType` from when the autofix inserts it. Omit when the wrapper is globally available (the default `Readonly` needs no import).",
+						type: "string",
+					},
+					wrapperType: {
+						description:
+							"Utility type the autofix wraps props in. Defaults to `Readonly`; set to a deep-readonly type such as `Immutable` to enforce nested immutability.",
+						type: "string",
+					},
+				},
+				type: "object",
+			},
+		],
 		type: "suggestion",
 	},
 });
