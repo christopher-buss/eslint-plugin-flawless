@@ -1,4 +1,8 @@
 {
 	"extends": "@isentinel/tsconfig/typescript",
+	"compilerOptions": {
+		"jsx": "preserve"
+	},
+	"files": ["./file.ts", "./file.tsx"],
 	"include": ["**/*"]
 }

@@ -10,6 +10,7 @@ import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/ru
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
+import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
 import { purity } from "./rules/purity/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
@@ -45,6 +46,7 @@ export const plugin = {
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
 		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"prefer-parameter-destructuring": preferParameterDestructuring,
+		"prefer-read-only-props": preferReadOnlyProps,
 		"purity": purity,
 		"toml-sort-keys": tomlSortKeys,
 		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
