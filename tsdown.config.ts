@@ -11,7 +11,7 @@ export default defineConfig({
 			"typescript",
 		],
 	},
-	entry: ["src/index.ts", "src/oxlint.ts"],
+	entry: ["src/index.ts", "src/oxlint.ts", "src/rules/arrow-return-style/worker.ts"],
 	fixedExtension: true,
 	format: ["esm"],
 	onSuccess() {

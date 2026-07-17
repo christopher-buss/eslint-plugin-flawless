@@ -57,4 +57,17 @@ export default isentinel(
 			"flawless/yaml-block-key-blank-lines": "off",
 		},
 	},
+	{
+		// The documentation intentionally shows incorrect samples that the
+		// legacy arrow-style plugin and the oxfmt formatting rule would
+		// rewrite, and its arrow examples are the rule's subject matter.
+		files: ["src/rules/arrow-return-style/documentation.md/**"],
+		rules: {
+			"arrow-style/arrow-return-style": "off",
+			"flawless/arrow-return-style": "off",
+			"func-style": "off",
+			"oxfmt/oxfmt": "off",
+			"ts/explicit-function-return-type": "off",
+		},
+	},
 );

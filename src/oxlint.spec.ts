@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 7 dual-runtime rules is run through the real
+// Integration tests: each of the 8 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
@@ -13,6 +13,32 @@ beforeAll(() => {
 }, 120_000);
 
 describe("oxlint integration", () => {
+	it("arrow-return-style reports and fixes a collapsible block", () => {
+		const { diagnostics, fixed } = runOxlint({
+			code: "const foo = () => {\n\treturn 'foo';\n};\n",
+			filename: "file.ts",
+			rule: "arrow-return-style",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(arrow-return-style)");
+		expect(fixed).toContain("const foo = () => 'foo';");
+	});
+
+	it("arrow-return-style consults the oxfmt worker under oxlint", () => {
+		// 81 chars > maxLen 80 forces the synckit + oxfmt boundary consult
+		// before the explicit conversion is reported.
+		const { diagnostics, fixed } = runOxlint({
+			code: "const exactly81chars = () => 'this string makes the line exactly eighty-one char'\n",
+			filename: "file.ts",
+			rule: "arrow-return-style",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(arrow-return-style)");
+		expect(fixed).toContain("return 'this string makes the line exactly eighty-one char';");
+	});
+
 	it("jsx-shorthand-boolean reports and fixes", () => {
 		const { diagnostics, fixed } = runOxlint({
 			code: "export const A = () => <Foo disabled />;\n",

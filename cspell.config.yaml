@@ -5,7 +5,10 @@ version: "0.2"
 language: en
 
 words:
+  - fixpoint
   - oxlint
   - oxlintrc
+  - parenthesization
+  - specced
   - randomseed
   - tses

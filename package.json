@@ -51,9 +51,12 @@
 	"dependencies": {
 		"@eslint-react/core": "catalog:cli",
 		"@oxlint/plugins": "catalog:cli",
+		"@typescript-eslint/parser": "catalog:cli",
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
 		"@typescript-eslint/utils": "catalog:cli",
+		"oxfmt": "catalog:cli",
+		"synckit": "catalog:cli",
 		"toml-eslint-parser": "catalog:testing"
 	},
 	"devDependencies": {
@@ -62,7 +65,6 @@
 		"@isentinel/tsconfig": "catalog:types",
 		"@types/node": "catalog:types",
 		"@typescript-eslint/eslint-plugin": "catalog:cli",
-		"@typescript-eslint/parser": "catalog:cli",
 		"@vitest/eslint-plugin": "catalog:testing",
 		"bumpp": "catalog:cli",
 		"eslint": "catalog:cli",

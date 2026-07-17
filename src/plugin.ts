@@ -3,6 +3,7 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
+import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
 import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
 import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
@@ -39,6 +40,7 @@ export const plugin = {
 		version: packageVersion,
 	},
 	rules: {
+		"arrow-return-style": arrowReturnStyle,
 		"jsx-shorthand-boolean": jsxShorthandBoolean,
 		"jsx-shorthand-fragment": jsxShorthandFragment,
 		"naming-convention": namingConvention,
