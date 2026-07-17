@@ -19,6 +19,14 @@ const READONLY_WRAPPER_NAMES = new Set([
  */
 const REACT_BUILTIN_PROPS = new Set(["children", "key", "ref"]);
 
+/** The mutable members of a props type, as needed to insert `readonly` modifiers. */
+export interface MutableMembers {
+	/** Index signatures (`[key: string]: T`) that are not already `readonly`. */
+	readonly indexInfos: ReadonlyArray<IndexInfo>;
+	/** Property symbols that are not already read-only (nor React built-ins). */
+	readonly properties: ReadonlyArray<TSSymbol>;
+}
+
 /**
  * Determines whether every property of a props type is read-only.
  *
@@ -79,6 +87,33 @@ export function isTypeFullyReadonly(
 	}
 
 	return true;
+}
+
+/**
+ * Collects the mutable members of a props type so the autofix can add a
+ * `readonly` modifier to each. Mirrors {@link isTypeFullyReadonly}'s notion of
+ * read-only (React built-ins and inherited `readonly` count as read-only), but
+ * gathers the offenders instead of returning a boolean.
+ *
+ * Union and intersection types are not attributable to a single declaration, so
+ * they return `null` — the caller withholds the `readonly`-modifier fix.
+ *
+ * @param checker - The TypeScript type checker.
+ * @param type - The props type to inspect.
+ * @returns The mutable members, or `null` when the type is a union/intersection.
+ */
+export function collectMutableProperties(checker: TypeChecker, type: Type): MutableMembers | null {
+	if (type.isUnion() || type.isIntersection()) {
+		return null;
+	}
+
+	const indexInfos = checker
+		.getIndexInfosOfType(type)
+		.filter((indexInfo) => !indexInfo.isReadonly);
+	const properties = checker
+		.getPropertiesOfType(type)
+		.filter((property) => !isReadonlyPropertiesProperty(checker, type, property));
+	return { indexInfos, properties };
 }
 
 function isTypePropertyReadonly(checker: TypeChecker, type: Type, property: TSSymbol): boolean {

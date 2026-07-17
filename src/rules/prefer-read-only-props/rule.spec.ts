@@ -234,6 +234,169 @@ const invalid: Array<InvalidTestCase> = [
 			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
 		`,
 	},
+	// modifier mode: inline literal gets a per-property readonly modifier.
+	{
+		code: tsx`
+			function App(props: { name: string }) {
+				return <div>{props.name}</div>;
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			function App(props: { readonly name: string }) {
+				return <div>{props.name}</div>;
+			}
+		`,
+	},
+	// modifier mode: a same-file named interface is modified in place.
+	{
+		code: tsx`
+			interface Props {
+				name: string;
+			}
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			interface Props {
+				readonly name: string;
+			}
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+	},
+	// modifier mode: a same-file type alias to a type literal.
+	{
+		code: tsx`
+			type Props = {
+				name: string;
+			};
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			type Props = {
+				readonly name: string;
+			};
+			const App = (props: Props) => <div>{props.name}</div>;
+		`,
+	},
+	// modifier mode: only the mutable member of a partially read-only interface.
+	{
+		code: tsx`
+			interface Props {
+				readonly a: number;
+				b: string;
+			}
+			function App(props: Props) {
+				return <div>{props.b}</div>;
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			interface Props {
+				readonly a: number;
+				readonly b: string;
+			}
+			function App(props: Props) {
+				return <div>{props.b}</div>;
+			}
+		`,
+	},
+	// modifier mode: a mutable index signature gets a readonly modifier.
+	{
+		code: "const App = (props: { [key: string]: number }) => <div>{props.x}</div>;",
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: "const App = (props: { readonly [key: string]: number }) => <div>{props.x}</div>;",
+	},
+	// modifier mode: an FC annotation reaches the referenced same-file interface
+	// rather than the type argument.
+	{
+		code: tsx`
+			type FC<P> = (props: P) => any;
+			interface Props {
+				name: string;
+			}
+			const App: FC<Props> = (props) => <div>{props.name}</div>;
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			type FC<P> = (props: P) => any;
+			interface Props {
+				readonly name: string;
+			}
+			const App: FC<Props> = (props) => <div>{props.name}</div>;
+		`,
+	},
+	// modifier mode: forwardRef likewise reaches the same-file interface.
+	{
+		code: tsx`
+			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
+			interface Props {
+				name: string;
+			}
+			const App = forwardRef<HTMLDivElement, Props>((props, ref) => <div>{props.name}</div>);
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: tsx`
+			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
+			interface Props {
+				readonly name: string;
+			}
+			const App = forwardRef<HTMLDivElement, Props>((props, ref) => <div>{props.name}</div>);
+		`,
+	},
+	// modifier mode: a union props type is not attributable to a single
+	// declaration, so it is reported without a fix.
+	{
+		code: tsx`
+			interface A {
+				a: number;
+			}
+			interface B {
+				b: number;
+			}
+			type Props = A | B;
+			function App(props: Props) {
+				return <div />;
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: null,
+	},
+	// modifier mode: a method signature cannot take a readonly modifier, so the
+	// component is reported without a fix even though `name` alone could be
+	// fixed.
+	{
+		code: tsx`
+			interface Props {
+				name: string;
+				onClick(): void;
+			}
+			function App(props: Props) {
+				return <div onClick={props.onClick}>{props.name}</div>;
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		options: [{ fixStyle: "modifier" }],
+		output: null,
+	},
 ];
 
 run({

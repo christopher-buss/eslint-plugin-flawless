@@ -3,16 +3,24 @@ import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type { Type } from "typescript";
+import type { Declaration, Type } from "typescript";
 
 import { createEslintRule } from "../../util";
-import { isTypeFullyReadonly } from "./readonly-type";
+import type { MutableMembers } from "./readonly-type";
+import { collectMutableProperties, isTypeFullyReadonly } from "./readonly-type";
 
 export const RULE_NAME = "prefer-read-only-props";
 
 type MessageIds = "preferReadOnlyProps";
 type Options = [
 	{
+		/**
+		 * How the autofix makes props read-only. `"wrap"` (the default) wraps the
+		 * props type in `wrapperType`; `"modifier"` instead adds a `readonly`
+		 * modifier to each mutable property, but only when every one is inline or
+		 * declared in the same file (otherwise no fix is offered).
+		 */
+		fixStyle?: "modifier" | "wrap";
 		/**
 		 * Module to import the wrapper from when the autofix inserts it. Omit when
 		 * the wrapper is globally available (the default `Readonly` needs no
@@ -261,11 +269,73 @@ function create(
 	const { sourceCode } = context;
 	const options = context.options.at(0) ?? {};
 	const wrapperType = options.wrapperType ?? DEFAULT_WRAPPER_TYPE;
+	const fixStyle = options.fixStyle ?? "wrap";
 	const { importSource } = options;
 	const collector = core.getFunctionComponentCollector(context);
 
 	function getParameterType(parameter: TSESTree.Parameter): Type {
 		return checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(parameter));
+	}
+
+	/**
+	 * Maps a member's TypeScript declaration back to its editable AST node.
+	 *
+	 * @param declaration - The member's declaration, or `undefined` when the
+	 *   symbol has none (a synthesized member).
+	 * @param expected - The AST node type the declaration must map to.
+	 * @returns The AST node, or `undefined` when the declaration is missing, lives
+	 *   in another file (absent from this file's node map), or is not the expected
+	 *   kind (such as a method signature, which cannot take a `readonly`).
+	 */
+	function resolveMemberNode(
+		declaration: Declaration | undefined,
+		expected: AST_NODE_TYPES.TSIndexSignature | AST_NODE_TYPES.TSPropertySignature,
+	): TSESTree.Node | undefined {
+		if (declaration === undefined) {
+			return undefined;
+		}
+
+		const node = services.tsNodeToESTreeNodeMap.get(declaration) as TSESTree.Node | undefined;
+		if (node?.type !== expected) {
+			return undefined;
+		}
+
+		return node;
+	}
+
+	/**
+	 * Resolves every mutable member to its editable AST node, so a `readonly`
+	 * modifier can be inserted before each.
+	 *
+	 * @param members - The mutable properties and index signatures of the props.
+	 * @returns The member nodes, or `undefined` when any member cannot be edited
+	 *   here (cross-file, synthesized, or a method signature) — in which case the
+	 *   `"modifier"` fix is withheld.
+	 */
+	function resolveModifierTargets(members: MutableMembers): Array<TSESTree.Node> | undefined {
+		const nodes = new Set<TSESTree.Node>();
+		for (const property of members.properties) {
+			const node = resolveMemberNode(
+				property.valueDeclaration,
+				AST_NODE_TYPES.TSPropertySignature,
+			);
+			if (node === undefined) {
+				return undefined;
+			}
+
+			nodes.add(node);
+		}
+
+		for (const indexInfo of members.indexInfos) {
+			const node = resolveMemberNode(indexInfo.declaration, AST_NODE_TYPES.TSIndexSignature);
+			if (node === undefined) {
+				return undefined;
+			}
+
+			nodes.add(node);
+		}
+
+		return nodes.size === 0 ? undefined : [...nodes];
 	}
 
 	function checkComponent(functionNode: TSESTree.Node): void {
@@ -284,6 +354,24 @@ function create(
 
 		const propsType = getParameterType(firstParameter);
 		if (isTypeFullyReadonly(checker, propsType, wrapperType)) {
+			return;
+		}
+
+		if (fixStyle === "modifier") {
+			const members = collectMutableProperties(checker, propsType);
+			const targets = members === null ? undefined : resolveModifierTargets(members);
+			context.report({
+				fix:
+					targets === undefined
+						? undefined
+						: (fixer): Array<TSESLint.RuleFix> => {
+								return targets.map((node) =>
+									fixer.insertTextBefore(node, "readonly "),
+								);
+							},
+				messageId: "preferReadOnlyProps",
+				node: functionNode,
+			});
 			return;
 		}
 
@@ -351,6 +439,12 @@ export const preferReadOnlyProps = createEslintRule<Options, MessageIds>({
 			{
 				additionalProperties: false,
 				properties: {
+					fixStyle: {
+						description:
+							'How the autofix makes props read-only: "wrap" wraps the type in the wrapper (Readonly<> by default); "modifier" adds a readonly modifier to each property, but only when every property is inline or declared in the same file, otherwise no fix is offered. "modifier" ignores wrapperType/importSource.',
+						enum: ["wrap", "modifier"],
+						type: "string",
+					},
 					importSource: {
 						description:
 							"Module to import `wrapperType` from when the autofix inserts it. Omit when the wrapper is globally available (the default `Readonly` needs no import).",

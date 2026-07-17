@@ -29,12 +29,21 @@ Because it reads type information, this rule requires
 [type-aware linting](https://typescript-eslint.io/getting-started/typed-linting)
 and does not run under oxlint.
 
-The autofix wraps the props type in `Readonly<>`, which makes every top-level
-property read-only in a single edit. The fix is only offered when the props type
-is written explicitly — as a parameter annotation, or as the type argument of an
-`FC` / `forwardRef` / `memo` form. When no such type node can be located (for
-example, props inferred with no annotation), the component is reported without a
-fix.
+The autofix has two styles, chosen by [`fixStyle`](#fixstyle). By default
+(`"wrap"`) it wraps the props type in `Readonly<>`, which makes every top-level
+property read-only in a single edit. This fix is only offered when the props
+type is written explicitly — as a parameter annotation, or as the type argument
+of an `FC` / `forwardRef` / `memo` form. When no such type node can be located
+(for example, props inferred with no annotation), the component is reported
+without a fix.
+
+With `"modifier"`, the fix instead adds a `readonly` modifier to each mutable
+property (`interface Props { name: string }` →
+`interface Props { readonly name: string }`). Every property must be reachable
+and editable here: inline type literals and props declared by a same-file
+`interface` or `type` are rewritten in place; when any property is declared in
+another file, or the props type is a union/intersection or contains a method
+signature, the component is reported without a fix.
 
 ## Examples
 
@@ -80,6 +89,8 @@ This rule accepts an options object:
 	"flawless/prefer-read-only-props": [
 		"error",
 		{
+			// How the autofix makes props read-only. Default: "wrap".
+			"fixStyle": "modifier",
 			// Utility type the autofix wraps props in. Default: "Readonly".
 			"wrapperType": "Immutable",
 			// Module to import `wrapperType` from when it is not global.
@@ -88,6 +99,19 @@ This rule accepts an options object:
 	],
 }
 ```
+
+### `fixStyle`
+
+How the autofix makes props read-only. `"wrap"` (the default) wraps the props
+type in [`wrapperType`](#wrappertype); `"modifier"` adds a `readonly` modifier
+to each mutable property instead. See [Rule details](#rule-details) for exactly
+when each style produces a fix.
+
+`"modifier"` ignores `wrapperType` and `importSource` — it inserts no wrapper,
+so there is nothing to name or import. Note that when it modifies a shared
+same-file `interface` or `type`, that declaration becomes read-only for every
+consumer, not only the component being linted; this is the intended effect of
+the modifier style.
 
 ### `wrapperType`
 
