@@ -90,6 +90,37 @@ function getFormatSync(): FormatSync | null {
 	return formatSync;
 }
 
+// --- format cache -----------------------------------------------------------
+
+/**
+ * Worker verdicts cached across files and fix passes: a snippet formats the
+ * same way regardless of which file (or autofix iteration) asked. Bounded LRU
+ * so long sessions (editors, watch mode) cannot grow it without limit.
+ */
+const formatCache = new Map<string, FormatResponse>();
+const FORMAT_CACHE_MAX_ENTRIES = 1024;
+
+function formatCacheGet(key: string): FormatResponse | undefined {
+	const value = formatCache.get(key);
+	if (value !== undefined) {
+		formatCache.delete(key);
+		formatCache.set(key, value);
+	}
+
+	return value;
+}
+
+function formatCacheSet(key: string, value: FormatResponse): void {
+	formatCache.delete(key);
+	formatCache.set(key, value);
+	if (formatCache.size > FORMAT_CACHE_MAX_ENTRIES) {
+		const oldest = formatCache.keys().next().value;
+		if (oldest !== undefined) {
+			formatCache.delete(oldest);
+		}
+	}
+}
+
 // --- measurement helpers ----------------------------------------------------
 
 /**
@@ -248,7 +279,6 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		let config: Config = DEFAULTS;
 		let sourceCode: Readonly<TSESLint.SourceCode>;
 		let lines: Array<string>;
-		let formatCache: Map<string, FormatResponse>;
 		let pendingConsults: Array<TSESTree.ArrowFunctionExpression>;
 
 		/**
@@ -367,12 +397,14 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 					tabWidth: config.tabWidth,
 				};
 
-				return [{ baseIndent, cacheKey: `${arrowIndex} ${snippet}`, node, request }];
+				const cacheKey = `${arrowIndex} ${request.printWidth} ${request.tabWidth} ${snippet}`;
+
+				return [{ baseIndent, cacheKey, node, request }];
 			});
 
 			const misses = new Map<string, FormatRequest>();
 			for (const consult of consults) {
-				if (!formatCache.has(consult.cacheKey)) {
+				if (formatCacheGet(consult.cacheKey) === undefined) {
 					misses.set(consult.cacheKey, consult.request);
 				}
 			}
@@ -388,13 +420,13 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 				for (const [index, cacheKey] of [...misses.keys()].entries()) {
 					const response = responses[index];
 					if (response !== undefined) {
-						formatCache.set(cacheKey, response);
+						formatCacheSet(cacheKey, response);
 					}
 				}
 			}
 
 			for (const consult of consults) {
-				const response = formatCache.get(consult.cacheKey);
+				const response = formatCacheGet(consult.cacheKey);
 				if (response === undefined) {
 					continue;
 				}
@@ -647,7 +679,6 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 				config = { ...DEFAULTS, ...context.options[0] };
 				({ sourceCode } = context);
 				lines = [...sourceCode.lines];
-				formatCache = new Map();
 				pendingConsults = [];
 			},
 			"Program:exit": function (): void {

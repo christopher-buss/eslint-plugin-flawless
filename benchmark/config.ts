@@ -35,9 +35,11 @@ export default defineConfig({
 			cases: [{ testPath: "./cases/block-to-implicit.ts" }],
 		},
 		{
-			// Worst case for the worker: every consult is a cache miss.
-			// useOxfmt:false measures the pure line-length path on the same input;
-			// the delta to useOxfmt:true is the formatter/worker cost.
+			// Worst case for the worker: every consult is distinct. The format
+			// cache persists across lint runs, so only warmup iterations pay the
+			// worker; measured iterations read the warm cache — the steady state
+			// for unchanged code. useOxfmt:false measures the pure line-length
+			// path on the same input.
 			name: "over-limit distinct — useOxfmt:false (pure)",
 			ruleId: RULE_ID,
 			rulePath: RULE_PATH,
@@ -52,7 +54,7 @@ export default defineConfig({
 			],
 		},
 		{
-			name: "over-limit distinct — useOxfmt:true (worker, cache-miss)",
+			name: "over-limit distinct — useOxfmt:true (worker, warm cache)",
 			ruleId: RULE_ID,
 			rulePath: RULE_PATH,
 			iterations: 30,
@@ -67,8 +69,7 @@ export default defineConfig({
 		},
 		{
 			// Same shape and size as the distinct case, but textually identical
-			// arrows collapse to a single worker consult via the per-file cache.
-			// Compare hz against the cache-miss case above to read cache payoff.
+			// arrows collapse to a single cache entry even on a cold cache.
 			name: "over-limit repeated — useOxfmt:true (worker, cached)",
 			ruleId: RULE_ID,
 			rulePath: RULE_PATH,
