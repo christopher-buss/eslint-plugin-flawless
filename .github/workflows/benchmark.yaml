@@ -1,0 +1,47 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/rules/arrow-return-style/**"
+      - "benchmark/**"
+      - .github/workflows/benchmark.yaml
+
+# One run per PR; a new push cancels the in-flight run rather than racing it to
+# update the same comment.
+concurrency:
+  group: benchmark-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    # eslint-rule-benchmark posts/updates a single results comment on the PR via
+    # the GraphQL API, which needs write access to pull requests.
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          cache: pnpm
+          node-version: lts/*
+
+      - run: pnpm i -g @antfu/ni
+      - run: nci
+
+      # `nr bench` runs prebench (nr build) first, so the rule resolves its
+      # oxfmt worker from dist. GITHUB_TOKEN must be mapped explicitly — the
+      # tool reads process.env.GITHUB_TOKEN to post the results comment. Numbers
+      # are informational (shared runners are noisy); this job never gates.
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Benchmark arrow-return-style
+        run: nr bench

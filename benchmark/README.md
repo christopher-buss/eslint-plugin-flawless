@@ -23,6 +23,17 @@ it measures the exact artifact users install.
 Fixtures under `cases/` are generated — edit `generate-cases.mjs` and re-run
 `node benchmark/generate-cases.mjs`, not the fixtures by hand.
 
+## CI
+
+`.github/workflows/benchmark.yaml` runs this on PRs that touch the rule, its
+worker, or `benchmark/`, and `eslint-rule-benchmark` posts the results as a
+single (auto-updated) PR comment. It is **informational only** — GitHub-hosted
+runners are too noisy for absolute wall-clock times to gate a merge, so the job
+never fails on a slowdown. Reading it: eyeball the comment on rule-touching PRs;
+watch the `useOxfmt:true` cache-miss row and its multiple over the pure row, not
+the raw millisecond count. Posting the comment needs repo Actions settings to
+allow the workflow token to write pull requests.
+
 ## What each case isolates
 
 The runner lints each fixture with `fix: true`, reusing one ESLint instance
