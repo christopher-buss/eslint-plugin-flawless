@@ -33,7 +33,7 @@ catalogs:
     lint-staged: 17.0.8
     simple-git-hooks: 2.13.1
     ts-api-utils: 2.5.0
-    tsdown: 0.22.3
+    tsdown: 0.22.9
     tsx: 4.22.4
     typescript: 6.0.3
   testing:
