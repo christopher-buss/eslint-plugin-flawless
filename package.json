@@ -1,6 +1,6 @@
 {
 	"name": "eslint-plugin-flawless",
-	"version": "0.1.10",
+	"version": "0.1.11",
 	"description": "Your ESLint plugin description",
 	"keywords": [
 		"eslint",
