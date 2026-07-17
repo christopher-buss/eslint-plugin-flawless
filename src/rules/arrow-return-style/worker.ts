@@ -1,8 +1,10 @@
 import { runAsWorker } from "synckit";
 
 /**
- * Request sent by the rule: format `code` with oxfmt and locate the
- * `arrowIndex`-th arrow function (in source order) in the formatted output.
+ * One entry of the batched request sent by the rule: format `code` with oxfmt
+ * and locate the `arrowIndex`-th arrow function (in source order) in the
+ * formatted output. Requests are batched per linted file so a file pays the
+ * worker round-trip cost once, not once per arrow.
  */
 export interface FormatRequest {
 	arrowIndex: number;
@@ -75,7 +77,7 @@ function collectArrows(root: unknown): Array<NodeLike> {
 	return arrows.sort((a, b) => a.range[0] - b.range[0]);
 }
 
-runAsWorker(async (request: FormatRequest): Promise<FormatResponse> => {
+async function formatOne(request: FormatRequest): Promise<FormatResponse> {
 	const { format } = await import("oxfmt");
 	const { parse } = await import("@typescript-eslint/parser");
 
@@ -104,4 +106,13 @@ runAsWorker(async (request: FormatRequest): Promise<FormatResponse> => {
 		lineText: result.code.split("\n")[arrow.loc.start.line - 1] ?? null,
 		singleLine: arrow.loc.start.line === arrow.loc.end.line,
 	};
+}
+
+runAsWorker(async (requests: Array<FormatRequest>): Promise<Array<FormatResponse>> => {
+	const responses: Array<FormatResponse> = [];
+	for (const request of requests) {
+		responses.push(await formatOne(request));
+	}
+
+	return responses;
 });
