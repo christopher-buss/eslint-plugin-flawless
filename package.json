@@ -29,6 +29,8 @@
 		"dist"
 	],
 	"scripts": {
+		"prebench": "nr build",
+		"bench": "eslint-rule-benchmark run",
 		"build": "tsdown --clean --dts",
 		"create-rule": "tsx scripts/create-rule.ts",
 		"dev": "tsdown --stub",
@@ -74,6 +76,7 @@
 		"eslint-plugin-pnpm": "catalog:cli",
 		"eslint-plugin-toml": "catalog:testing",
 		"eslint-plugin-yml": "catalog:testing",
+		"eslint-rule-benchmark": "catalog:utils",
 		"eslint-vitest-rule-tester": "catalog:testing",
 		"jiti": "catalog:cli",
 		"lint-staged": "catalog:cli",
