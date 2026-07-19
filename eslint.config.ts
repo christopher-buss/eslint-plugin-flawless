@@ -51,6 +51,21 @@ export default isentinel(
 		},
 	},
 	{
+		// The documentation intentionally shows the anonymous default exports
+		// this rule reports, and its arrow examples are the rule's subject
+		// matter.
+		files: ["src/rules/no-export-default-arrow/documentation.md/**"],
+		rules: {
+			"arrow-style/arrow-return-style": "off",
+			// The legacy arrow-style plugin still ships the rule this one was
+			// migrated from, and would rewrite the incorrect samples.
+			"arrow-style/no-export-default-arrow": "off",
+			"flawless/no-export-default-arrow": "off",
+			"func-style": "off",
+			"ts/explicit-function-return-type": "off",
+		},
+	},
+	{
 		// Documentation code fences intentionally show incorrect YAML samples.
 		files: ["src/rules/yaml-block-key-blank-lines/documentation.md/**"],
 		rules: {

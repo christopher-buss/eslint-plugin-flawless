@@ -7,6 +7,7 @@ import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
 import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
 import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
+import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
@@ -44,6 +45,7 @@ export const plugin = {
 		"jsx-shorthand-boolean": jsxShorthandBoolean,
 		"jsx-shorthand-fragment": jsxShorthandFragment,
 		"naming-convention": namingConvention,
+		"no-export-default-arrow": noExportDefaultArrow,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
 		"prefer-destructuring-assignment": preferDestructuringAssignment,

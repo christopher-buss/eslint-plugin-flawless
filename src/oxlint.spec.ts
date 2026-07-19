@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 8 dual-runtime rules is run through the real
+// Integration tests: each of the 9 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
@@ -118,6 +118,21 @@ describe("oxlint integration", () => {
 		});
 
 		expect(diagnostics).toHaveLength(0);
+	});
+
+	it("no-export-default-arrow reports and fixes an anonymous default export", () => {
+		const { diagnostics, fixed } = runOxlint({
+			code: "export default () => 1;\n",
+			filename: "file.ts",
+			rule: "no-export-default-arrow",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-export-default-arrow)");
+		// The name is derived from the filename, so `context.physicalFilename`
+		// resolves under oxlint's runtime too.
+		expect(fixed).toContain("const file = () => 1");
+		expect(fixed).toContain("export default file");
 	});
 
 	it("no-unnecessary-use-memo reports an empty-deps useMemo", () => {
