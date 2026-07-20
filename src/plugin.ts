@@ -6,6 +6,7 @@ import { name as packageName, version as packageVersion } from "../package.json"
 import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
 import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
 import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
+import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
@@ -45,6 +46,7 @@ export const plugin = {
 		"arrow-return-style": arrowReturnStyle,
 		"jsx-shorthand-boolean": jsxShorthandBoolean,
 		"jsx-shorthand-fragment": jsxShorthandFragment,
+		"max-lines-per-function": maxLinesPerFunction,
 		"naming-convention": namingConvention,
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,

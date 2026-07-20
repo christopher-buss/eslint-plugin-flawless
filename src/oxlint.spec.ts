@@ -74,6 +74,19 @@ describe("oxlint integration", () => {
 		expect(fixed).toContain("<><Foo /></>");
 	});
 
+	it("max-lines-per-function reports a function over the limit", () => {
+		const { diagnostics } = runOxlint({
+			code: "export function foo() {\n\tconst a = 1;\n\treturn a;\n}\n",
+			filename: "file.ts",
+			options: [{ max: 2 }],
+			rule: "max-lines-per-function",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(max-lines-per-function)");
+		expect(diagnostics[0]?.message).toContain("Function 'foo' has too many lines (4)");
+	});
+
 	it("prefer-parameter-destructuring reports body destructuring", () => {
 		const { diagnostics } = runOxlint({
 			code: "export function b(props: { id: number }) {\n\tconst { id } = props;\n\treturn id;\n}\n",

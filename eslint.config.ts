@@ -51,6 +51,15 @@ export default isentinel(
 		},
 	},
 	{
+		// The documentation's samples are deliberately plain, unannotated
+		// functions — their shape and length is the rule's subject matter.
+		files: ["src/rules/max-lines-per-function/documentation.md/**"],
+		rules: {
+			"func-style": "off",
+			"ts/explicit-function-return-type": "off",
+		},
+	},
+	{
 		// The documentation intentionally shows the anonymous default exports
 		// this rule reports, and its arrow examples are the rule's subject
 		// matter.
