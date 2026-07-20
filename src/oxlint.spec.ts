@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 9 dual-runtime rules is run through the real
+// Integration tests: each of the 10 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
@@ -155,5 +155,17 @@ describe("oxlint integration", () => {
 
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0]?.code).toBe("flawless(no-unnecessary-use-callback)");
+	});
+
+	it("padding-after-expect-assertions reports and fixes a missing blank line", () => {
+		const { diagnostics, fixed } = runOxlint({
+			code: "it('x', () => {\n\texpect.assertions(1);\n\texpect(1).toBe(1);\n});\n",
+			filename: "file.ts",
+			rule: "padding-after-expect-assertions",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(padding-after-expect-assertions)");
+		expect(fixed).toContain("expect.assertions(1);\n\n\texpect(1).toBe(1);");
 	});
 });

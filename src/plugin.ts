@@ -10,6 +10,7 @@ import { namingConvention } from "./rules/naming-convention/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
+import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule";
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
 import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
@@ -48,6 +49,7 @@ export const plugin = {
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
+		"padding-after-expect-assertions": paddingAfterExpectAssertions,
 		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"prefer-parameter-destructuring": preferParameterDestructuring,
 		"prefer-read-only-props": preferReadOnlyProps,
