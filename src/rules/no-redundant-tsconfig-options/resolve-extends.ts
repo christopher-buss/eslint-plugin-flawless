@@ -31,6 +31,20 @@ interface RawTsconfig {
 	include?: unknown;
 }
 
+/**
+ * State threaded through one `buildInheritedConfig` resolution.
+ *
+ * `stack` is the current recursion path — a file is added while it is being
+ * flattened and removed on return, so it guards cycles without deduping a shared
+ * ancestor reached through two different `extends` branches (which must each
+ * resolve it independently, per TypeScript's precedence). `cache` stores the
+ * parse of each file so that independent resolution still reads disk once.
+ */
+interface ResolveContext {
+	readonly cache: Map<string, RawTsconfig | undefined>;
+	readonly stack: Set<string>;
+}
+
 const TOP_LEVEL_KEYS = ["include", "exclude", "files"] as const;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,16 +65,13 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function resolveExtendsTarget(spec: string, fromFile: string): string | undefined {
 	if (isPathSpecifier(spec)) {
 		const base = path.resolve(path.dirname(fromFile), spec);
-		if (fileExists(base)) {
-			return base;
-		}
-
-		if (!base.endsWith(".json") && fileExists(`${base}.json`)) {
-			return `${base}.json`;
-		}
-
-		const nested = path.join(base, "tsconfig.json");
-		return fileExists(nested) ? nested : undefined;
+		// TypeScript appends `.json` when the path lacks it, and treats a
+		// directory as its `tsconfig.json` — it never loads a file that has no
+		// extension.
+		const candidates = base.endsWith(".json")
+			? [base]
+			: [`${base}.json`, path.join(base, "tsconfig.json")];
+		return candidates.find((candidate) => fileExists(candidate));
 	}
 
 	const require = createRequire(fromFile);
@@ -89,7 +100,9 @@ export function buildInheritedConfig(
 	childFile: string,
 	extendsField: unknown,
 ): InheritedConfig | undefined {
-	const visited = new Set<string>([childFile]);
+	// Seed the stack with the child so a parent that extends back into it is
+	// treated as a cycle rather than re-linted.
+	const context: ResolveContext = { cache: new Map(), stack: new Set([childFile]) };
 	const result = emptyConfig();
 
 	let resolvedAny = false;
@@ -100,7 +113,7 @@ export function buildInheritedConfig(
 		}
 
 		resolvedAny = true;
-		mergeParent(result, flatten(target, visited));
+		mergeParent(result, flatten(target, context));
 	}
 
 	return resolvedAny ? result : undefined;
@@ -153,15 +166,7 @@ function mergeParent(into: InheritedConfig, parent: InheritedConfig): void {
 	mergeInto(into.topLevel, parent.topLevel);
 }
 
-/**
- * Reads and parses a parent tsconfig from disk. Returns `undefined` for any
- * failure — missing file, unreadable, invalid JSONC, or a top level that is not
- * an object — so a broken ancestor never crashes the lint.
- *
- * @param file - The absolute path of the config to read.
- * @returns The parsed config subset, or `undefined`.
- */
-function readTsconfig(file: string): RawTsconfig | undefined {
+function parseTsconfig(file: string): RawTsconfig | undefined {
 	try {
 		const text = readFileSync(file, "utf8");
 		const { ast } = parseForESLint(text, {});
@@ -175,6 +180,28 @@ function readTsconfig(file: string): RawTsconfig | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+/**
+ * Reads and parses a parent tsconfig from disk. Returns `undefined` for any
+ * failure — missing file, unreadable, invalid JSONC, or a top level that is not
+ * an object — so a broken ancestor never crashes the lint.
+ *
+ * @param file - The absolute path of the config to read.
+ * @param cache - Per-resolution parse cache, keyed by absolute path.
+ * @returns The parsed config subset, or `undefined`.
+ */
+function readTsconfig(
+	file: string,
+	cache: Map<string, RawTsconfig | undefined>,
+): RawTsconfig | undefined {
+	if (cache.has(file)) {
+		return cache.get(file);
+	}
+
+	const parsed = parseTsconfig(file);
+	cache.set(file, parsed);
+	return parsed;
 }
 
 function overlay(target: Map<string, InheritedEntry>, options: unknown, source: string): void {
@@ -193,35 +220,38 @@ function overlay(target: Map<string, InheritedEntry>, options: unknown, source: 
  * The `visited` set guards against circular `extends`.
  *
  * @param file - The absolute path of the config to flatten.
- * @param visited - Absolute paths already being flattened on this branch.
+ * @param context - The shared cycle stack and parse cache.
  * @returns The flattened config, with each entry's `source` naming its definer.
  */
-function flatten(file: string, visited: Set<string>): InheritedConfig {
+function flatten(file: string, context: ResolveContext): InheritedConfig {
 	const result = emptyConfig();
-	if (visited.has(file)) {
+	if (context.stack.has(file)) {
 		return result;
 	}
 
-	visited.add(file);
+	context.stack.add(file);
+	try {
+		const config = readTsconfig(file, context.cache);
+		if (config === undefined) {
+			return result;
+		}
 
-	const config = readTsconfig(file);
-	if (config === undefined) {
+		for (const spec of normalizeExtends(config.extends)) {
+			const target = resolveExtendsTarget(spec, file);
+			if (target !== undefined) {
+				mergeParent(result, flatten(target, context));
+			}
+		}
+
+		overlay(result.compilerOptions, config.compilerOptions, file);
+		for (const key of TOP_LEVEL_KEYS) {
+			if (config[key] !== undefined) {
+				result.topLevel.set(key, { source: file, value: config[key] });
+			}
+		}
+
 		return result;
+	} finally {
+		context.stack.delete(file);
 	}
-
-	for (const spec of normalizeExtends(config.extends)) {
-		const target = resolveExtendsTarget(spec, file);
-		if (target !== undefined) {
-			mergeParent(result, flatten(target, visited));
-		}
-	}
-
-	overlay(result.compilerOptions, config.compilerOptions, file);
-	for (const key of TOP_LEVEL_KEYS) {
-		if (config[key] !== undefined) {
-			result.topLevel.set(key, { source: file, value: config[key] });
-		}
-	}
-
-	return result;
 }

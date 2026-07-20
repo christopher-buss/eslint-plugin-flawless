@@ -30,6 +30,12 @@ const ENUM_SCALAR_KEYS = new Set([
 ]);
 
 /**
+ * Array-valued options TypeScript treats as unordered sets, so a reordered but
+ * otherwise identical value is still redundant.
+ */
+const SET_KEYS = new Set(["lib", "types"]);
+
+/**
  * `compilerOptions` keys whose values are resolved as paths relative to the
  * config that declares them. An identical value repeated in a child in a
  * different directory means a different path, so these are only redundant when
@@ -87,6 +93,37 @@ function equalValues(a: unknown, b: unknown, caseInsensitive: boolean): boolean 
 }
 
 /**
+ * Set equality for two arrays: same length and every element of one has a
+ * distinct equal counterpart in the other, ignoring order.
+ *
+ * @param a - The child's array.
+ * @param b - The inherited array.
+ * @param caseInsensitive - Whether string elements compare case-insensitively.
+ * @returns Whether the arrays hold the same elements regardless of order.
+ */
+function equalUnordered(
+	a: ReadonlyArray<unknown>,
+	b: ReadonlyArray<unknown>,
+	caseInsensitive: boolean,
+): boolean {
+	if (a.length !== b.length) {
+		return false;
+	}
+
+	const remaining = [...b];
+	for (const item of a) {
+		const index = remaining.findIndex((other) => equalValues(item, other, caseInsensitive));
+		if (index === -1) {
+			return false;
+		}
+
+		remaining.splice(index, 1);
+	}
+
+	return true;
+}
+
+/**
  * Whether a path-valued option is location-independent — every path string it
  * contains is either `${configDir}`-anchored (re-anchored to the extending
  * config, so an identical value resolves to the same files) or absolute. Only
@@ -130,7 +167,11 @@ function isRedundant(
 	isPathKey: boolean,
 ): boolean {
 	const caseInsensitive = key === "lib" || ENUM_SCALAR_KEYS.has(key);
-	if (!equalValues(childValue, inherited, caseInsensitive)) {
+	const equal =
+		SET_KEYS.has(key) && Array.isArray(childValue) && Array.isArray(inherited)
+			? equalUnordered(childValue, inherited, caseInsensitive)
+			: equalValues(childValue, inherited, caseInsensitive);
+	if (!equal) {
 		return false;
 	}
 
@@ -146,6 +187,22 @@ function findProperty(
 	name: string,
 ): AST.JSONProperty | undefined {
 	return object.properties.find((property) => keyName(property) === name);
+}
+
+/**
+ * Reads a node's static value, returning `undefined` when it cannot be evaluated
+ * (such as an exotic non-JSON node), so an odd value never crashes the rule. The
+ * result is boxed so a genuine `undefined` value stays distinguishable.
+ *
+ * @param node - The value node to evaluate.
+ * @returns A box holding the value, or `undefined` on failure.
+ */
+function safeStaticValue(node: AST.JSONExpression): undefined | { value: unknown } {
+	try {
+		return { value: getStaticJSONValue(node) };
+	} catch {
+		return undefined;
+	}
 }
 
 function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListener {
@@ -171,10 +228,12 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 	 * @param entry - The inherited value and the config that defined it.
 	 */
 	function report(property: AST.JSONProperty, name: string, entry: InheritedEntry): void {
+		const relative = path.relative(path.dirname(filename), entry.source) || entry.source;
 		context.report({
 			data: {
 				option: name,
-				source: path.relative(path.dirname(filename), entry.source) || entry.source,
+				// Use forward slashes so the message reads the same on Windows.
+				source: relative.split(path.sep).join("/"),
 			},
 			fix: buildFix(property),
 			loc: property.key.loc,
@@ -233,8 +292,11 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 				continue;
 			}
 
-			const childValue = getStaticJSONValue(property.value);
-			if (isRedundant(name, childValue, entry.value, isPathKey(name))) {
+			const childValue = safeStaticValue(property.value);
+			if (
+				childValue !== undefined &&
+				isRedundant(name, childValue.value, entry.value, isPathKey(name))
+			) {
 				report(property, name, entry);
 			}
 		}
@@ -253,10 +315,12 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 				return;
 			}
 
-			const inherited = buildInheritedConfig(
-				filename,
-				getStaticJSONValue(extendsProperty.value),
-			);
+			const extendsValue = safeStaticValue(extendsProperty.value);
+			if (extendsValue === undefined) {
+				return;
+			}
+
+			const inherited = buildInheritedConfig(filename, extendsValue.value);
 			if (inherited === undefined) {
 				return;
 			}

@@ -82,6 +82,18 @@ const valid: Array<ValidTestCase> = [
 		`,
 		filename,
 	},
+	// Diamond extends: both branches share a grandparent, and the later branch
+	// (b.json) inherits the grandparent's `strict: false`, so it wins over
+	// a.json's `strict: true`. The child's `strict: true` is a genuine override.
+	{
+		code: unindent`
+			{
+				"extends": ["./diamond/a.json", "./diamond/b.json"],
+				"compilerOptions": { "strict": true }
+			}
+		`,
+		filename,
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -159,6 +171,41 @@ const invalid: Array<InvalidTestCase> = [
 		output: unindent`
 			{
 				"extends": "./base.json",
+				"compilerOptions": { }
+			}
+		`,
+	},
+	// `lib` is an unordered set, so a reordered but identical array is redundant.
+	{
+		code: unindent`
+			{
+				"extends": "./base.json",
+				"compilerOptions": { "lib": ["dom", "esnext"] }
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		output: unindent`
+			{
+				"extends": "./base.json",
+				"compilerOptions": { }
+			}
+		`,
+	},
+	// Diamond extends where the child re-sets the value the later branch actually
+	// resolves to (`strict: false`, inherited by b.json from the grandparent).
+	{
+		code: unindent`
+			{
+				"extends": ["./diamond/a.json", "./diamond/b.json"],
+				"compilerOptions": { "strict": false }
+			}
+		`,
+		errors: [{ messageId }],
+		filename,
+		output: unindent`
+			{
+				"extends": ["./diamond/a.json", "./diamond/b.json"],
 				"compilerOptions": { }
 			}
 		`,
