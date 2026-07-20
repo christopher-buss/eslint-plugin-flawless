@@ -7,6 +7,7 @@ export default defineConfig({
 		neverBundle: [
 			"@oxlint/plugins",
 			"@typescript-eslint/utils",
+			"jsonc-eslint-parser",
 			"toml-eslint-parser",
 			"typescript",
 		],

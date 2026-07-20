@@ -9,6 +9,7 @@ import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
+import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule";
@@ -49,6 +50,7 @@ export const plugin = {
 		"max-lines-per-function": maxLinesPerFunction,
 		"naming-convention": namingConvention,
 		"no-export-default-arrow": noExportDefaultArrow,
+		"no-redundant-tsconfig-options": noRedundantTsconfigOptions,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
 		"padding-after-expect-assertions": paddingAfterExpectAssertions,

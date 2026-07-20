@@ -1,0 +1,6 @@
+{
+	"extends": "./root.json",
+	"compilerOptions": {
+		"declaration": true
+	}
+}

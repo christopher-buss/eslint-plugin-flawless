@@ -193,28 +193,27 @@ pnpm eslint-docs
 
 <!-- begin auto-generated rules list -->
 
-🔧 Automatically fixable by the
-[`--fix` CLI option](https://eslint.org/docs/user-guide/command-line-interface#--fix).\
-💭
-Requires [type information](https://typescript-eslint.io/linting/typed-linting).
+🔧 Automatically fixable by the [`--fix` CLI option](https://eslint.org/docs/user-guide/command-line-interface#--fix).\
+💭 Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 
-| Name                                                                                          | Description                                                                      | 🔧  | 💭  |
-| :-------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :-- | :-- |
-| [arrow-return-style](src/rules/arrow-return-style/documentation.md)                           | Enforce arrow function return style based on line length                         | 🔧  |     |
-| [jsx-shorthand-boolean](src/rules/jsx-shorthand-boolean/documentation.md)                     | Disallow shorthand boolean JSX attributes                                        | 🔧  |     |
-| [jsx-shorthand-fragment](src/rules/jsx-shorthand-fragment/documentation.md)                   | Enforce a consistent fragment form: the shorthand `<>...</>` or a named fragment | 🔧  |     |
-| [max-lines-per-function](src/rules/max-lines-per-function/documentation.md)                   | Enforce a maximum number of lines of code in a function                          |     |     |
-| [naming-convention](src/rules/naming-convention/documentation.md)                             | Enforce naming conventions for everything across a codebase                      |     | 💭  |
-| [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                 | Disallow anonymous arrow functions as export default declarations                | 🔧  |     |
-| [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                      |     |     |
-| [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                          |     |     |
-| [padding-after-expect-assertions](src/rules/padding-after-expect-assertions/documentation.md) | Enforce a blank line after `expect.assertions` and `expect.hasAssertions`        | 🔧  |     |
-| [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                             | 🔧  |     |
-| [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                       | 🔧  |     |
-| [prefer-read-only-props](src/rules/prefer-read-only-props/documentation.md)                   | Enforce that function component props are read-only                              | 🔧  | 💭  |
-| [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render          |     |     |
-| [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                         | 🔧  |     |
-| [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys                  | 🔧  |     |
+| Name                                                                                          | Description                                                                                      | 🔧 | 💭 |
+| :-------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- | :- | :- |
+| [arrow-return-style](src/rules/arrow-return-style/documentation.md)                           | Enforce arrow function return style based on line length                                         | 🔧 |    |
+| [jsx-shorthand-boolean](src/rules/jsx-shorthand-boolean/documentation.md)                     | Disallow shorthand boolean JSX attributes                                                        | 🔧 |    |
+| [jsx-shorthand-fragment](src/rules/jsx-shorthand-fragment/documentation.md)                   | Enforce a consistent fragment form: the shorthand `<>...</>` or a named fragment                 | 🔧 |    |
+| [max-lines-per-function](src/rules/max-lines-per-function/documentation.md)                   | Enforce a maximum number of lines of code in a function                                          |    |    |
+| [naming-convention](src/rules/naming-convention/documentation.md)                             | Enforce naming conventions for everything across a codebase                                      |    | 💭 |
+| [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                 | Disallow anonymous arrow functions as export default declarations                                | 🔧 |    |
+| [no-redundant-tsconfig-options](src/rules/no-redundant-tsconfig-options/documentation.md)     | Disallow tsconfig options that redundantly re-set a value already provided by an extended config | 🔧 |    |
+| [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                                      |    |    |
+| [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                                          |    |    |
+| [padding-after-expect-assertions](src/rules/padding-after-expect-assertions/documentation.md) | Enforce a blank line after `expect.assertions` and `expect.hasAssertions`                        | 🔧 |    |
+| [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                                             | 🔧 |    |
+| [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                                       | 🔧 |    |
+| [prefer-read-only-props](src/rules/prefer-read-only-props/documentation.md)                   | Enforce that function component props are read-only                                              | 🔧 | 💭 |
+| [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render                          |    |    |
+| [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                                         | 🔧 |    |
+| [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys                                  | 🔧 |    |
 
 <!-- end auto-generated rules list -->
 
