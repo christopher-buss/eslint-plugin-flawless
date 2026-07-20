@@ -1,10 +1,15 @@
-# arrow-return-style benchmark
+# flawless rule benchmarks
 
-Measures where time goes in `flawless/arrow-return-style`, driven by
+Wall-clock benchmarks for the plugin's rules, driven by
 [`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark).
-The rule's predecessor (`eslint-plugin-arrow-return-style-x`) had pathological
-performance from spawning Prettier workers; this benchmark exists to keep the
-oxfmt-worker path honest.
+Two passes share one `config.ts`:
+
+- **`arrow-return-style`** gets a detailed, multi-case profile. Its predecessor
+  (`eslint-plugin-arrow-return-style-x`) had pathological performance from
+  spawning Prettier workers, so each case isolates a code path to keep the
+  oxfmt-worker path honest.
+- **Every other rule** gets one coarse run — enough to catch a gross regression,
+  not to attribute cost to a code path.
 
 ## Running
 
@@ -12,27 +17,55 @@ oxfmt-worker path honest.
 pnpm bench   # `prebench` builds first; see below for why that matters
 ```
 
-`pnpm bench` runs `prebench` (`nr build`) first, and that is not optional. The
-rule locates its oxfmt worker relative to `import.meta.url`, and only the built
-layout resolves it to `dist/rules/arrow-return-style/worker.mjs`. With a stale
-or missing build the worker silently fails open (every consult returns "fits",
-no oxfmt call), so the `useOxfmt:true` cases would report the no-worker cost and
-quietly lie. The benchmark points `rulePath` at `dist/index.mjs` on purpose, so
-it measures the exact artifact users install.
+`pnpm bench` runs `prebench` (`nr build`) first, and that is not optional.
+`arrow-return-style` locates its oxfmt worker relative to `import.meta.url`, and
+only the built layout resolves it to `dist/rules/arrow-return-style/worker.mjs`.
+With a stale or missing build the worker silently fails open (every consult
+returns "fits", no oxfmt call), so the `useOxfmt:true` cases would report the
+no-worker cost and quietly lie. The benchmark points `rulePath` at
+`dist/index.mjs` on purpose, so it measures the exact artifact users install; the
+build also produces the `dist` module `config.ts` imports for its coverage check.
 
-Fixtures under `cases/` are generated — edit `generate-cases.mjs` and re-run
-`node benchmark/generate-cases.mjs`, not the fixtures by hand.
+The detailed arrow fixtures under `cases/` are generated — edit
+`generate-cases.mjs` and re-run `node benchmark/generate-cases.mjs`, not the
+fixtures by hand. The coarse fixtures under `cases/all/` are hand-written.
+
+## All-rules coarse pass
+
+`config.ts` walks a `COARSE` manifest, one entry per rule, each pointing at a
+hand-written fixture in `cases/all/<rule>.tsx` sized so its median lifts clear of
+sub-millisecond noise. A rule that only reports with options (naming-convention,
+…) passes them through the manifest, mirroring its eslint config shape.
+
+Coverage is enforced: `config.ts` cross-checks the manifest against the built
+plugin's rule list and, if a rule is neither profiled in detail, present in
+`COARSE`, nor a documented `UNSUPPORTED` exemption, prints the gap and sets a
+non-zero exit — so a new rule cannot silently skip benchmarking. It flags rather
+than throws, so the benchmarks that *can* run still produce numbers; only the
+exit code (and CI status) goes red.
+
+Three rules sit in `UNSUPPORTED` because `eslint-rule-benchmark` structurally
+cannot run them (revisit if the tool changes):
+
+- `prefer-read-only-props` needs type information, but the harness lints each
+  fixture by bare basename — a path no tsconfig can include — so a typed program
+  is impossible and the rule reports nothing.
+- `toml-sort-keys` and `yaml-block-key-blank-lines` lint TOML/YAML, whose
+  extensions are absent from the tool's `SUPPORTED_EXTENSIONS` (js/ts/jsx/tsx,
+  plus astro/svelte/vue).
 
 ## CI
 
-`.github/workflows/benchmark.yaml` runs this on PRs that touch the rule, its
-worker, or `benchmark/`, and `eslint-rule-benchmark` posts the results as a
-single (auto-updated) PR comment. It is **informational only** — GitHub-hosted
+`.github/workflows/benchmark.yaml` runs on PRs that touch any rule (`src/rules/**`)
+or `benchmark/`, and `eslint-rule-benchmark` posts the results as a single
+(auto-updated) PR comment. The **timings are informational** — GitHub-hosted
 runners are too noisy for absolute wall-clock times to gate a merge, so the job
-never fails on a slowdown. Reading it: eyeball the comment on rule-touching PRs;
-watch the `useOxfmt:true` cache-miss row and its multiple over the pure row, not
-the raw millisecond count. Posting the comment needs repo Actions settings to
-allow the workflow token to write pull requests.
+never fails on a slowdown. It does fail on the coverage gate above (a rule with
+no fixture), which is intended: that is a config error to fix, not a measurement.
+Reading it: eyeball the comment on rule-touching PRs; for the arrow rows watch
+the `useOxfmt:true` cache-miss row and its multiple over the pure row, not the
+raw millisecond count. Posting the comment needs repo Actions settings to allow
+the workflow token to write pull requests.
 
 ## What each case isolates
 
