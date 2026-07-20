@@ -56,6 +56,7 @@
 		"@typescript-eslint/scope-manager": "catalog:cli",
 		"@typescript-eslint/type-utils": "catalog:cli",
 		"@typescript-eslint/utils": "catalog:cli",
+		"jsonc-eslint-parser": "catalog:testing",
 		"oxc-parser": "catalog:cli",
 		"oxfmt": "catalog:cli",
 		"synckit": "catalog:cli",

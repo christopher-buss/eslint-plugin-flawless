@@ -2,6 +2,7 @@ import tsParser from "@typescript-eslint/parser";
 
 import type { RuleTesterInitOptions, TestCasesOptions } from "eslint-vitest-rule-tester";
 import { run as runInternal } from "eslint-vitest-rule-tester";
+import * as jsoncParser from "jsonc-eslint-parser";
 import path from "node:path";
 import * as tomlParser from "toml-eslint-parser";
 import * as yamlParser from "yaml-eslint-parser";
@@ -14,6 +15,16 @@ export function run(options: RuleTesterInitOptions & TestCasesOptions): void {
 			project: path.resolve(__dirname, "../../fixtures/tsconfig.json"),
 			sourceType: "module",
 			tsconfigRootDir: path.resolve(__dirname, "../../fixtures"),
+		},
+		...options,
+	});
+}
+
+export function runJsonc(options: RuleTesterInitOptions & TestCasesOptions): void {
+	void runInternal({
+		defaultFilenames: { js: "file.json", jsx: "file.json", ts: "file.json", tsx: "file.json" },
+		languageOptions: {
+			parser: jsoncParser,
 		},
 		...options,
 	});

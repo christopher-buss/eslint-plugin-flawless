@@ -19,7 +19,7 @@ export default isentinel(
 		type: "package",
 	},
 	{
-		ignores: ["fixtures/**", "benchmark/**"],
+		ignores: ["**/fixtures/**", "benchmark/**"],
 	},
 	{
 		files: [GLOB_YAML],

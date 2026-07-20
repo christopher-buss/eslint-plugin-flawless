@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"composite": true,
+		"downlevelIteration": true,
+		"lib": ["esnext", "dom"],
+		"outDir": "${configDir}/dist",
+		"rootDir": "./src",
+		"strict": true,
+		"target": "esnext"
+	},
+	"exclude": ["node_modules"],
+	"include": ["${configDir}/src"]
+}
