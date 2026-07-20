@@ -529,6 +529,54 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		}
 
 		/**
+		 * The `)` of a wrapped sole-argument call whose trailing comma the fix
+		 * should absorb. `foo(() =>\n\tbody,\n)` only carries that comma because
+		 * the argument was wrapped; once the block body hugs the call again the
+		 * comma is debris (`},\n)` where the formatter writes `})`).
+		 *
+		 * @param node - The arrow function being converted.
+		 * @param bodyEnd - The body's last token or node (including parens).
+		 * @returns The closing paren to absorb up to, or `null`.
+		 */
+		function danglingCloser(
+			node: TSESTree.ArrowFunctionExpression,
+			bodyEnd: TSESTree.Node | TSESTree.Token,
+		): null | TSESTree.Token {
+			const { loc, parent } = node;
+			const isCall =
+				parent.type === AST_NODE_TYPES.CallExpression ||
+				parent.type === AST_NODE_TYPES.NewExpression;
+			if (!isCall || parent.arguments.length !== 1 || parent.arguments[0] !== node) {
+				return null;
+			}
+
+			// Only when the argument still hugs the call (`expect(() =>`). A call
+			// expanded across lines keeps its trailing comma, which the formatter
+			// wants there.
+			const opener = sourceCode.getTokenBefore(node);
+			if (opener?.value !== "(" || opener.loc.end.line !== loc.start.line) {
+				return null;
+			}
+
+			const comma = sourceCode.getTokenAfter(bodyEnd);
+			if (comma?.value !== ",") {
+				return null;
+			}
+
+			const closer = sourceCode.getTokenAfter(comma);
+			if (closer?.value !== ")" || closer.range[1] !== parent.range[1]) {
+				return null;
+			}
+
+			// Comments in the gap would be swallowed with the comma.
+			if (sourceCode.getCommentsBefore(closer).length > 0) {
+				return null;
+			}
+
+			return closer;
+		}
+
+		/**
 		 * Reports and fixes an implicit arrow into an explicit block body.
 		 *
 		 * @param node - The arrow function to convert.
@@ -574,9 +622,10 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 			const returnLine = `${targetIndent}return ${[firstLine, ...shifted].join("\n")};`;
 			const replacement = ` {\n${[...commentLines, returnLine].join("\n")}\n${arrowIndent}}`;
 
+			const end = danglingCloser(node, bodyEnd)?.range[0] ?? bodyEnd.range[1];
+
 			context.report({
-				fix: (fixer) =>
-					fixer.replaceTextRange([arrowToken.range[1], bodyEnd.range[1]], replacement),
+				fix: (fixer) => fixer.replaceTextRange([arrowToken.range[1], end], replacement),
 				messageId,
 				node,
 			});

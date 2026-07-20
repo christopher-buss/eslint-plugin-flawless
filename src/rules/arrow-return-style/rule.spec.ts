@@ -970,11 +970,12 @@ const invalid: Array<InvalidTestCase> = [
 		output: "const a = () => getValue();",
 	},
 
-	// Wrap-after-arrow inside an already-wrapped call. The explicit fix leaves
-	// the body's closing line as `},`, with the call's `).toThrow(...)` tail on
-	// the next line; measuring the collapse candidate against that truncated
-	// line made it look like it fit, collapsing straight back and looping
-	// against the formatter forever.
+	// Wrap-after-arrow inside an already-wrapped call. The collapse candidate
+	// must be measured against the line the formatter would emit, not against
+	// the block's truncated closing line (`},`, with the call's `).toThrow(...)`
+	// tail on the next one) — that made the collapse look like it fit, and the
+	// fix ping-ponged against the formatter forever. The fix also absorbs the
+	// now-dangling comma so the block hugs `)` the way oxfmt writes it.
 	{
 		code: unindent`
 			describe('error format', () => {
@@ -992,10 +993,28 @@ const invalid: Array<InvalidTestCase> = [
 				it('should list only apiKey when other two are provided', () => {
 					expect(() => {
 						return resolveCredentials({ defaults: { placeId: '456', universeId: '123' } });
-					},
-					).toThrow(/Missing: apiKey/);
+					}).toThrow(/Missing: apiKey/);
 				});
 			});
+		`,
+	},
+
+	// ...but a call already expanded across lines keeps its trailing comma:
+	// there the comma is the formatter's, not wrap debris.
+	{
+		code: unindent`
+			runTask(
+				() =>
+					someHelper(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota),
+			);
+		`,
+		errors: [{ messageId: explicitMessageId }],
+		output: unindent`
+			runTask(
+				() => {
+					return someHelper(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota);
+				},
+			);
 		`,
 	},
 ];
