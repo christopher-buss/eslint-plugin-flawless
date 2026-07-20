@@ -207,6 +207,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                 | Disallow anonymous arrow functions as export default declarations                | 🔧  |     |
 | [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                      |     |     |
 | [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                          |     |     |
+| [padding-after-expect-assertions](src/rules/padding-after-expect-assertions/documentation.md) | Enforce a blank line after `expect.assertions` and `expect.hasAssertions`        | 🔧  |     |
 | [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                             | 🔧  |     |
 | [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                       | 🔧  |     |
 | [prefer-read-only-props](src/rules/prefer-read-only-props/documentation.md)                   | Enforce that function component props are read-only                              | 🔧  | 💭  |
