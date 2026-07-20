@@ -52,6 +52,22 @@ const DEFAULTS: Config = {
 
 type Context = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 
+/**
+ * A deferred oxfmt question: how would the formatter render `request.code` —
+ * the enclosing statement with this rule's candidate fix already applied?
+ * Explicit consults report when the arrow does not survive on one fitting
+ * line; implicit consults report when it does.
+ */
+type PendingConsult = {
+	baseIndent: string;
+	cacheKey: string;
+	node: TSESTree.ArrowFunctionExpression;
+	request: FormatRequest;
+} & (
+	| { block: TSESTree.BlockStatement; kind: "implicit"; replacement: string }
+	| { kind: "explicit" }
+);
+
 // --- oxfmt worker bridge ----------------------------------------------------
 
 type FormatSync = (requests: Array<FormatRequest>) => Array<FormatResponse>;
@@ -279,7 +295,7 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		let config: Config = DEFAULTS;
 		let sourceCode: Readonly<TSESLint.SourceCode>;
 		let lines: Array<string>;
-		let pendingConsults: Array<TSESTree.ArrowFunctionExpression>;
+		let pendingConsults: Array<PendingConsult>;
 
 		/**
 		 * Effective line-length limit for emitted lines: the fixer must never
@@ -360,47 +376,71 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 		}
 
 		/**
+		 * Prepares the oxfmt question for `node`: how would the formatter render
+		 * the enclosing statement once the candidate fix is applied? `collapse`
+		 * supplies the implicit-direction candidate (the block body textually
+		 * replaced by its collapsed expression); omitting it asks about the
+		 * statement as written.
+		 *
+		 * @param node - The arrow function in question.
+		 * @param collapse - The implicit-direction candidate, if any.
+		 * @returns The consult, or `null` when the arrow cannot be located.
+		 */
+		function buildConsult(
+			node: TSESTree.ArrowFunctionExpression,
+			collapse?: { block: TSESTree.BlockStatement; replacement: string },
+		): null | Omit<PendingConsult, "kind"> {
+			const statement = statementOf(node);
+			const arrowIndex = collectArrows(statement).findIndex(
+				(arrow) => arrow.range[0] === node.range[0],
+			);
+			if (arrowIndex === -1) {
+				return null;
+			}
+
+			const offset = statement.range[0];
+			const source = sourceCode.getText(statement);
+			const snippet =
+				collapse === undefined
+					? source
+					: source.slice(0, collapse.block.range[0] - offset) +
+						collapse.replacement +
+						source.slice(collapse.block.range[1] - offset);
+
+			const request: FormatRequest = {
+				arrowIndex,
+				code: `${snippet}\n`,
+				printWidth: printWidth(),
+				tabWidth: config.tabWidth,
+			};
+
+			return {
+				baseIndent: leadingWhitespace(lineOf(statement.loc.start.line)),
+				cacheKey: `${arrowIndex} ${request.printWidth} ${request.tabWidth} ${snippet}`,
+				node,
+				request,
+			};
+		}
+
+		/**
 		 * Resolves every deferred oxfmt consult with a single worker round-trip:
-		 * would the formatter render each arrow (params through body) on a single
-		 * line that fits `maxLen`? Arrows the formatter cannot keep on one fitting
-		 * line are reported. Fails open (no report) when the worker or oxfmt is
-		 * unavailable so that an unavailable formatter can never introduce reports
-		 * it would have to fight over.
+		 * would the formatter render each candidate arrow (params through body) on
+		 * a single line that fits `maxLen`? Explicit consults report when it
+		 * cannot, implicit consults report when it can. Fails open (no report)
+		 * when the worker or oxfmt is unavailable so that an unavailable formatter
+		 * can never introduce reports it would have to fight over.
 		 */
 		function resolvePendingConsults(): void {
 			if (pendingConsults.length === 0) {
 				return;
 			}
 
-			const nodes = pendingConsults;
+			const consults = pendingConsults;
 			pendingConsults = [];
 			const worker = getFormatSync();
 			if (worker === null) {
 				return;
 			}
-
-			const consults = nodes.flatMap((node) => {
-				const statement = statementOf(node);
-				const snippet = sourceCode.getText(statement);
-				const baseIndent = leadingWhitespace(lineOf(statement.loc.start.line));
-				const arrowIndex = collectArrows(statement).findIndex(
-					(arrow) => arrow.range[0] === node.range[0],
-				);
-				if (arrowIndex === -1) {
-					return [];
-				}
-
-				const request: FormatRequest = {
-					arrowIndex,
-					code: `${snippet}\n`,
-					printWidth: printWidth(),
-					tabWidth: config.tabWidth,
-				};
-
-				const cacheKey = `${arrowIndex} ${request.printWidth} ${request.tabWidth} ${snippet}`;
-
-				return [{ baseIndent, cacheKey, node, request }];
-			});
 
 			const misses = new Map<string, FormatRequest>();
 			for (const consult of consults) {
@@ -438,7 +478,12 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 				const fits =
 					response.singleLine &&
 					width(consult.baseIndent) + width(response.lineText) <= config.maxLen;
-				if (!fits) {
+
+				if (consult.kind === "implicit") {
+					if (fits) {
+						reportImplicit(consult.node, consult.block, consult.replacement);
+					}
+				} else if (!fits) {
 					reportExplicit(consult.node, EXPLICIT);
 				}
 			}
@@ -600,7 +645,27 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 				return;
 			}
 
-			reportImplicit(node, block, collapsed);
+			// `suffix` only reaches the end of the block's closing line. When the
+			// statement continues past it the enclosing call is wrapped, so the
+			// measurement above is missing the tail the formatter would pull back
+			// up (`},\n).toThrow(x)` measures as `},`) and cannot decide alone.
+			const statementEnd = statementOf(node).loc.end.line;
+			if (statementEnd === block.loc.end.line || config.useOxfmt === false) {
+				reportImplicit(node, block, collapsed);
+				return;
+			}
+
+			// The formatter verdict is deferred so that all consults in the file
+			// share one worker round-trip (see resolvePendingConsults).
+			const consult = buildConsult(node, { block, replacement: collapsed });
+			if (consult !== null) {
+				pendingConsults.push({
+					...consult,
+					block,
+					kind: "implicit",
+					replacement: collapsed,
+				});
+			}
 		}
 
 		function checkExpressionBody(node: TSESTree.ArrowFunctionExpression): void {
@@ -651,12 +716,16 @@ export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
 
 			const lineWidth = width(lineOf(bodyStart.loc.start.line));
 			if (lineWidth > limit()) {
+				if (config.useOxfmt === false) {
+					reportExplicit(node, EXPLICIT);
+					return;
+				}
+
 				// The formatter verdict is deferred so that all consults in the
 				// file share one worker round-trip (see resolvePendingConsults).
-				if (config.useOxfmt !== false) {
-					pendingConsults.push(node);
-				} else {
-					reportExplicit(node, EXPLICIT);
+				const consult = buildConsult(node);
+				if (consult !== null) {
+					pendingConsults.push({ ...consult, kind: "explicit" });
 				}
 
 				return;

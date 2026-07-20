@@ -969,6 +969,35 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ messageId: implicitMessageId }],
 		output: "const a = () => getValue();",
 	},
+
+	// Wrap-after-arrow inside an already-wrapped call. The explicit fix leaves
+	// the body's closing line as `},`, with the call's `).toThrow(...)` tail on
+	// the next line; measuring the collapse candidate against that truncated
+	// line made it look like it fit, collapsing straight back and looping
+	// against the formatter forever.
+	{
+		code: unindent`
+			describe('error format', () => {
+				it('should list only apiKey when other two are provided', () => {
+					expect(() =>
+						resolveCredentials({ defaults: { placeId: '456', universeId: '123' } }),
+					).toThrow(/Missing: apiKey/);
+				});
+			});
+		`,
+		errors: [{ messageId: explicitMessageId }],
+		options: [{ maxLen: 100, useOxfmt: { printWidth: 100 } }],
+		output: unindent`
+			describe('error format', () => {
+				it('should list only apiKey when other two are provided', () => {
+					expect(() => {
+						return resolveCredentials({ defaults: { placeId: '456', universeId: '123' } });
+					},
+					).toThrow(/Missing: apiKey/);
+				});
+			});
+		`,
+	},
 ];
 
 run({
