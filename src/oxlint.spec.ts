@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 10 dual-runtime rules is run through the real
+// Integration tests: each of the 11 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
@@ -72,6 +72,40 @@ describe("oxlint integration", () => {
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0]?.code).toBe("flawless(jsx-shorthand-fragment)");
 		expect(fixed).toContain("<><Foo /></>");
+	});
+
+	it("max-lines-per-function reports a function over the limit", () => {
+		const { diagnostics } = runOxlint({
+			code: "export function foo() {\n\tconst a = 1;\n\treturn a;\n}\n",
+			filename: "file.ts",
+			options: [{ max: 2 }],
+			rule: "max-lines-per-function",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(max-lines-per-function)");
+		expect(diagnostics[0]?.message).toContain("Function 'foo' has too many lines (4)");
+	});
+
+	it("max-lines-per-function counts the whole node under countFrom: function", () => {
+		// A three-line signature: body-only counts 3, the whole node counts 6.
+		const code = "export function foo(\n\ta: number,\n\tb: number,\n) {\n\treturn a + b;\n}\n";
+		const body = runOxlint({
+			code,
+			filename: "file.ts",
+			options: [{ countFrom: "body", max: 4 }],
+			rule: "max-lines-per-function",
+		});
+		const whole = runOxlint({
+			code,
+			filename: "file.ts",
+			options: [{ countFrom: "function", max: 4 }],
+			rule: "max-lines-per-function",
+		});
+
+		expect(body.diagnostics).toHaveLength(0);
+		expect(whole.diagnostics).toHaveLength(1);
+		expect(whole.diagnostics[0]?.message).toContain("too many lines (6)");
 	});
 
 	it("prefer-parameter-destructuring reports body destructuring", () => {
