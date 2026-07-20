@@ -16,7 +16,21 @@ const MESSAGE_ID_EXCEED = "exceed";
 
 export type MessageIds = typeof MESSAGE_ID_EXCEED;
 
+/** Where a function's counted range begins. */
+export type CountFrom = "body" | "function";
+
 export interface MaxLinesPerFunctionOptions {
+	/**
+	 * Where the counted range begins. `"body"` (the default) counts from the
+	 * line holding the body's opening brace through the line holding its closing
+	 * brace, so lines spent purely on the signature — destructured parameters, a
+	 * long parameter list, multi-line generics or return types, decorators — do
+	 * not count against `max`. Note the opening-brace line is still counted, and
+	 * it is usually also the last line of the signature (`): void {`), so exactly
+	 * one signature line always remains in the total. `"function"` counts the
+	 * whole function node instead, matching ESLint core.
+	 */
+	readonly countFrom?: CountFrom;
 	/**
 	 * Whether immediately-invoked function expressions are measured. Off by
 	 * default, matching ESLint core.
@@ -38,6 +52,7 @@ export type Options = [MaxLinesPerFunctionOptions?];
 type Config = Required<MaxLinesPerFunctionOptions>;
 
 const DEFAULTS: Config = {
+	countFrom: "body",
 	IIFEs: false,
 	max: 50,
 	skipBlankLines: false,
@@ -53,6 +68,12 @@ const schema: Array<JSONSchema.JSONSchema4> = [
 	{
 		additionalProperties: false,
 		properties: {
+			countFrom: {
+				description:
+					'Where the counted range begins: "body" (default) excludes the signature, "function" counts the whole node like ESLint core.',
+				enum: ["body", "function"],
+				type: "string",
+			},
 			IIFEs: {
 				description: "Whether immediately-invoked function expressions are measured.",
 				type: "boolean",
@@ -166,6 +187,27 @@ function isEmbedded(node: FunctionNode): boolean {
 }
 
 /**
+ * Selects the source range whose lines are counted for a function.
+ *
+ * Under `"body"` this is the function's body — the braces themselves for a
+ * block body, or the expression for a concise arrow body — so the signature is
+ * excluded. Under `"function"` it is the reported node, matching ESLint core.
+ *
+ * @param countFrom - Which range to measure.
+ * @param funcNode - The function being measured.
+ * @param reportNode - The node the diagnostic attaches to: the enclosing member
+ *   for an embedded method, otherwise `funcNode` itself.
+ * @returns The location whose line span is counted.
+ */
+function getCountedLoc(
+	countFrom: CountFrom,
+	funcNode: FunctionNode,
+	reportNode: TSESTree.Node,
+): TSESTree.SourceLocation {
+	return countFrom === "function" ? reportNode.loc : funcNode.body.loc;
+}
+
+/**
  * Builds the rule's per-file listener.
  *
  * @param context - The rule context.
@@ -189,7 +231,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		const { end, start } = node.loc;
+		const { end, start } = getCountedLoc(config.countFrom, funcNode, node);
 		let lineCount = 0;
 
 		for (let index = start.line - 1; index < end.line; index += 1) {
@@ -234,6 +276,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			// would survive a spread and defeat the default.
 			const options = context.options[0];
 			config = {
+				countFrom: options?.countFrom ?? DEFAULTS.countFrom,
 				IIFEs: options?.IIFEs ?? DEFAULTS.IIFEs,
 				max: options?.max ?? DEFAULTS.max,
 				skipBlankLines: options?.skipBlankLines ?? DEFAULTS.skipBlankLines,

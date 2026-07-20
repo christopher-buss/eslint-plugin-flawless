@@ -52,10 +52,15 @@ export default isentinel(
 	},
 	{
 		// The documentation's samples are deliberately plain, unannotated
-		// functions — their shape and length is the rule's subject matter.
+		// functions — their shape and length is the rule's subject matter. oxfmt
+		// would collapse the multi-line signatures the examples turn on, and the
+		// two identical-bodied functions demonstrating `countFrom` are identical
+		// on purpose.
 		files: ["src/rules/max-lines-per-function/documentation.md/**"],
 		rules: {
 			"func-style": "off",
+			"oxfmt/oxfmt": "off",
+			"sonar/no-identical-functions": "off",
 			"ts/explicit-function-return-type": "off",
 		},
 	},

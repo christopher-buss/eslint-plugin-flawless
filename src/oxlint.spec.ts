@@ -87,6 +87,27 @@ describe("oxlint integration", () => {
 		expect(diagnostics[0]?.message).toContain("Function 'foo' has too many lines (4)");
 	});
 
+	it("max-lines-per-function counts the whole node under countFrom: function", () => {
+		// A three-line signature: body-only counts 3, the whole node counts 6.
+		const code = "export function foo(\n\ta: number,\n\tb: number,\n) {\n\treturn a + b;\n}\n";
+		const body = runOxlint({
+			code,
+			filename: "file.ts",
+			options: [{ countFrom: "body", max: 4 }],
+			rule: "max-lines-per-function",
+		});
+		const whole = runOxlint({
+			code,
+			filename: "file.ts",
+			options: [{ countFrom: "function", max: 4 }],
+			rule: "max-lines-per-function",
+		});
+
+		expect(body.diagnostics).toHaveLength(0);
+		expect(whole.diagnostics).toHaveLength(1);
+		expect(whole.diagnostics[0]?.message).toContain("too many lines (6)");
+	});
+
 	it("prefer-parameter-destructuring reports body destructuring", () => {
 		const { diagnostics } = runOxlint({
 			code: "export function b(props: { id: number }) {\n\tconst { id } = props;\n\treturn id;\n}\n",

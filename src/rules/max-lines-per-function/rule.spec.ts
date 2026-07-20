@@ -190,6 +190,43 @@ function foo(a: unknown): void {
 ): void;`,
 		options: [{ max: 1 }],
 	},
+
+	// --- countFrom: "body" (the default) ---------------------------------------
+
+	// A concise arrow whose `=>` wraps to a new line: the body is a single
+	// expression, so it counts 1 even though the whole node spans 2 lines.
+	{
+		code: "const bar = () =>\n 2",
+		options: [{ max: 1 }],
+	},
+	// Parameters on separate lines are signature, so the body-only count is 3 —
+	// well under the limit — even though the whole node spans 7 lines.
+	{
+		code: `function foo(
+    aaa = 1,
+    bbb = 2,
+    ccc = 3
+) {
+    return aaa + bbb + ccc
+}`,
+		options: [{ max: 3 }],
+	},
+	// The motivating bug, passing: destructuring in the parameter position spends
+	// signature lines that no longer push the body over the limit.
+	{
+		code: `function logResult({
+	a,
+	b,
+	c,
+	d,
+}: Info): void {
+	one();
+	two();
+	three();
+	four();
+}`,
+		options: [{ max: 6 }],
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -239,7 +276,9 @@ const invalid: Array<InvalidTestCase> = [
 		],
 		options: [{ max: 3 }],
 	},
-	// A concise arrow body spanning two lines.
+	// A concise arrow whose `=>` and body sit on different lines. Under
+	// countFrom: "function" the whole node spans two lines; the body-only
+	// default counts just the expression (see the valid cases).
 	{
 		code: "const bar = () =>\n 2",
 		errors: [
@@ -252,7 +291,7 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 1 }],
+		options: [{ countFrom: "function", max: 1 }],
 	},
 	// An empty options object falls back to max: 50.
 	{
@@ -374,8 +413,8 @@ const invalid: Array<InvalidTestCase> = [
 		],
 		options: [{ max: 1, skipBlankLines: true, skipComments: false }],
 	},
-	// Parameters on separate lines inflate the count — the behaviour the
-	// `countFrom` option changes in the commit that follows.
+	// Under countFrom: "function", parameters on separate lines inflate the
+	// count. The body-only default sees just 3 lines (see the valid cases).
 	{
 		code: `function foo(
     aaa = 1,
@@ -394,9 +433,9 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
-	// The IIFE's `function` keyword line is included in the count.
+	// Under countFrom: "function", the IIFE's `function` keyword line is counted.
 	{
 		code: `(
 function
@@ -415,7 +454,15 @@ function
 				messageId: exceed,
 			},
 		],
-		options: [{ IIFEs: true, max: 2, skipBlankLines: false, skipComments: true }],
+		options: [
+			{
+				countFrom: "function",
+				IIFEs: true,
+				max: 2,
+				skipBlankLines: false,
+				skipComments: true,
+			},
+		],
 	},
 	// A nested function's lines count toward its parent too.
 	{
@@ -494,7 +541,8 @@ if ( x === y ) {
 		],
 		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
 	},
-	// A static method, with its modifier and name on separate lines.
+	// A static method, with its modifier and name on separate lines. Those
+	// signature lines only count under countFrom: "function".
 	{
 		code: `class A {
     static
@@ -513,7 +561,7 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// An object getter.
 	{
@@ -534,7 +582,7 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// An object setter.
 	{
@@ -555,9 +603,10 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
-	// A computed key yields no name at all.
+	// A computed key yields no name at all. Its multi-line key only counts under
+	// countFrom: "function".
 	{
 		code: `class A {
     static
@@ -579,7 +628,7 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// IIFEs: true measures a function IIFE.
 	{
@@ -639,9 +688,9 @@ function foo(a: unknown): void {
 		],
 		options: [{ max: 2 }],
 	},
-	// A decorator sits inside the MethodDefinition's range, so it is counted.
-	// The exact count is pinned here so the `countFrom` commit cannot change it
-	// silently.
+	// Under countFrom: "function" a decorator sits inside the MethodDefinition's
+	// range, so it is counted: 4 lines. The body-only default excludes it (see
+	// the body cases below).
 	{
 		code: `class A {
 	@dec
@@ -655,7 +704,119 @@ function foo(a: unknown): void {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2 }],
+		options: [{ countFrom: "function", max: 2 }],
+	},
+
+	// --- countFrom: "body" (the default) ---------------------------------------
+
+	// The motivating bug: two functions with identical bodies but different
+	// signature formatting must report the identical body-only count. Moving the
+	// destructure from the parameter position (below) to a single-line signature
+	// (here) leaves the body — hence the count — unchanged at 6.
+	{
+		code: `function logResult(result: Info): void {
+	one();
+	two();
+	three();
+	four();
+}`,
+		errors: [
+			{
+				data: { name: "Function 'logResult'", lineCount: 6, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ max: 3 }],
+	},
+	{
+		code: `function logResult({
+	a,
+	b,
+	c,
+	d,
+}: Info): void {
+	one();
+	two();
+	three();
+	four();
+}`,
+		errors: [
+			{
+				data: { name: "Function 'logResult'", lineCount: 6, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ max: 3 }],
+	},
+	// A multi-line return type is signature, so it does not count under "body".
+	// Body is 5 lines; the whole node would be 9.
+	{
+		code: `function pick(): {
+	a: number;
+	b: number;
+	c: number;
+} {
+	one();
+	two();
+	three();
+}`,
+		errors: [
+			{
+				data: { name: "Function 'pick'", lineCount: 5, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ max: 3 }],
+	},
+	// A decorated method: the `@dec` line is signature, so body-only counts 4,
+	// not the 5 the whole node would.
+	{
+		code: `class A {
+	@dec
+	method() {
+		one();
+		two();
+	}
+}`,
+		errors: [
+			{
+				data: { name: "Method 'method'", lineCount: 4, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ max: 3 }],
+	},
+	// A comment between signature and body is outside the body range, so it does
+	// not count under "body". Body is 4 lines; the whole node would be 7.
+	{
+		code: `function foo(
+	// why
+	a,
+) {
+	one();
+	two();
+}`,
+		errors: [
+			{
+				data: { name: "Function 'foo'", lineCount: 4, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ max: 3 }],
+	},
+	// An IIFE under the body default: only its body counts, so 4 lines.
+	{
+		code: `(function () {
+	one();
+	two();
+}());`,
+		errors: [
+			{
+				data: { name: "Function", lineCount: 4, maxLines: 3 },
+				messageId: exceed,
+			},
+		],
+		options: [{ IIFEs: true, max: 3 }],
 	},
 ];
 
