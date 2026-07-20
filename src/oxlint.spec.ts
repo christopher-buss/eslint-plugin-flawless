@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 10 dual-runtime rules is run through the real
+// Integration tests: each of the 11 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint

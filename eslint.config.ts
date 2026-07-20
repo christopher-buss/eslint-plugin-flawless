@@ -58,7 +58,6 @@ export default isentinel(
 		// on purpose.
 		files: ["src/rules/max-lines-per-function/documentation.md/**"],
 		rules: {
-			"func-style": "off",
 			"oxfmt/oxfmt": "off",
 			"sonar/no-identical-functions": "off",
 			"ts/explicit-function-return-type": "off",

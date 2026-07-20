@@ -1,9 +1,13 @@
 /**
  * @file Helpers ported from ESLint core's `lib/rules/utils/ast-utils.js` and
  * `lib/shared/string-utils.js`, so this rule's diagnostics read and point
- * identically to core's `max-lines-per-function`. Neither module is published,
- * hence the port. ESLint is MIT licensed — Copyright OpenJS Foundation and
- * other contributors.
+ * identically to core's `max-lines-per-function`. `@typescript-eslint/utils`
+ * re-exports `@eslint-community/eslint-utils` equivalents
+ * (`getFunctionNameWithKind`, `getFunctionHeadLocation`), but those diverge from
+ * core — they name variable-bound functions (`const f = () => {}` →
+ * `arrow function 'f'`) and bracket computed keys — so the port is what keeps
+ * parity with core, not availability. ESLint is MIT licensed — Copyright OpenJS
+ * Foundation and other contributors.
  */
 
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";

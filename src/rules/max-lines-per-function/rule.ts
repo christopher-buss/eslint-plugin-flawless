@@ -51,6 +51,9 @@ export type Options = [MaxLinesPerFunctionOptions?];
 
 type Config = Required<MaxLinesPerFunctionOptions>;
 
+/** A line that is empty or holds only whitespace. */
+const BLANK_LINE = /^\s*$/u;
+
 const DEFAULTS: Config = {
 	countFrom: "body",
 	IIFEs: false,
@@ -245,7 +248,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 			}
 
-			if (config.skipBlankLines && /^\s*$/u.test(line)) {
+			if (config.skipBlankLines && BLANK_LINE.test(line)) {
 				continue;
 			}
 
@@ -285,7 +288,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 			({ sourceCode } = context);
 			lines = [...sourceCode.lines];
-			commentLineNumbers = getCommentLineNumbers(sourceCode.getAllComments());
+			// Only consulted under `skipComments`; skip the build otherwise.
+			commentLineNumbers = config.skipComments
+				? getCommentLineNumbers(sourceCode.getAllComments())
+				: new Map<number, TSESTree.Comment>();
 		},
 		FunctionDeclaration: processFunction,
 		FunctionExpression: processFunction,
