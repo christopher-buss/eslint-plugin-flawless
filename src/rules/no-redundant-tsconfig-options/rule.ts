@@ -5,7 +5,8 @@ import type { AST } from "jsonc-eslint-parser";
 import path from "node:path";
 
 import { createEslintRule } from "../../util";
-import { buildInheritedConfig, type InheritedEntry } from "./resolve-extends";
+import type { JsonContext, JsonSourceCode } from "../../utils/types";
+import { buildInheritedConfig, type InheritedEntry, isRecord } from "./resolve-extends";
 
 export const RULE_NAME = "no-redundant-tsconfig-options";
 
@@ -50,10 +51,6 @@ const messages = {
 	[MESSAGE_ID]:
 		"'{{option}}' is redundant: it is already set to this value by {{source}}. Remove it.",
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Structural equality between two static JSON values. Strings compare
@@ -151,12 +148,9 @@ function findProperty(
 	return object.properties.find((property) => keyName(property) === name);
 }
 
-function create(
-	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
-): TSESLint.RuleListener {
+function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListener {
 	const { sourceCode } = context;
-	const services = sourceCode.parserServices as undefined | { isJSON?: boolean };
-	if (services?.isJSON !== true) {
+	if (sourceCode.parserServices.isJSON !== true) {
 		return {};
 	}
 
@@ -173,12 +167,13 @@ function create(
 	 * stranding the comment.
 	 *
 	 * @param property - The redundant property node.
+	 * @param name - The property's key name (already computed by the caller).
 	 * @param entry - The inherited value and the config that defined it.
 	 */
-	function report(property: AST.JSONProperty, entry: InheritedEntry): void {
+	function report(property: AST.JSONProperty, name: string, entry: InheritedEntry): void {
 		context.report({
 			data: {
-				option: keyName(property),
+				option: name,
 				source: path.relative(path.dirname(filename), entry.source) || entry.source,
 			},
 			fix: buildFix(property),
@@ -240,14 +235,14 @@ function create(
 
 			const childValue = getStaticJSONValue(property.value);
 			if (isRedundant(name, childValue, entry.value, isPathKey(name))) {
-				report(property, entry);
+				report(property, name, entry);
 			}
 		}
 	}
 
 	return {
 		Program(): void {
-			const statement = (sourceCode.ast as unknown as AST.JSONProgram).body.at(0);
+			const statement = sourceCode.ast.body.at(0);
 			if (statement?.expression.type !== "JSONObjectExpression") {
 				return;
 			}
@@ -284,9 +279,7 @@ function create(
 			checkObject(
 				root,
 				(name) => {
-					return name === "include" || name === "exclude" || name === "files"
-						? inherited[name]
-						: undefined;
+					return inherited.topLevel.get(name);
 				},
 				() => {
 					return true;
@@ -296,7 +289,7 @@ function create(
 	};
 }
 
-export const noRedundantTsconfigOptions = createEslintRule<Options, MessageIds>({
+export const noRedundantTsconfigOptions = createEslintRule<Options, MessageIds, JsonSourceCode>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],

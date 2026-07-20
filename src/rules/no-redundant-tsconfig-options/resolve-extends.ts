@@ -1,5 +1,5 @@
 import { getStaticJSONValue, parseForESLint } from "jsonc-eslint-parser";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -14,15 +14,12 @@ export interface InheritedEntry {
 
 /**
  * The options a tsconfig inherits from everything it `extends`, flattened so the
- * nearest ancestor that defines a key wins. Top-level `include` / `exclude` /
- * `files` replace rather than merge in TypeScript, so each is a single entry
- * rather than a per-key map.
+ * nearest ancestor that defines a key wins. `topLevel` holds `include` /
+ * `exclude` / `files`, which replace rather than merge in TypeScript.
  */
 export interface InheritedConfig {
 	readonly compilerOptions: Map<string, InheritedEntry>;
-	readonly exclude?: InheritedEntry;
-	readonly files?: InheritedEntry;
-	readonly include?: InheritedEntry;
+	readonly topLevel: Map<string, InheritedEntry>;
 }
 
 /** The subset of a tsconfig this rule reads. */
@@ -35,6 +32,10 @@ interface RawTsconfig {
 }
 
 const TOP_LEVEL_KEYS = ["include", "exclude", "files"] as const;
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
  * Resolves one `extends` specifier to an absolute config path, or `undefined`
@@ -88,39 +89,18 @@ export function buildInheritedConfig(
 	childFile: string,
 	extendsField: unknown,
 ): InheritedConfig | undefined {
-	const specs = normalizeExtends(extendsField);
-	if (specs.length === 0) {
-		return undefined;
-	}
-
 	const visited = new Set<string>([childFile]);
-	const compilerOptions = new Map<string, InheritedEntry>();
-	const result: {
-		compilerOptions: Map<string, InheritedEntry>;
-		exclude?: InheritedEntry;
-		files?: InheritedEntry;
-		include?: InheritedEntry;
-	} = { compilerOptions };
+	const result = emptyConfig();
 
 	let resolvedAny = false;
-	for (const spec of specs) {
+	for (const spec of normalizeExtends(extendsField)) {
 		const target = resolveExtendsTarget(spec, childFile);
 		if (target === undefined) {
 			continue;
 		}
 
 		resolvedAny = true;
-		const parent = flatten(target, visited);
-		for (const [key, entry] of parent.compilerOptions) {
-			compilerOptions.set(key, entry);
-		}
-
-		for (const key of TOP_LEVEL_KEYS) {
-			const entry = parent[key];
-			if (entry !== undefined) {
-				result[key] = entry;
-			}
-		}
+		mergeParent(result, flatten(target, visited));
 	}
 
 	return resolvedAny ? result : undefined;
@@ -140,7 +120,7 @@ function isPathSpecifier(spec: string): boolean {
 
 function fileExists(candidate: string): boolean {
 	try {
-		return existsSync(candidate) && statSync(candidate).isFile();
+		return statSync(candidate).isFile();
 	} catch {
 		return false;
 	}
@@ -158,8 +138,19 @@ function normalizeExtends(value: unknown): Array<string> {
 	return [];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+function emptyConfig(): InheritedConfig {
+	return { compilerOptions: new Map(), topLevel: new Map() };
+}
+
+function mergeInto(target: Map<string, InheritedEntry>, source: Map<string, InheritedEntry>): void {
+	for (const [key, entry] of source) {
+		target.set(key, entry);
+	}
+}
+
+function mergeParent(into: InheritedConfig, parent: InheritedConfig): void {
+	mergeInto(into.compilerOptions, parent.compilerOptions);
+	mergeInto(into.topLevel, parent.topLevel);
 }
 
 /**
@@ -206,14 +197,7 @@ function overlay(target: Map<string, InheritedEntry>, options: unknown, source: 
  * @returns The flattened config, with each entry's `source` naming its definer.
  */
 function flatten(file: string, visited: Set<string>): InheritedConfig {
-	const compilerOptions = new Map<string, InheritedEntry>();
-	const result: {
-		compilerOptions: Map<string, InheritedEntry>;
-		exclude?: InheritedEntry;
-		files?: InheritedEntry;
-		include?: InheritedEntry;
-	} = { compilerOptions };
-
+	const result = emptyConfig();
 	if (visited.has(file)) {
 		return result;
 	}
@@ -227,27 +211,15 @@ function flatten(file: string, visited: Set<string>): InheritedConfig {
 
 	for (const spec of normalizeExtends(config.extends)) {
 		const target = resolveExtendsTarget(spec, file);
-		if (target === undefined) {
-			continue;
-		}
-
-		const parent = flatten(target, visited);
-		for (const [key, entry] of parent.compilerOptions) {
-			compilerOptions.set(key, entry);
-		}
-
-		for (const key of TOP_LEVEL_KEYS) {
-			const entry = parent[key];
-			if (entry !== undefined) {
-				result[key] = entry;
-			}
+		if (target !== undefined) {
+			mergeParent(result, flatten(target, visited));
 		}
 	}
 
-	overlay(compilerOptions, config.compilerOptions, file);
+	overlay(result.compilerOptions, config.compilerOptions, file);
 	for (const key of TOP_LEVEL_KEYS) {
 		if (config[key] !== undefined) {
-			result[key] = { source: file, value: config[key] };
+			result.topLevel.set(key, { source: file, value: config[key] });
 		}
 	}
 
