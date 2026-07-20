@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "src/rules/arrow-return-style/**"
+      - "src/rules/**"
       - "benchmark/**"
       - .github/workflows/benchmark.yaml
 
@@ -39,9 +39,11 @@ jobs:
 
       # `nr bench` runs prebench (nr build) first, so the rule resolves its
       # oxfmt worker from dist. GITHUB_TOKEN must be mapped explicitly — the
-      # tool reads process.env.GITHUB_TOKEN to post the results comment. Numbers
-      # are informational (shared runners are noisy); this job never gates.
+      # tool reads process.env.GITHUB_TOKEN to post the results comment. Timings
+      # are informational (shared runners are noisy) and never gate on a
+      # slowdown; the job DOES fail if a rule lacks a benchmark fixture, which is
+      # config.ts's deliberate coverage gate (see benchmark/README.md).
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        name: Benchmark arrow-return-style
+        name: Benchmark rules
         run: nr bench

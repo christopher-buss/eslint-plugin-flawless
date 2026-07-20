@@ -1,0 +1,32 @@
+// Coarse benchmark fixture for flawless/jsx-shorthand-boolean.
+// Each line is a shorthand boolean attribute the rule reports and fixes.
+const b0 = <Component hidden disabled />;
+const b1 = <Component hidden disabled />;
+const b2 = <Component hidden disabled />;
+const b3 = <Component hidden disabled />;
+const b4 = <Component hidden disabled />;
+const b5 = <Component hidden disabled />;
+const b6 = <Component hidden disabled />;
+const b7 = <Component hidden disabled />;
+const b8 = <Component hidden disabled />;
+const b9 = <Component hidden disabled />;
+const b10 = <Component hidden disabled />;
+const b11 = <Component hidden disabled />;
+const b12 = <Component hidden disabled />;
+const b13 = <Component hidden disabled />;
+const b14 = <Component hidden disabled />;
+const b15 = <Component hidden disabled />;
+const b16 = <Component hidden disabled />;
+const b17 = <Component hidden disabled />;
+const b18 = <Component hidden disabled />;
+const b19 = <Component hidden disabled />;
+const b20 = <Component hidden disabled />;
+const b21 = <Component hidden disabled />;
+const b22 = <Component hidden disabled />;
+const b23 = <Component hidden disabled />;
+const b24 = <Component hidden disabled />;
+const b25 = <Component hidden disabled />;
+const b26 = <Component hidden disabled />;
+const b27 = <Component hidden disabled />;
+const b28 = <Component hidden disabled />;
+const b29 = <Component hidden disabled />;

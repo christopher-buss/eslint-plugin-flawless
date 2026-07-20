@@ -1,18 +1,105 @@
 import { defineConfig } from "eslint-rule-benchmark";
 
-// Benchmarks flawless/arrow-return-style against the BUILT plugin
-// (dist/index.mjs). Building first matters: the rule locates its oxfmt worker
-// relative to import.meta.url, and only the built layout resolves the worker to
+import builtPlugin from "../dist/index.mjs";
+
+// Benchmarks the flawless rules against the BUILT plugin (dist/index.mjs).
+// Building first matters: arrow-return-style locates its oxfmt worker relative
+// to import.meta.url, and only the built layout resolves the worker to
 // dist/rules/arrow-return-style/worker.mjs. Run `pnpm build` before this.
+//
+// arrow-return-style gets a detailed, multi-case profile below. Every other rule
+// gets one coarse run driven by the COARSE manifest — enough to catch a gross
+// regression, not to attribute cost to a code path. See ./README.md.
 //
 // The runner lints each fixture with fix:true, reusing one ESLint instance per
 // test across warmup + measured iterations, so numbers reflect the WARM,
 // steady-state cost (the worker's one-time cold start is spawned during warmup
-// and dropped by outlier filtering). Fixtures live in ./cases and are produced
-// by ./generate-cases.mjs.
+// and dropped by outlier filtering). Detailed arrow fixtures live in ./cases and
+// are produced by ./generate-cases.mjs; coarse fixtures are hand-written under
+// ./cases/all.
 
 const RULE_PATH = "../dist/index.mjs";
 const RULE_ID = "arrow-return-style";
+
+// One coarse run per rule. arrow-return-style is profiled in detail below, so it
+// is intentionally absent here. A rule needing options (to report at all) passes
+// them through, matching the shape it would take in eslint config.
+const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string }> = [
+	{ ruleId: "jsx-shorthand-boolean", testPath: "./cases/all/jsx-shorthand-boolean.tsx" },
+	{ ruleId: "jsx-shorthand-fragment", testPath: "./cases/all/jsx-shorthand-fragment.tsx" },
+	{
+		options: [{ max: 5 }],
+		ruleId: "max-lines-per-function",
+		testPath: "./cases/all/max-lines-per-function.tsx",
+	},
+	{
+		options: [{ format: ["camelCase"], selector: "variable" }],
+		ruleId: "naming-convention",
+		testPath: "./cases/all/naming-convention.tsx",
+	},
+	{ ruleId: "no-export-default-arrow", testPath: "./cases/all/no-export-default-arrow.tsx" },
+	{
+		ruleId: "no-unnecessary-use-callback",
+		testPath: "./cases/all/no-unnecessary-use-callback.tsx",
+	},
+	{ ruleId: "no-unnecessary-use-memo", testPath: "./cases/all/no-unnecessary-use-memo.tsx" },
+	{
+		ruleId: "padding-after-expect-assertions",
+		testPath: "./cases/all/padding-after-expect-assertions.tsx",
+	},
+	{
+		ruleId: "prefer-destructuring-assignment",
+		testPath: "./cases/all/prefer-destructuring-assignment.tsx",
+	},
+	{
+		ruleId: "prefer-parameter-destructuring",
+		testPath: "./cases/all/prefer-parameter-destructuring.tsx",
+	},
+	{ ruleId: "purity", testPath: "./cases/all/purity.tsx" },
+];
+
+// Rules eslint-rule-benchmark structurally cannot run, so they are exempt from
+// the coverage check below. Revisit if the tool gains support.
+//   - prefer-read-only-props needs type information, but the harness lints each
+//     fixture by bare basename, which no tsconfig can include — so a typed
+//     program is impossible and the rule silently reports nothing.
+//   - toml-sort-keys / yaml-block-key-blank-lines lint non-JS languages, whose
+//     extensions are absent from the tool's SUPPORTED_EXTENSIONS.
+//   - no-redundant-tsconfig-options lints JSON (also unsupported) and resolves
+//     the tsconfig `extends` chain from sibling files on disk — which the
+//     harness's bare-basename lint can never provide.
+const UNSUPPORTED = new Set([
+	"no-redundant-tsconfig-options",
+	"prefer-read-only-props",
+	"toml-sort-keys",
+	"yaml-block-key-blank-lines",
+]);
+
+// Fail the run when a new rule ships without a benchmark: every built rule must
+// be profiled in detail (arrow-return-style), present in COARSE, or a documented
+// UNSUPPORTED exemption. We flag and set a non-zero exit rather than throw — a
+// throw aborts config loading and nukes EVERY result (arrow included) on any PR
+// that adds a rule, whereas this lets the existing benchmarks still measure while
+// CI (and a local `pnpm bench`) still goes red until a fixture is added.
+const benched = new Set([RULE_ID, ...COARSE.map((entry) => entry.ruleId)]);
+const missing = Object.keys(builtPlugin.rules).filter(
+	(ruleId) => !benched.has(ruleId) && !UNSUPPORTED.has(ruleId),
+);
+if (missing.length > 0) {
+	console.error(
+		`\n✖ No benchmark fixture for rule(s): ${missing.join(", ")}.\n` +
+			`  Add each to COARSE (with a cases/all/<rule>.tsx fixture) or, if ` +
+			`eslint-rule-benchmark cannot run it, to UNSUPPORTED in benchmark/config.ts.\n`,
+	);
+	process.exitCode = 1;
+}
+
+const coarseTests = COARSE.map((entry) => ({
+	name: `${entry.ruleId} (coarse)`,
+	ruleId: entry.ruleId,
+	rulePath: RULE_PATH,
+	cases: [{ testPath: entry.testPath, ...(entry.options ? { options: entry.options } : {}) }],
+}));
 
 export default defineConfig({
 	iterations: 100,
@@ -89,5 +176,6 @@ export default defineConfig({
 			rulePath: RULE_PATH,
 			cases: [{ testPath: "./cases/realistic.ts" }],
 		},
+		...coarseTests,
 	],
 });
