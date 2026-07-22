@@ -1,3 +1,4 @@
+export { type ContextualTypeCache, isDictatedByContextualType } from "./contextual-type";
 export { Modifier as Modifiers } from "./enums";
 export type { PredefinedFormatString } from "./enums";
 export { parseOptions } from "./parse-options";

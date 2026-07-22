@@ -3,7 +3,16 @@ import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vites
 import path from "node:path";
 
 import { run } from "../test";
-import { namingConvention, RULE_NAME } from "./rule";
+import { namingConvention, type Options, RULE_NAME } from "./rule";
+
+// Shared options for the contextual-type-dictated name cases: only object
+// literal members are configured, so any skip/report comes from that path.
+const dictatedNameOptions: Options = [
+	{
+		format: ["camelCase"],
+		selector: ["objectLiteralMethod", "objectLiteralProperty"],
+	},
+];
 
 const valid: Array<ValidTestCase> = [
 	{
@@ -1221,6 +1230,83 @@ const valid: Array<ValidTestCase> = [
 				types: [{ name: "Entity" }, { name: "Pair" }],
 			},
 		],
+	},
+	{
+		// contextual type - names dictated by `satisfies Partial<T>` are not the
+		// author's choice (mapped-type symbols), for both properties and methods
+		code: "interface UserInputService { GetPropertyChangedSignal(): number; PreferredInput: number; } declare const preferred: number; const userInputService = { GetPropertyChangedSignal() { return 1; }, PreferredInput: preferred } satisfies Partial<UserInputService>;",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - plain `satisfies` against a non-mapped interface
+		code: "interface Config { PascalProp: number } const x = { PascalProp: 1 } satisfies Config;",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - variable type annotation
+		code: "interface Config { PascalProp: number } const x: Config = { PascalProp: 1 };",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - `as` assertion
+		code: "interface Config { PascalProp: number } const x = { PascalProp: 1 } as Config;",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - call argument position
+		code: "interface Config { PascalProp: number } declare function configure(config: Config): void; configure({ PascalProp: 1 });",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - optional parameter (`Config | undefined` is stripped
+		// via getNonNullableType)
+		code: "interface Config { PascalProp: number } declare function configure(config?: Config): void; configure({ PascalProp: 1 });",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - nested object literal inherits the contextual type
+		code: "interface Outer { inner: { PascalProp: number } } const x: Outer = { inner: { PascalProp: 1 } };",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - return position
+		code: "interface Config { PascalProp: number } function make(): Config { return { PascalProp: 1 }; } const lazy: () => Config = () => ({ PascalProp: 1 });",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - shorthand property (the property name is dictated;
+		// the variable itself is covered by the `variable` selector, which is
+		// not configured here)
+		code: "interface Config { PascalProp: number } declare const PascalProp: number; const x: Config = { PascalProp };",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - quoted key dictated by the type (requiresQuotes
+		// interplay: skip fires before modifiers are computed)
+		code: "interface Config { 'Weird Name': number } const x = { 'Weird Name': 1 } satisfies Config;",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - numeric key
+		code: "interface Config { 0: string } const x = { 0: 'a' } satisfies Config;",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - `Record` over a literal key union produces real
+		// properties, so the exact name is dictated
+		code: "const x: Record<'ExactName', number> = { ExactName: 1 };",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - union contextual type where the property exists in
+		// only one arm (per-arm lookup, not union-wide)
+		code: "interface ConfigA { OnlyA: number } interface ConfigB { onlyB: number } declare function f(x: ConfigA | ConfigB): void; f({ OnlyA: 1 });",
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - spread siblings do not affect the lookup
+		code: "interface Config { PascalProp: number; other: number } declare const base: Config; const x: Config = { ...base, PascalProp: 1 };",
+		options: dictatedNameOptions,
 	},
 ];
 
@@ -2668,6 +2754,61 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{ format: ["camelCase"], selector: "variable" },
 		],
+	},
+	{
+		// contextual type - no contextual type means the name is the author's
+		// choice; property still validated
+		code: "const x = { PascalProp: 1 };",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - no contextual type, method
+		code: "const x = { GetThing() { return 1; } };",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - a string index signature does not dictate the
+		// specific name
+		code: "const x: Record<string, number> = { PascalProp: 1 };",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - per-property granularity: declared member skipped,
+		// index-signature-only member still validated
+		code: "interface Config { Declared: number; [key: string]: number } const x = { Declared: 1, NotDeclared: 2 } satisfies Config;",
+		errors: [
+			{
+				data: {
+					name: "NotDeclared",
+					formats: "camelCase",
+					type: "Object Literal Property",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - generic self-inference guard: `T` is inferred from
+		// the literal itself, so the name is still the author's choice
+		code: "declare function identity<T>(x: T): T; identity({ PascalProp: 1 });",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - `as const` provides no contextual type
+		code: "const x = { PascalProp: 1 } as const;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
+	},
+	{
+		// contextual type - contextual type without the property
+		code: "const x: object = { PascalProp: 1 };",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: dictatedNameOptions,
 	},
 ];
 

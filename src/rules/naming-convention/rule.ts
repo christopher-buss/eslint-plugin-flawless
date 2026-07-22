@@ -10,6 +10,8 @@ import { createEslintRule } from "../../util";
 import { collectVariables } from "../../utils/collect-variables";
 import {
 	type Context,
+	type ContextualTypeCache,
+	isDictatedByContextualType,
 	type NamingSelector,
 	parseOptions,
 	SCHEMA,
@@ -89,7 +91,9 @@ function create(
 
 	const validators = parseOptions(context);
 
-	const compilerOptions = getParserServices(context, true).program?.getCompilerOptions() ?? {};
+	const services = getParserServices(context, true);
+	const compilerOptions = services.program?.getCompilerOptions() ?? {};
+	const contextualTypeCache: ContextualTypeCache = new WeakMap();
 	function handleMember(
 		validator: ValidatorFunction,
 		{
@@ -145,7 +149,6 @@ function create(
 			| TSESTree.TSAbstractMethodDefinitionNonComputedName
 			| TSESTree.TSAbstractPropertyDefinitionNonComputedName,
 	): boolean {
-		const services = getParserServices(context, true);
 		if (!services.program) {
 			return false;
 		}
@@ -221,6 +224,12 @@ function create(
 		':not(ObjectPattern) > Property[computed = false][kind = "init"][value.type != "ArrowFunctionExpression"][value.type != "FunctionExpression"][value.type != "TSEmptyBodyFunctionExpression"]':
 			{
 				handler: (node: TSESTree.PropertyNonComputedName, validator): void => {
+					// Skip naming validation if the name is dictated by the
+					// contextual type of the enclosing object literal
+					if (isDictatedByContextualType(node, services, contextualTypeCache)) {
+						return;
+					}
+
 					const modifiers = new Set<ModifierType>([Modifier.public]);
 					handleMember(validator, node, modifiers);
 				},
@@ -308,6 +317,15 @@ function create(
 				node: TSESTree.PropertyNonComputedName | TSESTree.TSMethodSignatureNonComputedName,
 				validator,
 			): void => {
+				// Skip naming validation if the name is dictated by the
+				// contextual type of the enclosing object literal
+				if (
+					node.type === AST_NODE_TYPES.Property &&
+					isDictatedByContextualType(node, services, contextualTypeCache)
+				) {
+					return;
+				}
+
 				const modifiers = new Set<ModifierType>([Modifier.public]);
 
 				if (isAsyncMemberOrProperty(node)) {

@@ -33,6 +33,42 @@ function goodExample() {
 }
 ```
 
+## Names dictated by a contextual type
+
+`objectLiteralProperty` and `objectLiteralMethod` members are automatically
+exempt from naming validation when the enclosing object literal has a contextual
+type that declares the member. In that case the name is not the author's choice
+— it is required by the declared type, which is itself validated at its
+declaration site (via `typeProperty` / `typeMethod`). This is not configurable.
+
+```ts
+// Correct — names are required by UserInputService:
+const userInputService = {
+	GetPropertyChangedSignal() {
+		return signal;
+	},
+	PreferredInput: options.preferred ?? Enum.PreferredInput.KeyboardAndMouse,
+} satisfies Partial<UserInputService>;
+```
+
+The contextual type can come from `satisfies`, an `as` assertion, a variable /
+parameter / return type annotation, a call-argument position, or an enclosing
+literal (nested object literals inherit it).
+
+Notes:
+
+- Object literals **without** a contextual type are validated as before
+  (including `as const` — a `const` assertion provides no contextual type).
+- The contextual type must actually **declare** the member: `Record<string, T>`
+  (a bare index signature) does not dictate any specific name and exempts
+  nothing, while `Record<"ExactName", T>` does.
+- Generic inference from the literal itself (e.g. `identity({ Name: 1 })` with
+  `identity<T>(x: T): T`) does not exempt — the names still originate from the
+  literal.
+- Object-literal `get` / `set` accessors are validated as `classicAccessor` and
+  are not exempted.
+- Requires type information; without a TS program the rule behaves as before.
+
 ## Options
 
 This rule is a fork of
