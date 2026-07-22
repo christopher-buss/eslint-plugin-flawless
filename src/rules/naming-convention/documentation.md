@@ -82,13 +82,37 @@ Each entry in a selector's `types` array is one of:
 
 - a built-in type modifier: `"array"`, `"boolean"`, `"function"`, `"number"`,
   `"string"` (matched against the widened TS type, as upstream), or
-- a **type-reference matcher**: `{ from?: string, name: string }`.
+- a **type-reference matcher**: `{ from?: string, name?: string, returns?: … }`
+  with at least one of `name` / `returns` present.
 
 A type-reference matcher matches when the value's type resolves to a symbol
 named `name` — checked against the type's `aliasSymbol` first, then its
 `symbol`, recursing through union and intersection members. A union type
 satisfies the selector when every arm matches at least one entry in `types` (not
 necessarily the same one).
+
+`returns` holds a nested type-reference matcher applied to call-signature return
+types: the value's type matches when at least one of its call signatures returns
+a type satisfying the nested matcher. This covers values whose type is an
+_anonymous_ function type — there is no symbol name to match, but the return
+type is a named reference. The canonical case is React components typed
+`(props: P) => React.ReactNode`:
+
+```ts
+const componentNaming = [
+	{
+		format: ["StrictPascalCase"],
+		selector: ["variable", "parameter"],
+		types: [{ returns: { name: "ReactNode", from: "@rbxts/react" } }],
+	},
+];
+```
+
+When `name` and `returns` are both present, both must hold. Unlike upstream,
+`types` is also accepted on the `function` and method (`classMethod`,
+`objectLiteralMethod`, `typeMethod`, `method`) selectors, where the matched type
+is the function's own type — combined with `returns` this lets e.g. interface
+methods acting as component factories carry their own format.
 
 `from` is optional. When supplied, the matched symbol's declaration must also
 live in a file the specifier resolves to:
@@ -123,8 +147,9 @@ const namingConventionOptions = [
 ];
 ```
 
-For sorting purposes, strict matchers (`from` + `name`) take priority over loose
-matchers (`name` only), and both take priority over the built-in type modifiers.
+For sorting purposes, strict matchers (a `from` constraint at any depth,
+including inside `returns`) take priority over loose matchers (no `from`), and
+both take priority over the built-in type modifiers.
 
 The `TypeMatcher` and `TypeReference` types are exported from the package root
 so consumers can strongly type their config.

@@ -57,27 +57,39 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 				type: "string",
 			},
 			{
-				additionalProperties: false,
-				description:
-					"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to.",
-				properties: {
-					name: {
-						description:
-							"Symbol name to match (compared against the type's `aliasSymbol` then `symbol`).",
-						minLength: 1,
-						type: "string",
-					},
-					from: {
-						description:
-							"Module specifier the type must originate from. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source.",
-						minLength: 1,
-						type: "string",
-					},
-				},
-				required: ["name"],
-				type: "object",
+				$ref: "#/$defs/typeReferenceMatcher",
 			},
 		],
+	},
+	typeReferenceMatcher: {
+		additionalProperties: false,
+		anyOf: [
+			{ required: ["name"], type: "object" },
+			{ required: ["returns"], type: "object" },
+		],
+		dependencies: { from: ["name"] },
+		description:
+			"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to. `returns` instead (or additionally) matches callable types by the return type of their call signatures.",
+		properties: {
+			name: {
+				description:
+					"Symbol name to match (compared against the type's `aliasSymbol` then `symbol`).",
+				minLength: 1,
+				type: "string",
+			},
+			from: {
+				description:
+					"Module specifier the type must originate from. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source.",
+				minLength: 1,
+				type: "string",
+			},
+			returns: {
+				$ref: "#/$defs/typeReferenceMatcher",
+				description:
+					"Nested matcher applied to call-signature return types. The type matches when at least one call signature's return type satisfies it. Lets anonymous function types (which have no symbol name) be matched, e.g. React components typed `(props: P) => ReactNode`.",
+			},
+		},
+		type: "object",
 	},
 	underscoreOptions: {
 		enum: Object.keys(UnderscoreOption),
@@ -225,7 +237,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 				"unused",
 				"async",
 			]),
-			...selectorSchema("function", false, ["exported", "global", "unused", "async"]),
+			...selectorSchema("function", true, ["exported", "global", "unused", "async"]),
 			...selectorSchema("parameter", true, ["destructured", "unused"]),
 			...selectorSchema("objectStyleEnum", false, ["const", "exported", "global", "unused"]),
 
@@ -273,7 +285,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 				"async",
 			]),
 
-			...selectorSchema("classMethod", false, [
+			...selectorSchema("classMethod", true, [
 				"abstract",
 				"private",
 				"#private",
@@ -284,9 +296,9 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 				"override",
 				"async",
 			]),
-			...selectorSchema("objectLiteralMethod", false, ["public", "requiresQuotes", "async"]),
-			...selectorSchema("typeMethod", false, ["public", "requiresQuotes"]),
-			...selectorSchema("method", false, [
+			...selectorSchema("objectLiteralMethod", true, ["public", "requiresQuotes", "async"]),
+			...selectorSchema("typeMethod", true, ["public", "requiresQuotes"]),
+			...selectorSchema("method", true, [
 				"abstract",
 				"private",
 				"#private",

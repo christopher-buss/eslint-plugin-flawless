@@ -10,7 +10,13 @@ import {
 	UnderscoreOption,
 } from "./enums";
 import { isMetaSelector } from "./shared";
-import type { Context, NamingSelector, NormalizedSelector, ParsedOptions } from "./types";
+import type {
+	Context,
+	NamingSelector,
+	NormalizedSelector,
+	ParsedOptions,
+	TypeReference,
+} from "./types";
 import { createValidator } from "./validator";
 
 export function parseOptions(context: Context): ParsedOptions {
@@ -22,6 +28,21 @@ export function parseOptions(context: Context): ParsedOptions {
 			createValidator(key as SelectorString, context, normalizedOptions),
 		]),
 	) as ParsedOptions;
+}
+
+/**
+ * A type-reference matcher counts as "strict" for sorting when any level of it
+ * (including nested `returns` matchers) constrains the declaring module.
+ *
+ * @param reference - The matcher to inspect.
+ * @returns True if the matcher carries a `from` constraint at any depth.
+ */
+function hasFromConstraint(reference: TypeReference): boolean {
+	if (reference.from !== undefined) {
+		return true;
+	}
+
+	return reference.returns !== undefined && hasFromConstraint(reference.returns);
 }
 
 function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
@@ -38,10 +59,9 @@ function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
 			if (typeof type === "string") {
 				weight |= TypeModifier[type];
 			} else {
-				weight |=
-					type.from === undefined
-						? TYPE_REFERENCE_LOOSE_WEIGHT
-						: TYPE_REFERENCE_STRICT_WEIGHT;
+				weight |= hasFromConstraint(type)
+					? TYPE_REFERENCE_STRICT_WEIGHT
+					: TYPE_REFERENCE_LOOSE_WEIGHT;
 			}
 		}
 	}

@@ -417,12 +417,16 @@ export function createValidator(
 
 const SelectorsAllowedToHaveTypes =
 	Selector.variable |
+	Selector.function |
 	Selector.parameter |
 	Selector.classProperty |
 	Selector.objectLiteralProperty |
 	Selector.typeProperty |
 	Selector.parameterProperty |
-	Selector.classicAccessor;
+	Selector.classicAccessor |
+	Selector.classMethod |
+	Selector.objectLiteralMethod |
+	Selector.typeMethod;
 
 function isAllTypesMatch(type: ts.Type, callback: (type: ts.Type) => boolean): boolean {
 	if (type.isUnion()) {
@@ -440,7 +444,7 @@ function symbolMatchesTypeReference(
 	symbol: ts.Symbol | undefined,
 	reference: TypeReference,
 ): boolean {
-	if (symbol?.name !== reference.name) {
+	if (symbol === undefined || reference.name === undefined || symbol.name !== reference.name) {
 		return false;
 	}
 
@@ -463,7 +467,7 @@ function symbolMatchesTypeReference(
 	return false;
 }
 
-function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean {
+function matchesNamedTypeReference(type: ts.Type, reference: TypeReference): boolean {
 	if (isAnyType(type)) {
 		return false;
 	}
@@ -478,13 +482,57 @@ function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean 
 
 	if (type.isIntersection() || type.isUnion()) {
 		for (const inner of type.types) {
-			if (matchesTypeReference(inner, reference)) {
+			if (matchesNamedTypeReference(inner, reference)) {
 				return true;
 			}
 		}
 	}
 
 	return false;
+}
+
+function matchesReturnTypeReference(type: ts.Type, reference: TypeReference): boolean {
+	if (isAnyType(type)) {
+		return false;
+	}
+
+	for (const signature of type.getCallSignatures()) {
+		if (matchesTypeReference(signature.getReturnType(), reference)) {
+			return true;
+		}
+	}
+
+	if (type.isIntersection() || type.isUnion()) {
+		for (const inner of type.types) {
+			if (matchesReturnTypeReference(inner, reference)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean {
+	if (isAnyType(type)) {
+		return false;
+	}
+
+	// an empty matcher would match every type; the schema requires at least one
+	// of `name` / `returns`, so treat it as a non-match defensively
+	if (reference.name === undefined && reference.returns === undefined) {
+		return false;
+	}
+
+	if (reference.name !== undefined && !matchesNamedTypeReference(type, reference)) {
+		return false;
+	}
+
+	if (reference.returns !== undefined && !matchesReturnTypeReference(type, reference.returns)) {
+		return false;
+	}
+
+	return true;
 }
 
 function isCorrectType(

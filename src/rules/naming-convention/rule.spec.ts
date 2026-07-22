@@ -1232,6 +1232,106 @@ const valid: Array<ValidTestCase> = [
 		],
 	},
 	{
+		// returns matcher - anonymous function type matched by its return type
+		code: "type Node = { readonly __node: true }; declare function createProbe(): (props: { label: string }) => Node; const Probe = createProbe();",
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ returns: { name: "Node" } }],
+			},
+		],
+	},
+	{
+		// returns matcher - nullable return type matches via the union branch
+		code: "type Node = { readonly __node: true }; declare function createProbe(): () => Node | undefined; const Probe = createProbe();",
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ returns: { name: "Node" } }],
+			},
+		],
+	},
+	{
+		// returns matcher - combined with `name`: both constraints hold
+		code: "type Node = { readonly __node: true }; type Component = () => Node; declare function make(): Component; const Probe = make();",
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ name: "Component", returns: { name: "Node" } }],
+			},
+		],
+	},
+	{
+		// returns matcher - non-callable type falls back to the default rule
+		code: "const myCount: number = 1;",
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	{
+		// returns matcher on typeMethod - interface methods returning a component
+		// type get their own format; other methods keep the base format
+		code: "type Node = { readonly __node: true }; interface Api { FluxProvider(props: { x: number }): Node; getCount(): number; }",
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: "typeMethod",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "typeMethod" },
+		],
+	},
+	{
+		// returns matcher on function declarations
+		code: "type Node = { readonly __node: true }; function Probe(): Node { return { __node: true } as Node; }",
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: "function",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "function" },
+		],
+	},
+	{
+		// fork divergence from upstream: `types` is honored (not ignored) on
+		// function selectors — a function's type is never `string`, so this
+		// config no longer applies to the declaration
+		code: "function my_foo_bar() {}",
+		options: [
+			{
+				format: ["PascalCase"],
+				prefix: ["my", "My"],
+				selector: ["variable", "function"],
+				types: ["string"],
+			},
+		],
+	},
+	{
+		// returns matcher on parameters - component passed as an argument
+		code: "type Node = { readonly __node: true }; function mount(Component: (props: { x: number }) => Node) { return Component({ x: 1 }); }",
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: "parameter",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "parameter" },
+		],
+	},
+	{
 		// contextual type - names dictated by `satisfies Partial<T>` are not the
 		// author's choice (mapped-type symbols), for both properties and methods
 		code: "interface UserInputService { GetPropertyChangedSignal(): number; PreferredInput: number; } declare const preferred: number; const userInputService = { GetPropertyChangedSignal() { return 1; }, PreferredInput: preferred } satisfies Partial<UserInputService>;",
@@ -1664,6 +1764,9 @@ const invalid: Array<InvalidTestCase> = [
 		],
 	},
 	{
+		// `types` is honored on function selectors (fork divergence from
+		// upstream, where it is silently ignored); the "function" modifier
+		// matches the declaration's own callable type
 		code: `
         function my_foo_bar() {}
       `,
@@ -1673,7 +1776,7 @@ const invalid: Array<InvalidTestCase> = [
 				format: ["PascalCase"],
 				prefix: ["my", "My"],
 				selector: ["variable", "function"],
-				types: ["string"],
+				types: ["function"],
 			},
 		],
 	},
@@ -2753,6 +2856,48 @@ const invalid: Array<InvalidTestCase> = [
 				types: [{ name: "LocalEntity", from: "some-other-pkg" }],
 			},
 			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	{
+		// returns matcher - camelCase rejected once the return type matches
+		code: "type Node = { readonly __node: true }; declare function createProbe(): () => Node; const myProbe = createProbe();",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ returns: { name: "Node" } }],
+			},
+		],
+	},
+	{
+		// returns matcher - return type mismatch falls back to the default rule;
+		// PascalCase then rejected by the camelCase fallback
+		code: "declare function makeThing(): () => number; const MyThing = makeThing();",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [
+			{
+				format: ["PascalCase"],
+				modifiers: ["const"],
+				selector: "variable",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	{
+		// returns matcher on typeMethod - non-matching method still held to the
+		// base camelCase format
+		code: "type Node = { readonly __node: true }; interface Api { GetCount(): number; }",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: "typeMethod",
+				types: [{ returns: { name: "Node" } }],
+			},
+			{ format: ["camelCase"], selector: "typeMethod" },
 		],
 	},
 	{

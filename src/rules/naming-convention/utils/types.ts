@@ -23,9 +23,20 @@ export interface MatchRegex {
 	regex: string;
 }
 
+/**
+ * Object-form entry in a selector's `types` array. At least one of `name` or
+ * `returns` must be present (enforced by the rule schema).
+ */
 export interface TypeReference {
-	name: string;
+	/** Symbol name the value's type must resolve to. */
+	name?: string;
+	/** Module specifier the matched symbol must be declared in. */
 	from?: string;
+	/**
+	 * Matches callable types by return type: at least one call signature's
+	 * return type must satisfy this nested matcher.
+	 */
+	returns?: TypeReference;
 }
 
 export type TypeMatcher = TypeModifierString | TypeReference;
