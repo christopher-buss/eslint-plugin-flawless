@@ -49,9 +49,35 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 		},
 		type: "array",
 	},
-	typeModifiers: {
-		enum: Object.keys(TypeModifier),
-		type: "string",
+	typeMatcher: {
+		oneOf: [
+			{
+				description: "Built-in type modifier matching by widened TS type.",
+				enum: Object.keys(TypeModifier),
+				type: "string",
+			},
+			{
+				additionalProperties: false,
+				description:
+					"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to.",
+				properties: {
+					name: {
+						description:
+							"Symbol name to match (compared against the type's `aliasSymbol` then `symbol`).",
+						minLength: 1,
+						type: "string",
+					},
+					from: {
+						description:
+							"Module specifier the type must originate from. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source.",
+						minLength: 1,
+						type: "string",
+					},
+				},
+				required: ["name"],
+				type: "object",
+			},
+		],
 	},
 	underscoreOptions: {
 		enum: Object.keys(UnderscoreOption),
@@ -118,7 +144,7 @@ function selectorSchema(
 		selector["types"] = {
 			additionalItems: false,
 			items: {
-				$ref: "#/$defs/typeModifiers",
+				$ref: "#/$defs/typeMatcher",
 			},
 			type: "array",
 		};
@@ -172,7 +198,7 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 			types: {
 				additionalItems: false,
 				items: {
-					$ref: "#/$defs/typeModifiers",
+					$ref: "#/$defs/typeMatcher",
 				},
 				type: "array",
 			},

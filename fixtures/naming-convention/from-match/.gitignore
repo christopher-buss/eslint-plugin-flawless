@@ -1,0 +1,6 @@
+# Intentional: the bare-package `from` path of the type-reference matcher in
+# `naming-convention` needs a real `/node_modules/<pkg>/` segment to exist for
+# the substring check to fire. Override the root `node_modules` exclusion for
+# this fixture.
+!node_modules/
+!node_modules/**

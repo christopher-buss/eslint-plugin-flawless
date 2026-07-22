@@ -119,6 +119,12 @@ export const TypeModifierValueToKey = Object.fromEntries(
 export type TypeModifierString = keyof typeof TypeModifier;
 export type TypeModifierType = (typeof TypeModifier)[keyof typeof TypeModifier];
 
+// weights for the object-form type-reference matchers in `types`; strict
+// (from + name) sorts ahead of loose (name only), and both sort ahead of the
+// built-in type modifiers above. The filter weight (1 << 30) stays highest.
+export const TYPE_REFERENCE_LOOSE_WEIGHT = 1 << 22;
+export const TYPE_REFERENCE_STRICT_WEIGHT = 1 << 23;
+
 export const UnderscoreOption = {
 	forbid: 1,
 	allow: 2,

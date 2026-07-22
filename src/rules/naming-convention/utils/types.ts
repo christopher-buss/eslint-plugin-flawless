@@ -23,6 +23,13 @@ export interface MatchRegex {
 	regex: string;
 }
 
+export interface TypeReference {
+	name: string;
+	from?: string;
+}
+
+export type TypeMatcher = TypeModifierString | TypeReference;
+
 export interface NamingSelector {
 	custom?: MatchRegex;
 	filter?: MatchRegex | string;
@@ -39,7 +46,7 @@ export interface NamingSelector {
 	selector: Array<IndividualAndMetaSelectorsString> | IndividualAndMetaSelectorsString;
 	suffix?: Array<string>;
 	trailingUnderscore?: UnderscoreOptionString;
-	types?: Array<TypeModifierString>;
+	types?: Array<TypeMatcher>;
 }
 
 export interface NormalizedMatchRegex {
@@ -67,7 +74,7 @@ export interface NormalizedSelector {
 	selector: MetaSelectorType | SelectorType;
 	suffix: Array<string> | undefined;
 	trailingUnderscore: undefined | UnderscoreOptionType;
-	types: Array<TypeModifierType> | undefined;
+	types: Array<TypeModifierType | TypeReference> | undefined;
 }
 export type ValidatorFunction = (
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,

@@ -4,6 +4,8 @@ import {
 	Modifier,
 	PredefinedFormat,
 	Selector,
+	TYPE_REFERENCE_LOOSE_WEIGHT,
+	TYPE_REFERENCE_STRICT_WEIGHT,
 	TypeModifier,
 	UnderscoreOption,
 } from "./enums";
@@ -33,7 +35,14 @@ function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
 
 	if (option.types) {
 		for (const type of option.types) {
-			weight |= TypeModifier[type];
+			if (typeof type === "string") {
+				weight |= TypeModifier[type];
+			} else {
+				weight |=
+					type.from === undefined
+						? TYPE_REFERENCE_LOOSE_WEIGHT
+						: TYPE_REFERENCE_STRICT_WEIGHT;
+			}
 		}
 	}
 
@@ -77,7 +86,9 @@ function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
 			option.trailingUnderscore !== undefined
 				? UnderscoreOption[option.trailingUnderscore]
 				: undefined,
-		types: option.types?.map((type) => TypeModifier[type]) ?? undefined,
+		types:
+			option.types?.map((type) => (typeof type === "string" ? TypeModifier[type] : type)) ??
+			undefined,
 	};
 
 	const selectors = Array.isArray(option.selector) ? option.selector : [option.selector];
