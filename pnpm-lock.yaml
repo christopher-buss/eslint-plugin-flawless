@@ -27,9 +27,6 @@ catalogs:
     '@typescript-eslint/scope-manager':
       specifier: 8.62.1
       version: 8.62.1
-    '@typescript-eslint/type-utils':
-      specifier: 8.62.1
-      version: 8.62.1
     '@typescript-eslint/utils':
       specifier: 8.62.1
       version: 8.62.1
@@ -141,9 +138,6 @@ importers:
       '@typescript-eslint/scope-manager':
         specifier: catalog:cli
         version: 8.62.1
-      '@typescript-eslint/type-utils':
-        specifier: catalog:cli
-        version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/utils':
         specifier: catalog:cli
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)

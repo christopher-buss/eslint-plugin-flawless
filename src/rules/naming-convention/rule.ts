@@ -1,12 +1,10 @@
 /* eslint-disable eslint-plugin/no-property-in-node -- For now */
 
-import { PatternVisitor } from "@typescript-eslint/scope-manager";
-import { requiresQuoting as _requiresQuoting } from "@typescript-eslint/type-utils";
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type { ScriptTarget } from "typescript";
+import { isIdentifierPart, isIdentifierStart, ScriptTarget } from "typescript";
 
 import { createEslintRule } from "../../util";
 import { collectVariables } from "../../utils/collect-variables";
@@ -114,48 +112,6 @@ function create(
 		validator(key, modifiers);
 	}
 
-	function getMemberModifiers(
-		node:
-			| TSESTree.AccessorProperty
-			| TSESTree.MethodDefinition
-			| TSESTree.PropertyDefinition
-			| TSESTree.TSAbstractAccessorProperty
-			| TSESTree.TSAbstractMethodDefinition
-			| TSESTree.TSAbstractPropertyDefinition
-			| TSESTree.TSParameterProperty,
-	): Set<ModifierType> {
-		const modifiers = new Set<ModifierType>();
-		if ("key" in node && node.key.type === AST_NODE_TYPES.PrivateIdentifier) {
-			modifiers.add(Modifier["#private"]);
-		} else if (node.accessibility) {
-			modifiers.add(Modifier[node.accessibility]);
-		} else {
-			modifiers.add(Modifier.public);
-		}
-
-		if (node.static) {
-			modifiers.add(Modifier.static);
-		}
-
-		if ("readonly" in node && node.readonly) {
-			modifiers.add(Modifier.readonly);
-		}
-
-		if ("override" in node && node.override) {
-			modifiers.add(Modifier.override);
-		}
-
-		if (
-			node.type === AST_NODE_TYPES.TSAbstractPropertyDefinition ||
-			node.type === AST_NODE_TYPES.TSAbstractMethodDefinition ||
-			node.type === AST_NODE_TYPES.TSAbstractAccessorProperty
-		) {
-			modifiers.add(Modifier.abstract);
-		}
-
-		return modifiers;
-	}
-
 	const { unusedVariables } = collectVariables(context);
 	function isUnused(name: string, initialScope: null | TSESLint.Scope.Scope): boolean {
 		let variable: null | TSESLint.Scope.Variable = null;
@@ -174,135 +130,6 @@ function create(
 		}
 
 		return unusedVariables.has(variable);
-	}
-
-	function isDestructured(id: TSESTree.Identifier): boolean {
-		return (
-			// `const { x }`
-			// does not match `const { x: y }`
-			(id.parent.type === AST_NODE_TYPES.Property && id.parent.shorthand) ||
-			// `const { x = 2 }`
-			// does not match const `{ x: y = 2 }`
-			(id.parent.type === AST_NODE_TYPES.AssignmentPattern &&
-				id.parent.parent.type === AST_NODE_TYPES.Property &&
-				id.parent.parent.shorthand)
-		);
-	}
-
-	// eslint-disable-next-line unicorn/consistent-function-scoping -- Retain
-	function isAsyncMemberOrProperty(
-		propertyOrMemberNode:
-			| TSESTree.MethodDefinitionNonComputedName
-			| TSESTree.PropertyDefinitionNonComputedName
-			| TSESTree.PropertyNonComputedName
-			| TSESTree.TSAbstractMethodDefinitionNonComputedName
-			| TSESTree.TSAbstractPropertyDefinitionNonComputedName
-			| TSESTree.TSMethodSignatureNonComputedName,
-	): boolean {
-		return Boolean(
-			"value" in propertyOrMemberNode &&
-			propertyOrMemberNode.value &&
-			"async" in propertyOrMemberNode.value &&
-			propertyOrMemberNode.value.async,
-		);
-	}
-
-	// eslint-disable-next-line unicorn/consistent-function-scoping -- Retain
-	function isAsyncVariableIdentifier(id: TSESTree.Identifier): boolean {
-		return Boolean(
-			("async" in id.parent && id.parent.async) ||
-			("init" in id.parent &&
-				id.parent.init &&
-				"async" in id.parent.init &&
-				id.parent.init.async),
-		);
-	}
-
-	/**
-	 * Determines if a VariableDeclarator represents an object-style enum declaration.
-	 *
-	 * Object-style enums are const assertions applied to object expressions, commonly
-	 * used as an alternative to TypeScript enums. Examples:
-	 * - `const Colors = { RED: 'red', BLUE: 'blue' } as const`
-	 * - `const Status = <const>{ OK: 200, ERROR: 500 }`.
-	 *
-	 * @param node - The VariableDeclarator AST node to check.
-	 * @param parent - The parent VariableDeclaration node.
-	 * @returns True if this represents an object-style enum declaration.
-	 */
-	function isObjectStyleEnumDeclaration(
-		node: TSESTree.VariableDeclarator,
-		parent: TSESTree.VariableDeclaration,
-	): boolean {
-		// Must be a const declaration
-		if (parent.kind !== "const") {
-			return false;
-		}
-
-		if (!node.init) {
-			return false;
-		}
-
-		// Check for const assertion: `as const`
-		if (
-			node.init.type === AST_NODE_TYPES.TSAsExpression &&
-			node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
-			node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
-			node.init.typeAnnotation.typeName.name === "const" &&
-			node.init.expression.type === AST_NODE_TYPES.ObjectExpression
-		) {
-			return true;
-		}
-
-		// Check for type assertion: `<const>`
-		if (
-			node.init.type === AST_NODE_TYPES.TSTypeAssertion &&
-			node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
-			node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
-			node.init.typeAnnotation.typeName.name === "const" &&
-			node.init.expression.type === AST_NODE_TYPES.ObjectExpression
-		) {
-			return true;
-		}
-
-		return false;
-	}
-
-	/**
-	 * Checks if a method name exists in any of the implemented interfaces.
-	 *
-	 * @param implementsList - List of implemented interfaces.
-	 * @param methodName - Name of the method to check.
-	 * @param checker - TypeScript type checker.
-	 * @param services - Parser services.
-	 * @returns True if the method name is found in any interface.
-	 */
-	function checkInterfacesForMethod(
-		implementsList: Array<TSESTree.TSClassImplements>,
-		methodName: string,
-		checker: import("typescript").TypeChecker,
-		services: ReturnType<typeof getParserServices>,
-	): boolean {
-		for (const implementsClause of implementsList) {
-			const interfaceType = checker.getTypeAtLocation(
-				services.esTreeNodeToTSNodeMap.get(implementsClause),
-			);
-			const interfaceSymbol = interfaceType.getSymbol();
-
-			if (!interfaceSymbol) {
-				continue;
-			}
-
-			const interfaceMembers = checker.getPropertiesOfType(interfaceType);
-
-			for (const member of interfaceMembers) {
-				if (member.name === methodName) {
-					return true;
-				}
-			}
-		}
-
-		return false;
 	}
 
 	/**
@@ -878,15 +705,176 @@ export const namingConvention = createEslintRule<Options, MessageIds>({
 	},
 });
 
+/**
+ * Checks if a method name exists in any of the implemented interfaces.
+ *
+ * @param implementsList - List of implemented interfaces.
+ * @param methodName - Name of the method to check.
+ * @param checker - TypeScript type checker.
+ * @param services - Parser services.
+ * @returns True if the method name is found in any interface.
+ */
+function checkInterfacesForMethod(
+	implementsList: Array<TSESTree.TSClassImplements>,
+	methodName: string,
+	checker: import("typescript").TypeChecker,
+	services: ReturnType<typeof getParserServices>,
+): boolean {
+	for (const implementsClause of implementsList) {
+		const interfaceType = checker.getTypeAtLocation(
+			services.esTreeNodeToTSNodeMap.get(implementsClause),
+		);
+		const interfaceSymbol = interfaceType.getSymbol();
+
+		if (!interfaceSymbol) {
+			continue;
+		}
+
+		const interfaceMembers = checker.getPropertiesOfType(interfaceType);
+
+		for (const member of interfaceMembers) {
+			if (member.name === methodName) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 function getIdentifiersFromPattern(
 	pattern: TSESTree.DestructuringPattern,
 ): Array<TSESTree.Identifier> {
 	const identifiers: Array<TSESTree.Identifier> = [];
-	const visitor = new PatternVisitor({}, pattern, (id) => {
-		identifiers.push(id);
-	});
-	visitor.visit(pattern);
+	const stack: Array<TSESTree.Node> = [pattern];
+
+	// `for...of` re-checks length each step, so entries pushed during iteration
+	// are still visited
+	for (const node of stack) {
+		// eslint-disable-next-line ts/switch-exhaustiveness-check -- Only pattern nodes can bind names; everything else falls through
+		switch (node.type) {
+			case AST_NODE_TYPES.ArrayPattern: {
+				for (const element of node.elements) {
+					if (element !== null) {
+						stack.push(element);
+					}
+				}
+
+				break;
+			}
+			case AST_NODE_TYPES.AssignmentPattern: {
+				stack.push(node.left);
+				break;
+			}
+			case AST_NODE_TYPES.Identifier: {
+				identifiers.push(node);
+				break;
+			}
+			case AST_NODE_TYPES.ObjectPattern: {
+				for (const property of node.properties) {
+					stack.push(property);
+				}
+
+				break;
+			}
+			case AST_NODE_TYPES.Property: {
+				stack.push(node.value);
+				break;
+			}
+			case AST_NODE_TYPES.RestElement: {
+				stack.push(node.argument);
+				break;
+			}
+			default: {
+				// Other node types (e.g. MemberExpression) cannot bind new names
+				break;
+			}
+		}
+	}
+
 	return identifiers;
+}
+
+function getMemberModifiers(
+	node:
+		| TSESTree.AccessorProperty
+		| TSESTree.MethodDefinition
+		| TSESTree.PropertyDefinition
+		| TSESTree.TSAbstractAccessorProperty
+		| TSESTree.TSAbstractMethodDefinition
+		| TSESTree.TSAbstractPropertyDefinition
+		| TSESTree.TSParameterProperty,
+): Set<ModifierType> {
+	const modifiers = new Set<ModifierType>();
+	if ("key" in node && node.key.type === AST_NODE_TYPES.PrivateIdentifier) {
+		modifiers.add(Modifier["#private"]);
+	} else if (node.accessibility) {
+		modifiers.add(Modifier[node.accessibility]);
+	} else {
+		modifiers.add(Modifier.public);
+	}
+
+	if (node.static) {
+		modifiers.add(Modifier.static);
+	}
+
+	if ("readonly" in node && node.readonly) {
+		modifiers.add(Modifier.readonly);
+	}
+
+	if ("override" in node && node.override) {
+		modifiers.add(Modifier.override);
+	}
+
+	if (
+		node.type === AST_NODE_TYPES.TSAbstractPropertyDefinition ||
+		node.type === AST_NODE_TYPES.TSAbstractMethodDefinition ||
+		node.type === AST_NODE_TYPES.TSAbstractAccessorProperty
+	) {
+		modifiers.add(Modifier.abstract);
+	}
+
+	return modifiers;
+}
+
+function isAsyncMemberOrProperty(
+	propertyOrMemberNode:
+		| TSESTree.MethodDefinitionNonComputedName
+		| TSESTree.PropertyDefinitionNonComputedName
+		| TSESTree.PropertyNonComputedName
+		| TSESTree.TSAbstractMethodDefinitionNonComputedName
+		| TSESTree.TSAbstractPropertyDefinitionNonComputedName
+		| TSESTree.TSMethodSignatureNonComputedName,
+): boolean {
+	return Boolean(
+		"value" in propertyOrMemberNode &&
+		propertyOrMemberNode.value &&
+		"async" in propertyOrMemberNode.value &&
+		propertyOrMemberNode.value.async,
+	);
+}
+
+function isAsyncVariableIdentifier(id: TSESTree.Identifier): boolean {
+	return Boolean(
+		("async" in id.parent && id.parent.async) ||
+		("init" in id.parent &&
+			id.parent.init &&
+			"async" in id.parent.init &&
+			id.parent.init.async),
+	);
+}
+
+function isDestructured(id: TSESTree.Identifier): boolean {
+	return (
+		// `const { x }`
+		// does not match `const { x: y }`
+		(id.parent.type === AST_NODE_TYPES.Property && id.parent.shorthand) ||
+		// `const { x = 2 }`
+		// does not match const `{ x: y = 2 }`
+		(id.parent.type === AST_NODE_TYPES.AssignmentPattern &&
+			id.parent.parent.type === AST_NODE_TYPES.Property &&
+			id.parent.parent.shorthand)
+	);
 }
 
 function isExported(
@@ -932,6 +920,79 @@ function isGlobal(scope: null | TSESLint.Scope.Scope): boolean {
 	);
 }
 
+/**
+ * Determines if a VariableDeclarator represents an object-style enum declaration.
+ *
+ * Object-style enums are const assertions applied to object expressions, commonly
+ * used as an alternative to TypeScript enums. Examples:
+ * - `const Colors = { RED: 'red', BLUE: 'blue' } as const`
+ * - `const Status = <const>{ OK: 200, ERROR: 500 }`.
+ *
+ * @param node - The VariableDeclarator AST node to check.
+ * @param parent - The parent VariableDeclaration node.
+ * @returns True if this represents an object-style enum declaration.
+ */
+function isObjectStyleEnumDeclaration(
+	node: TSESTree.VariableDeclarator,
+	parent: TSESTree.VariableDeclaration,
+): boolean {
+	// Must be a const declaration
+	if (parent.kind !== "const") {
+		return false;
+	}
+
+	if (!node.init) {
+		return false;
+	}
+
+	// Check for const assertion: `as const`
+	if (
+		node.init.type === AST_NODE_TYPES.TSAsExpression &&
+		node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+		node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+		node.init.typeAnnotation.typeName.name === "const" &&
+		node.init.expression.type === AST_NODE_TYPES.ObjectExpression
+	) {
+		return true;
+	}
+
+	// Check for type assertion: `<const>`
+	if (
+		node.init.type === AST_NODE_TYPES.TSTypeAssertion &&
+		node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+		node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+		node.init.typeAnnotation.typeName.name === "const" &&
+		node.init.expression.type === AST_NODE_TYPES.ObjectExpression
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+function isValidIdentifierText(name: string, languageVersion: ScriptTarget): boolean {
+	if (name.length === 0) {
+		return false;
+	}
+
+	const firstCodePoint = name.codePointAt(0);
+	if (firstCodePoint === undefined || !isIdentifierStart(firstCodePoint, languageVersion)) {
+		return false;
+	}
+
+	let index = firstCodePoint > 0xff_ff ? 2 : 1;
+	while (index < name.length) {
+		const codePoint = name.codePointAt(index);
+		if (codePoint === undefined || !isIdentifierPart(codePoint, languageVersion)) {
+			return false;
+		}
+
+		index += codePoint > 0xff_ff ? 2 : 1;
+	}
+
+	return true;
+}
+
 function requiresQuoting(
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,
 	target: ScriptTarget | undefined,
@@ -940,5 +1001,5 @@ function requiresQuoting(
 		node.type === AST_NODE_TYPES.Identifier || node.type === AST_NODE_TYPES.PrivateIdentifier
 			? node.name
 			: `${node.value}`;
-	return _requiresQuoting(name, target);
+	return !isValidIdentifierText(name, target ?? ScriptTarget.Latest);
 }
