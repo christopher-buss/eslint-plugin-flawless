@@ -43,6 +43,10 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		ruleId: "naming-convention",
 		testPath: "./cases/all/naming-convention.tsx",
 	},
+	{
+		ruleId: "no-conditional-in-test",
+		testPath: "./cases/all/no-conditional-in-test.tsx",
+	},
 	{ ruleId: "no-export-default-arrow", testPath: "./cases/all/no-export-default-arrow.tsx" },
 	{
 		ruleId: "no-unnecessary-use-callback",
