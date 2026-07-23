@@ -1,9 +1,10 @@
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
-import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
+import type { ReactImportKind } from "./imports";
 import {
+	classifySpecifier,
 	ensureNamedValueImport,
 	findNamedSpecifier,
 	findReactNamespaceLocal,
@@ -11,7 +12,6 @@ import {
 	hasReactNamespaceImport,
 	insertImportStatement,
 	removeNamedSpecifier,
-	resolveReactImport,
 } from "./imports";
 
 export const RULE_NAME = "react-namespace";
@@ -32,6 +32,20 @@ const messages = {
 		"Access the '{{name}}' type through the React namespace instead of importing it by name.",
 };
 
+/** How an identifier resolves to a React import binding. */
+interface ReactImportResolution {
+	kind: ReactImportKind;
+	variable: TSESLint.Scope.Variable;
+}
+
+/** Per-binding facts that decide whether its named import can be removed. */
+interface RemovableInfo {
+	/** Whether every reference is a bare type reference this rule can qualify. */
+	allConvertible: boolean;
+	/** The start offset of the first reference in source order. */
+	firstStart: number;
+}
+
 /**
  * Whether a member access is the target of an assignment (`React.x = …`), which
  * must be left alone — rewriting it to a bare name would create an assignment to
@@ -45,42 +59,35 @@ function isAssignmentTarget(node: TSESTree.MemberExpression): boolean {
 }
 
 /**
- * Whether every reference to a binding is a bare type reference that this rule
- * can qualify (`typeName` is the identifier itself). When true, the named import
- * can be removed once the last such reference is qualified.
- *
- * @param references - The references recorded for the binding.
- * @returns True when all references are convertible type references.
- */
-function allRefsConvertibleTypes(references: ReadonlyArray<TSESLint.Scope.Reference>): boolean {
-	return references.every(({ identifier }) => {
-		return (
-			identifier.parent.type === AST_NODE_TYPES.TSTypeReference &&
-			identifier.parent.typeName === identifier
-		);
-	});
-}
-
-/**
- * Whether the given identifier is the first (lowest-positioned) reference to its
- * binding, so specifier removal happens exactly once.
+ * Scans a binding's references once, recording whether all of them are bare
+ * type references (`typeName` is the identifier itself) and where the first one
+ * starts. The named import can be removed only when every reference is
+ * convertible, and only the *first* reference carries the import edits.
  *
  * The import edits (adding the namespace import, removing the redundant
  * specifier) sit at the top of the file. ESLint merges a report's fix array into
- * one edit spanning `[min, max]`, so anchoring those edits to the *first*
+ * one edit spanning `[min, max]`, so anchoring those edits to the first
  * reference keeps that span from the file head to the first usage — later
  * references stay disjoint and their own qualify edits survive a single pass.
  *
  * @param references - The references recorded for the binding.
- * @param identifier - The identifier currently being reported.
- * @returns True when the identifier is the first reference in source order.
+ * @returns The convertibility and first-reference facts for the binding.
  */
-function isFirstReference(
-	references: ReadonlyArray<TSESLint.Scope.Reference>,
-	identifier: TSESTree.Identifier,
-): boolean {
-	const firstStart = Math.min(...references.map((reference) => reference.identifier.range[0]));
-	return identifier.range[0] === firstStart;
+function computeRemovableInfo(references: ReadonlyArray<TSESLint.Scope.Reference>): RemovableInfo {
+	let allConvertible = true;
+	let firstStart = Number.POSITIVE_INFINITY;
+
+	for (const { identifier } of references) {
+		firstStart = Math.min(firstStart, identifier.range[0]);
+		if (
+			identifier.parent.type !== AST_NODE_TYPES.TSTypeReference ||
+			identifier.parent.typeName !== identifier
+		) {
+			allConvertible = false;
+		}
+	}
+
+	return { allConvertible, firstStart };
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
@@ -88,6 +95,18 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let program: TSESTree.Program;
 	let declarations: Array<TSESTree.ImportDeclaration>;
 	let sourceCode: Readonly<TSESLint.SourceCode>;
+	let resolutions: Map<TSESTree.Identifier | TSESTree.JSXIdentifier, ReactImportResolution>;
+	let removableInfoByVariable: Map<TSESLint.Scope.Variable, RemovableInfo>;
+
+	function getRemovableInfo(variable: TSESLint.Scope.Variable): RemovableInfo {
+		let info = removableInfoByVariable.get(variable);
+		if (info === undefined) {
+			info = computeRemovableInfo(variable.references);
+			removableInfoByVariable.set(variable, info);
+		}
+
+		return info;
+	}
 
 	return {
 		before(): void {
@@ -96,6 +115,26 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			importSource = settings?.importSource ?? DEFAULT_IMPORT_SOURCE;
 			program = sourceCode.ast;
 			declarations = getReactImportDeclarations(program, importSource);
+			resolutions = new Map();
+			removableInfoByVariable = new Map();
+
+			// Index every reference to a React import binding up front, so the
+			// per-node listeners resolve identifiers with a map lookup instead
+			// of a scope-chain walk. Shadowed uses reference the shadowing
+			// variable, not the import, so they never enter the map.
+			for (const declaration of declarations) {
+				for (const specifier of declaration.specifiers) {
+					const kind = classifySpecifier(specifier);
+					const [variable] = sourceCode.getDeclaredVariables(specifier);
+					if (variable === undefined) {
+						continue;
+					}
+
+					for (const reference of variable.references) {
+						resolutions.set(reference.identifier, { kind, variable });
+					}
+				}
+			}
 		},
 		MemberExpression(node: TSESTree.MemberExpression): void {
 			if (
@@ -108,8 +147,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			}
 
 			const { object, property } = node;
-			const scope = sourceCode.getScope(object);
-			if (resolveReactImport(scope, object, importSource) !== "namespace") {
+			if (resolutions.get(object)?.kind !== "namespace") {
 				return;
 			}
 
@@ -139,8 +177,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			}
 
 			const { typeName } = node;
-			const scope = sourceCode.getScope(typeName);
-			if (resolveReactImport(scope, typeName, importSource) !== "named") {
+			const resolution = resolutions.get(typeName);
+			if (resolution?.kind !== "named") {
 				return;
 			}
 
@@ -150,12 +188,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					const reactLocal = findReactNamespaceLocal(declarations) ?? "React";
 					const fixes = [fixer.insertTextBefore(typeName, `${reactLocal}.`)];
 
-					const variable = findVariable(scope, typeName);
-					const references = variable?.references ?? [];
-					const removable =
-						variable !== null &&
-						isFirstReference(references, typeName) &&
-						allRefsConvertibleTypes(references);
+					const info = getRemovableInfo(resolution.variable);
+					const removable = info.allConvertible && typeName.range[0] === info.firstStart;
 
 					// The import is ensured and the redundant specifier removed
 					// only on the first reference, so both edits happen exactly

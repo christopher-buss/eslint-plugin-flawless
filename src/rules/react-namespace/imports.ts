@@ -1,7 +1,5 @@
-import { DefinitionType } from "@typescript-eslint/scope-manager";
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
-import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 /** The kind of binding an identifier resolves to within a React import. */
 export type ReactImportKind = "named" | "namespace";
@@ -47,51 +45,14 @@ export function getReactImportDeclarations(
 }
 
 /**
- * Resolves an identifier to the kind of React import binding it refers to, if any.
+ * Classifies an import specifier by the kind of React binding it introduces:
+ * named for `ImportSpecifier`, namespace for default and namespace specifiers.
  *
- * @param scope - The scope in which to look the identifier up.
- * @param identifier - The identifier to resolve.
- * @param importSource - The configured React import source.
- * @returns `"named"`, `"namespace"`, or `null` when it is not a React import.
+ * @param specifier - The specifier to classify.
+ * @returns `"named"` or `"namespace"`.
  */
-export function resolveReactImport(
-	scope: TSESLint.Scope.Scope,
-	identifier: TSESTree.Identifier,
-	importSource: string,
-): null | ReactImportKind {
-	const variable = findVariable(scope, identifier);
-	if (variable === null) {
-		return null;
-	}
-
-	for (const definition of variable.defs) {
-		if (definition.type !== DefinitionType.ImportBinding) {
-			continue;
-		}
-
-		const declaration = definition.parent;
-		if (
-			declaration.type !== AST_NODE_TYPES.ImportDeclaration ||
-			typeof declaration.source.value !== "string" ||
-			!matchesSource(declaration.source.value, importSource)
-		) {
-			continue;
-		}
-
-		const specifier = definition.node;
-		if (specifier.type === AST_NODE_TYPES.ImportSpecifier) {
-			return "named";
-		}
-
-		if (
-			specifier.type === AST_NODE_TYPES.ImportDefaultSpecifier ||
-			specifier.type === AST_NODE_TYPES.ImportNamespaceSpecifier
-		) {
-			return "namespace";
-		}
-	}
-
-	return null;
+export function classifySpecifier(specifier: TSESTree.ImportClause): ReactImportKind {
+	return specifier.type === AST_NODE_TYPES.ImportSpecifier ? "named" : "namespace";
 }
 
 /**
@@ -298,10 +259,9 @@ function isNamedSpecifier(specifier: TSESTree.ImportClause): specifier is TSESTr
  */
 function removeWholeDeclaration(
 	fixer: TSESLint.RuleFixer,
-	sourceCode: Readonly<TSESLint.SourceCode>,
+	{ text }: Readonly<TSESLint.SourceCode>,
 	declaration: TSESTree.ImportDeclaration,
 ): TSESLint.RuleFix {
-	const text = sourceCode.getText();
 	const [start] = declaration.range;
 	let end = declaration.range[1];
 	if (text[end] === "\r") {
