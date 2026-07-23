@@ -11,12 +11,18 @@ import builtPlugin from "../dist/index.mjs";
 // gets one coarse run driven by the COARSE manifest — enough to catch a gross
 // regression, not to attribute cost to a code path. See ./README.md.
 //
-// The runner lints each fixture with fix:true, reusing one ESLint instance per
-// test across warmup + measured iterations, so numbers reflect the WARM,
-// steady-state cost (the worker's one-time cold start is spawned during warmup
-// and dropped by outlier filtering). Detailed arrow fixtures live in ./cases and
-// are produced by ./generate-cases.mjs; coarse fixtures are hand-written under
-// ./cases/all.
+// The runner reuses one ESLint instance per test across warmup + measured
+// iterations, so numbers reflect the WARM, steady-state cost (the worker's
+// one-time cold start is spawned during warmup and dropped by outlier
+// filtering). Detailed arrow fixtures live in ./cases and are produced by
+// ./generate-cases.mjs; coarse fixtures are hand-written under ./cases/all.
+//
+// Each coarse rule gets a fix:false spec — a single detection pass, comparable
+// across rules — and fixable rules additionally a "(coarse, fix)" spec, where
+// every iteration is the full multi-pass verify-and-fix loop (re-parse +
+// re-lint per pass), so fixable and non-fixable rules are no longer conflated.
+// The `fix` knob comes from our patch to eslint-rule-benchmark (see
+// patches/eslint-rule-benchmark.patch); upstream hardcodes fix:true.
 
 const RULE_PATH = "../dist/index.mjs";
 const RULE_ID = "arrow-return-style";
@@ -95,12 +101,17 @@ if (missing.length > 0) {
 	process.exitCode = 1;
 }
 
-const coarseTests = COARSE.map((entry) => ({
-	name: `${entry.ruleId} (coarse)`,
-	ruleId: entry.ruleId,
-	rulePath: RULE_PATH,
-	cases: [{ testPath: entry.testPath, ...(entry.options ? { options: entry.options } : {}) }],
-}));
+const coarseTests = COARSE.flatMap((entry) => {
+	const cases = [
+		{ testPath: entry.testPath, ...(entry.options ? { options: entry.options } : {}) },
+	];
+	const base = { ruleId: entry.ruleId, rulePath: RULE_PATH, cases };
+	const fixable = builtPlugin.rules[entry.ruleId]?.meta?.fixable != null;
+	return [
+		{ ...base, fix: false, name: `${entry.ruleId} (coarse)` },
+		...(fixable ? [{ ...base, fix: true, name: `${entry.ruleId} (coarse, fix)` }] : []),
+	];
+});
 
 export default defineConfig({
 	iterations: 100,
