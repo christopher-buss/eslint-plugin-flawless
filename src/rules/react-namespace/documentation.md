@@ -37,7 +37,10 @@ The module specifier is taken from the shared
 [`@eslint-react`](https://eslint-react.xyz) setting
 `settings["react-x"].importSource` (default `"react"`). A declaration matches
 when its source equals that value or is a subpath of it (so `@rbxts/react` and
-`@rbxts/react/jsx-runtime` both count). There is no rule-level override — the
+`@rbxts/react/jsx-runtime` both count, but a sibling like `@rbxts/react-roblox`
+does not). When the setting is a bare npm scope (`"@rbxts"`, as Roblox configs
+set it) the React package is resolved to `<scope>/react`, so unrelated packages
+in the same scope stay untouched. There is no rule-level override — the
 `react-x` setting is the single source of truth.
 
 ```js

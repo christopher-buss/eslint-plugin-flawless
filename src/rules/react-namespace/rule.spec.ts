@@ -11,6 +11,10 @@ const filename = "file.tsx";
 // case runs once against the default `"react"` and once against `"@rbxts/react"`.
 const rbx = { "react-x": { importSource: "@rbxts/react" } } as const;
 
+// Roblox configs set `importSource` to the bare scope `@rbxts`, under which the
+// React package is `@rbxts/react` — sibling packages must stay untouched.
+const scope = { "react-x": { importSource: "@rbxts" } } as const;
+
 const valid: Array<ValidTestCase> = [
 	// A named runtime import is already used — nothing to rewrite.
 	{ code: 'import { useEffect } from "react";\nuseEffect();', filename },
@@ -42,6 +46,20 @@ const valid: Array<ValidTestCase> = [
 	},
 	// A member access on a non-React binding is untouched.
 	{ code: "const obj = { a() {} };\nobj.a();", filename },
+	// Under a bare-scope `importSource`, a sibling package is not React: a
+	// namespace access on `@rbxts/react-roblox` must not be rewritten (nor
+	// wrongly folded into the `@rbxts/react` import).
+	{
+		code: 'import ReactRoblox from "@rbxts/react-roblox";\nReactRoblox.createRoot();',
+		filename,
+		settings: scope,
+	},
+	// Likewise a bare named *type* from an unrelated `@rbxts` package stays put.
+	{
+		code: 'import type { ActionMap } from "@rbxts/flux";\nlet x: ActionMap;',
+		filename,
+		settings: scope,
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -74,6 +92,15 @@ const invalid: Array<InvalidTestCase> = [
 		filename,
 		output: 'import React, { useEffect } from "@rbxts/react";\nuseEffect();',
 		settings: rbx,
+	},
+	// A bare-scope `importSource` still resolves to `@rbxts/react`, so the real
+	// React package is rewritten as usual.
+	{
+		code: 'import React from "@rbxts/react";\nReact.useEffect();',
+		errors: [{ messageId: runtimeNamespace }],
+		filename,
+		output: 'import React, { useEffect } from "@rbxts/react";\nuseEffect();',
+		settings: scope,
 	},
 	// A namespace import cannot carry named siblings, so a fresh statement
 	// is inserted.

@@ -12,16 +12,22 @@ export interface EnsureNamedValueImportParameters {
 	readonly program: TSESTree.Program;
 }
 
+/** Matches a bare npm scope (`@rbxts`) with no package segment. */
+const SCOPE_PATTERN = /^@[^/]+$/;
+
 /**
- * Whether a module specifier refers to the configured React import source. Matches
- * the exact source or any subpath (`@rbxts/react` and `@rbxts/react/jsx-runtime`).
+ * Whether a module specifier refers to the configured React package. Matches the
+ * exact package or any subpath (`@rbxts/react` and `@rbxts/react/jsx-runtime`),
+ * but never a sibling package (`@rbxts/react-roblox`), because the `/` boundary
+ * excludes it.
  *
  * @param value - The `source.value` of an import declaration.
  * @param importSource - The configured React import source.
  * @returns True when the specifier resolves to the React package.
  */
 export function matchesSource(value: string, importSource: string): boolean {
-	return value === importSource || value.startsWith(`${importSource}/`);
+	const reactPackage = resolveReactPackage(importSource);
+	return value === reactPackage || value.startsWith(`${reactPackage}/`);
 }
 
 /**
@@ -242,6 +248,20 @@ export function findNamedSpecifier(
 	}
 
 	return null;
+}
+
+/**
+ * Resolves the React package the `react-x` `importSource` setting points at. The
+ * setting may be a package (`react`, `@rbxts/react`) or a bare npm scope
+ * (`@rbxts`, as Roblox configs set it). A scope names no package, so treating it
+ * as one claims every sibling (`@rbxts/react-roblox`, `@rbxts/flux`) as React;
+ * the React package under a scope is `<scope>/react`.
+ *
+ * @param importSource - The configured `react-x` import source.
+ * @returns The React package name to match against.
+ */
+function resolveReactPackage(importSource: string): string {
+	return SCOPE_PATTERN.test(importSource) ? `${importSource}/react` : importSource;
 }
 
 function isNamedSpecifier(specifier: TSESTree.ImportClause): specifier is TSESTree.ImportSpecifier {
