@@ -1039,6 +1039,126 @@ const valid: Array<ValidTestCase> = [
 			},
 		],
 	},
+	// objectStyleEnum: a `satisfies`-wrapped const assertion is the intended
+	// foreign-contract escape, not an objectStyleEnum - the container is
+	// validated as a plain `variable` instead
+	{
+		code: "const optionsArgPosition = { exec: 1, spawn: 2 } as const satisfies Record<string, number>;",
+		options: [
+			{ format: ["camelCase"], selector: "variable" },
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["camelCase"], selector: "objectLiteralProperty" },
+		],
+	},
+	// objectStyleEnum: keys are validated as enumMembers, not
+	// objectLiteralProperty - PascalCase keys pass an enumMember rule that a
+	// camelCase objectLiteralProperty rule would reject
+	{
+		code: "const COLORS = { Red: 'red', Blue: 'blue' } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+			{ format: ["camelCase"], selector: "objectLiteralProperty" },
+		],
+	},
+	// objectStyleEnum: only the object's own top-level keys are enumMembers -
+	// a nested object literal's keys are ordinary objectLiteralProperty names
+	{
+		code: "const CONFIG = { Nested: { red: 'red' } } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+			{ format: ["camelCase"], selector: "objectLiteralProperty" },
+		],
+	},
+	// objectStyleEnum: a type annotation on the binding doesn't opt out of
+	// objectStyleEnum classification - only `satisfies` does
+	{
+		code: "interface Options { EXEC: number } const CONFIG: Options = { EXEC: 1 } as const;",
+		options: [{ format: ["UPPER_CASE"], selector: "objectStyleEnum" }],
+	},
+	// constAsserted modifier: pins a format on const-asserted data objects,
+	// reached in practice via the `satisfies`-wrapped form (bare const
+	// assertions are claimed by the objectStyleEnum validator first)
+	{
+		code: "const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<string, number>;",
+		options: [
+			{ format: ["UPPER_CASE"], modifiers: ["constAsserted"], selector: "variable" },
+			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	// constAsserted modifier: an ordinary variable (no const assertion) isn't
+	// swept into the constAsserted-specific rule
+	{
+		code: "const notConstAsserted = { exec: 1 };",
+		options: [
+			{ format: ["UPPER_CASE"], modifiers: ["constAsserted"], selector: "variable" },
+			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	// constAsserted modifier: a bare const assertion is claimed by the
+	// objectStyleEnum validator, so a constAsserted `variable` rule never
+	// applies to it even though the name would fail that rule's format
+	{
+		code: "const COLORS = { RED: 'red' } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], modifiers: ["constAsserted"], selector: "variable" },
+		],
+	},
+	// @external: skips validation for every typeProperty/typeMethod of the
+	// tagged declaration; the declaration's own name is still validated
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			interface WireFormat {
+				user_id: string;
+				get_name(): string;
+			}
+		`,
+		options: [
+			{ format: ["PascalCase"], selector: "interface" },
+			{ format: ["PascalCase"], selector: ["typeProperty", "typeMethod"] },
+		],
+	},
+	// @external: nested type literals inherit the tag from the enclosing
+	// declaration - foreign formats nest
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			type WireFormat = { user_id: string; nested: { session_id: string } };
+		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
+	},
+	// @external: a single property can be tagged directly, exempting just
+	// that member
+	{
+		code: unindent`
+			interface Config {
+				/** @external */
+				user_id: string;
+				DisplayName: string;
+			}
+		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
+	},
+	// @external: survives an `export` wrapper (the JSDoc precedes `export`,
+	// not the declaration)
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			export interface WireFormat {
+				user_id: string;
+			}
+		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
+	},
 	// Interface implementation should allow any naming format
 	{
 		code: `
@@ -2690,7 +2810,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 			{
 				data: {
@@ -2698,7 +2818,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -2719,7 +2839,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -2728,6 +2848,152 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "objectStyleEnum",
 			},
 		],
+	},
+	// objectStyleEnum: an annotated declaration is still classified as an
+	// objectStyleEnum - only `satisfies` opts out, not a type annotation
+	{
+		code: "interface Options { exec: number } const config: Options = { exec: 1 } as const;",
+		errors: [
+			{
+				data: {
+					name: "config",
+					formats: "UPPER_CASE",
+					type: "Object Style Enum",
+				},
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["camelCase"], selector: "variable" },
+		],
+	},
+	// objectStyleEnum: keys are validated as enumMembers - the message and
+	// reported type reflect that, and teach the `satisfies` escape
+	{
+		code: "const COLORS = { red: 'red' } as const;",
+		errors: [
+			{
+				message:
+					"Enum Member name `red` must match one of the following formats: PascalCase If this is data conforming to an external shape, declare it with `satisfies` instead.",
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+		],
+	},
+	// objectStyleEnum: nested object values are ordinary objectLiteralProperty
+	// names, not enumMembers - only the top-level `Nested` key is affected
+	{
+		code: "const CONFIG = { nested: { red: 'red' } } as const;",
+		errors: [
+			{
+				data: {
+					name: "nested",
+					formats: "PascalCase",
+					type: "Enum Member",
+				},
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+			{ format: ["camelCase"], selector: "objectLiteralProperty" },
+		],
+	},
+	// @external: doesn't leak to sibling members - only the tagged property is
+	// skipped
+	{
+		code: unindent`
+			interface Config {
+				/** @external */
+				user_id: string;
+				display_name: string;
+			}
+		`,
+		errors: [
+			{
+				data: {
+					name: "display_name",
+					formats: "PascalCase",
+					type: "Type Property",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
+	},
+	// @external: the declaration's own name is still validated
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			interface wireFormat {
+				user_id: string;
+			}
+		`,
+		errors: [
+			{
+				data: {
+					name: "wireFormat",
+					formats: "PascalCase",
+					type: "Interface",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{ format: ["PascalCase"], selector: "interface" },
+			{ format: ["PascalCase"], selector: "typeProperty" },
+		],
+	},
+	// @external: a plain (non-JSDoc) line comment doesn't count - only a
+	// `/** ... */` block immediately preceding the declaration does
+	{
+		code: unindent`
+			interface Config {
+				// @external
+				user_id: string;
+			}
+		`,
+		errors: [
+			{
+				data: {
+					name: "user_id",
+					formats: "PascalCase",
+					type: "Type Property",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
+	},
+	// @external: an unrelated JSDoc block without the tag doesn't skip
+	// validation
+	{
+		code: unindent`
+			/**
+			 * Just a regular doc comment.
+			 */
+			interface Config {
+				user_id: string;
+			}
+		`,
+		errors: [
+			{
+				data: {
+					name: "user_id",
+					formats: "PascalCase",
+					type: "Type Property",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 	},
 	// Regular class methods should still fail naming validation
 	{
@@ -2944,10 +3210,13 @@ const invalid: Array<InvalidTestCase> = [
 		options: dictatedNameOptions,
 	},
 	{
-		// contextual type - `as const` provides no contextual type
+		// contextual type - `as const` provides no contextual type. The key is
+		// also a top-level objectStyleEnum member, so it's validated as an
+		// enumMember (not an objectLiteralProperty) and gets the ForeignContract
+		// message variant
 		code: "const x = { PascalProp: 1 } as const;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
-		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
+		options: [...dictatedNameOptions, { format: ["camelCase"], selector: "enumMember" }],
 	},
 	{
 		// contextual type - contextual type without the property

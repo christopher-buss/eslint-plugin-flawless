@@ -1,7 +1,7 @@
 /* eslint-disable eslint-plugin/no-property-in-node -- For now */
 
 import type { TSESTree } from "@typescript-eslint/utils";
-import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, AST_TOKEN_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import { isIdentifierPart, isIdentifierStart, ScriptTarget } from "typescript";
@@ -23,22 +23,42 @@ export const RULE_NAME = "naming-convention";
 
 export type MessageIds =
 	| "doesNotMatchFormat"
+	| "doesNotMatchFormatForeignContract"
 	| "doesNotMatchFormatTrimmed"
+	| "doesNotMatchFormatTrimmedForeignContract"
 	| "missingAffix"
+	| "missingAffixForeignContract"
 	| "missingUnderscore"
+	| "missingUnderscoreForeignContract"
 	| "satisfyCustom"
-	| "unexpectedUnderscore";
+	| "satisfyCustomForeignContract"
+	| "unexpectedUnderscore"
+	| "unexpectedUnderscoreForeignContract";
+
+// The `*ForeignContract` variants are reported instead of their base
+// counterpart when the name belongs to an `objectStyleEnum` - a plain object
+// literal, not a real enum. They append a pointer to the `satisfies` escape,
+// since renaming the container or a key is never the intended fix for data
+// that's meant to conform to an externally-owned shape.
+const FOREIGN_CONTRACT_HINT =
+	" If this is data conforming to an external shape, declare it with `satisfies` instead.";
 
 const messages = {
 	doesNotMatchFormat:
 		"{{type}} name `{{name}}` must match one of the following formats: {{formats}}",
+	doesNotMatchFormatForeignContract: `{{type}} name \`{{name}}\` must match one of the following formats: {{formats}}${FOREIGN_CONTRACT_HINT}`,
 	doesNotMatchFormatTrimmed:
 		"{{type}} name `{{name}}` trimmed as `{{processedName}}` must match one of the following formats: {{formats}}",
+	doesNotMatchFormatTrimmedForeignContract: `{{type}} name \`{{name}}\` trimmed as \`{{processedName}}\` must match one of the following formats: {{formats}}${FOREIGN_CONTRACT_HINT}`,
 	missingAffix:
 		"{{type}} name `{{name}}` must have one of the following {{position}}es: {{affixes}}",
+	missingAffixForeignContract: `{{type}} name \`{{name}}\` must have one of the following {{position}}es: {{affixes}}${FOREIGN_CONTRACT_HINT}`,
 	missingUnderscore: "{{type}} name `{{name}}` must have {{count}} {{position}} underscore(s).",
+	missingUnderscoreForeignContract: `{{type}} name \`{{name}}\` must have {{count}} {{position}} underscore(s).${FOREIGN_CONTRACT_HINT}`,
 	satisfyCustom: "{{type}} name `{{name}}` must {{regexMatch}} the RegExp: {{regex}}",
+	satisfyCustomForeignContract: `{{type}} name \`{{name}}\` must {{regexMatch}} the RegExp: {{regex}}${FOREIGN_CONTRACT_HINT}`,
 	unexpectedUnderscore: "{{type}} name `{{name}}` must not have a {{position}} underscore.",
+	unexpectedUnderscoreForeignContract: `{{type}} name \`{{name}}\` must not have a {{position}} underscore.${FOREIGN_CONTRACT_HINT}`,
 };
 
 // Note that this intentionally does not strictly type the modifiers/types
@@ -230,6 +250,22 @@ function create(
 						return;
 					}
 
+					// The keys of an object-style enum (`const X = {...} as
+					// const`) are a closed set of member names, not
+					// object-literal properties - validate them as enumMembers so
+					// a laundering rename can't sneak a foreign-shaped key past
+					// this rule; the intended escape is `satisfies` (see
+					// isObjectStyleEnumKey).
+					if (isObjectStyleEnumKey(node)) {
+						const enumModifiers = new Set<ModifierType>();
+						if (requiresQuoting(node.key, compilerOptions.target)) {
+							enumModifiers.add(Modifier.requiresQuotes);
+						}
+
+						validators.enumMember(node.key, enumModifiers, true);
+						return;
+					}
+
 					const modifiers = new Set<ModifierType>([Modifier.public]);
 					handleMember(validator, node, modifiers);
 				},
@@ -250,6 +286,12 @@ function create(
 					| TSESTree.TSPropertySignatureNonComputedName,
 				validator,
 			): void => {
+				// Skip naming validation for members of a type that's declared to
+				// mirror a foreign wire format
+				if (isExternalMember(node, context.sourceCode)) {
+					return;
+				}
+
 				const modifiers = new Set<ModifierType>([Modifier.public]);
 				handleMember(validator, node, modifiers);
 			},
@@ -586,6 +628,12 @@ function create(
 		'TSPropertySignature[computed = false][typeAnnotation.typeAnnotation.type != "TSFunctionType"]':
 			{
 				handler: (node: TSESTree.TSPropertySignatureNonComputedName, validator): void => {
+					// Skip naming validation for members of a type that's
+					// declared to mirror a foreign wire format
+					if (isExternalMember(node, context.sourceCode)) {
+						return;
+					}
+
 					const modifiers = new Set<ModifierType>([Modifier.public]);
 					if (node.readonly) {
 						modifiers.add(Modifier.readonly);
@@ -645,13 +693,21 @@ function create(
 				const identifiers = getIdentifiersFromPattern(node.id);
 
 				const baseModifiers = new Set<ModifierType>();
-				const { parent } = node;
+				const { init, parent } = node;
 				if (parent.kind === "const") {
 					baseModifiers.add(Modifier.const);
 				}
 
 				if (isGlobal(context.sourceCode.getScope(node))) {
 					baseModifiers.add(Modifier.global);
+				}
+
+				// Computed uniformly regardless of foreign-contract escape: a
+				// bare-const-asserted object is claimed by the objectStyleEnum
+				// validator below, so in practice this modifier only ever reaches
+				// the `variable` validator for the `satisfies`-wrapped form.
+				if (isConstAssertedInitializer(init)) {
+					baseModifiers.add(Modifier.constAsserted);
 				}
 
 				// Check if this is an object-style enum (const assertion)
@@ -680,7 +736,7 @@ function create(
 					// Use the appropriate validator based on whether it's an
 					// object-style enum
 					if (isObjectStyleEnum) {
-						validators.objectStyleEnum(id, modifiers);
+						validators.objectStyleEnum(id, modifiers, true);
 					} else {
 						validator(id, modifiers);
 					}
@@ -939,12 +995,62 @@ function isGlobal(scope: null | TSESLint.Scope.Scope): boolean {
 }
 
 /**
- * Determines if a VariableDeclarator represents an object-style enum declaration.
+ * Checks whether a type annotation is the bare `const` type reference used by
+ * const assertions (`as const`, `<const>`).
  *
- * Object-style enums are const assertions applied to object expressions, commonly
- * used as an alternative to TypeScript enums. Examples:
+ * @param typeAnnotation - The type node to check.
+ * @returns True if the type node is the `const` reference.
+ */
+function isConstTypeReference(typeAnnotation: TSESTree.TypeNode): boolean {
+	return (
+		typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+		typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+		typeAnnotation.typeName.name === "const"
+	);
+}
+
+/**
+ * Unwraps a *bare* const-asserted object expression - `{...} as const` or
+ * `<const>{...}` - directly, with no `satisfies` wrapper. A `satisfies`
+ * wrapper is a distinct, intentional escape hatch (declaring conformance to
+ * an externally-owned type) and must never be treated as the same thing by
+ * this helper; callers that also want to recognize the `satisfies`-wrapped
+ * form unwrap it themselves first (see `isConstAssertedInitializer`).
+ *
+ * @param expression - The expression to unwrap.
+ * @returns The inner object expression, or undefined if `expression` isn't a
+ *   bare const-asserted object literal.
+ */
+function getConstAssertedObject(
+	expression: TSESTree.Expression,
+): TSESTree.ObjectExpression | undefined {
+	if (
+		(expression.type === AST_NODE_TYPES.TSAsExpression ||
+			expression.type === AST_NODE_TYPES.TSTypeAssertion) &&
+		isConstTypeReference(expression.typeAnnotation) &&
+		expression.expression.type === AST_NODE_TYPES.ObjectExpression
+	) {
+		return expression.expression;
+	}
+
+	return undefined;
+}
+
+/**
+ * Determines if a VariableDeclarator represents an object-style enum
+ * declaration.
+ *
+ * Object-style enums are *bare* const assertions applied to object
+ * expressions, commonly used as an alternative to TypeScript enums. Examples:
  * - `const Colors = { RED: 'red', BLUE: 'blue' } as const`
- * - `const Status = <const>{ OK: 200, ERROR: 500 }`.
+ * - `const Status = <const>{ OK: 200, ERROR: 500 }`
+ * - `const Config: Options = { RED: 'red' } as const` (a type annotation on
+ *   the binding doesn't opt out - `satisfies` is the intended escape).
+ *
+ * A const assertion wrapped in `satisfies` (`{...} as const satisfies T`) is
+ * explicitly excluded: it declares conformance to an externally-owned type,
+ * which is the foreign-contract escape hatch this rule wants authors to
+ * reach for instead of renaming keys to fit.
  *
  * @param node - The VariableDeclarator AST node to check.
  * @param parent - The parent VariableDeclaration node.
@@ -954,38 +1060,157 @@ function isObjectStyleEnumDeclaration(
 	node: TSESTree.VariableDeclarator,
 	parent: TSESTree.VariableDeclaration,
 ): boolean {
-	// Must be a const declaration
-	if (parent.kind !== "const") {
+	if (parent.kind !== "const" || !node.init) {
 		return false;
 	}
 
-	if (!node.init) {
+	// `satisfies` is the foreign-contract escape hatch - never classify it as
+	// an object-style enum, even though its expression is `as const` too.
+	if (node.init.type === AST_NODE_TYPES.TSSatisfiesExpression) {
 		return false;
 	}
 
-	// Check for const assertion: `as const`
+	return getConstAssertedObject(node.init) !== undefined;
+}
+
+/**
+ * True when `init` is a const-asserted object expression, bare (`{...} as
+ * const`) or `satisfies`-wrapped (`{...} as const satisfies T`). Used for the
+ * `constAsserted` variable modifier, which - unlike `isObjectStyleEnumDeclaration`
+ * - deliberately covers both forms: it exists so consumers can pin a format on
+ * const-asserted data objects regardless of whether they carry a `satisfies`
+ * clause.
+ *
+ * @param init - The VariableDeclarator's initializer, if any.
+ * @returns True if `init` is a const-asserted object expression.
+ */
+function isConstAssertedInitializer(init: null | TSESTree.Expression | undefined): boolean {
+	if (!init) {
+		return false;
+	}
+
+	const expression = init.type === AST_NODE_TYPES.TSSatisfiesExpression ? init.expression : init;
+
+	return getConstAssertedObject(expression) !== undefined;
+}
+
+/**
+ * Determines if an object literal property is a direct key of an
+ * object-style-enum declaration's object literal - i.e. `RED` in `const
+ * Colors = { RED: 'red' } as const`, but not a key of a nested object value.
+ * Nested object values aren't reached because their enclosing ObjectExpression
+ * is parented by a Property, not the const-assertion node this checks for.
+ *
+ * @param node - The non-computed object literal property node.
+ * @returns True if this property is a top-level object-style-enum key.
+ */
+function isObjectStyleEnumKey(node: TSESTree.PropertyNonComputedName): boolean {
+	const objectExpression = node.parent;
+	if (objectExpression.type !== AST_NODE_TYPES.ObjectExpression) {
+		return false;
+	}
+
+	const assertion = objectExpression.parent;
 	if (
-		node.init.type === AST_NODE_TYPES.TSAsExpression &&
-		node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
-		node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
-		node.init.typeAnnotation.typeName.name === "const" &&
-		node.init.expression.type === AST_NODE_TYPES.ObjectExpression
+		(assertion.type !== AST_NODE_TYPES.TSAsExpression &&
+			assertion.type !== AST_NODE_TYPES.TSTypeAssertion) ||
+		getConstAssertedObject(assertion) !== objectExpression
 	) {
+		return false;
+	}
+
+	const declarator = assertion.parent;
+	return (
+		declarator.type === AST_NODE_TYPES.VariableDeclarator && declarator.parent.kind === "const"
+	);
+}
+
+const EXTERNAL_JSDOC_TAG_PATTERN = /@external\b/u;
+
+/**
+ * Resolves the node whose leading comments should be inspected for JSDoc -
+ * for an exported declaration, the JSDoc block precedes the `export` keyword,
+ * not the declaration itself.
+ *
+ * @param node - The declaration node.
+ * @returns The export wrapper if present, otherwise `node` itself.
+ */
+function getJsDocumentTargetNode(node: TSESTree.Node): TSESTree.Node {
+	const { parent } = node;
+	if (
+		parent?.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
+		parent?.type === AST_NODE_TYPES.ExportNamedDeclaration
+	) {
+		return parent;
+	}
+
+	return node;
+}
+
+/**
+ * Checks whether `node`'s immediately preceding JSDoc block comment carries
+ * an `@external` tag, marking the name(s) it documents as coming from a
+ * foreign wire format.
+ *
+ * @param node - The node to check.
+ * @param sourceCode - Used to read the comments preceding `node`.
+ * @returns True if the leading JSDoc comment contains `@external`.
+ */
+function hasExternalJsDocumentTag(node: TSESTree.Node, sourceCode: TSESLint.SourceCode): boolean {
+	const comments = sourceCode.getCommentsBefore(getJsDocumentTargetNode(node));
+	const lastComment = comments.at(-1);
+	return (
+		lastComment?.type === AST_TOKEN_TYPES.Block &&
+		lastComment.value.startsWith("*") &&
+		EXTERNAL_JSDOC_TAG_PATTERN.test(lastComment.value)
+	);
+}
+
+/**
+ * Walks up from a type member to the nearest enclosing interface or type
+ * alias declaration, passing through any nested type literals along the way
+ * - foreign formats nest, so an `@external` tag on the outer declaration
+ * covers members at any depth.
+ *
+ * @param node - The member node to walk up from.
+ * @returns The enclosing declaration, or undefined if none is found.
+ */
+function findEnclosingTypeDeclaration(
+	node: TSESTree.Node,
+): TSESTree.TSInterfaceDeclaration | TSESTree.TSTypeAliasDeclaration | undefined {
+	let current: TSESTree.Node | undefined = node.parent;
+
+	while (current) {
+		if (
+			current.type === AST_NODE_TYPES.TSInterfaceDeclaration ||
+			current.type === AST_NODE_TYPES.TSTypeAliasDeclaration
+		) {
+			return current;
+		}
+
+		current = current.parent;
+	}
+
+	return undefined;
+}
+
+/**
+ * Determines if a typeProperty/typeMethod member should skip naming
+ * validation because it (or its enclosing interface/type-alias declaration)
+ * is marked `@external` - a foreign wire-format name, not the author's
+ * choice. The type's own name (validated via `typeLike`) is unaffected.
+ *
+ * @param node - The typeProperty/typeMethod node to check.
+ * @param sourceCode - Used to read leading comments for the JSDoc check.
+ * @returns True if the member should be skipped.
+ */
+function isExternalMember(node: TSESTree.Node, sourceCode: TSESLint.SourceCode): boolean {
+	if (hasExternalJsDocumentTag(node, sourceCode)) {
 		return true;
 	}
 
-	// Check for type assertion: `<const>`
-	if (
-		node.init.type === AST_NODE_TYPES.TSTypeAssertion &&
-		node.init.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
-		node.init.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
-		node.init.typeAnnotation.typeName.name === "const" &&
-		node.init.expression.type === AST_NODE_TYPES.ObjectExpression
-	) {
-		return true;
-	}
-
-	return false;
+	const enclosing = findEnclosingTypeDeclaration(node);
+	return enclosing !== undefined && hasExternalJsDocumentTag(enclosing, sourceCode);
 }
 
 function isValidIdentifierText(name: string, languageVersion: ScriptTarget): boolean {

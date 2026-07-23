@@ -58,7 +58,9 @@ literal (nested object literals inherit it).
 Notes:
 
 - Object literals **without** a contextual type are validated as before
-  (including `as const` — a `const` assertion provides no contextual type).
+  (including `as const` — a `const` assertion provides no contextual type; see
+  `objectStyleEnum` below for how bare `as const` objects are validated
+  instead).
 - The contextual type must actually **declare** the member: `Record<string, T>`
   (a bare index signature) does not dictate any specific name and exempts
   nothing, while `Record<"ExactName", T>` does.
@@ -68,6 +70,107 @@ Notes:
 - Object-literal `get` / `set` accessors are validated as `classicAccessor` and
   are not exempted.
 - Requires type information; without a TS program the rule behaves as before.
+
+## Foreign contracts: renaming is never the fix
+
+Some names aren't the author's to choose — they're dictated by a shape owned
+elsewhere: a wire format, a third-party API, a TypeScript type the code has to
+conform to. This rule treats every such case as a **declaration of a foreign
+contract**, made explicit through a specific syntax:
+
+- a contextual type for object literals (see above),
+- `satisfies` for const data (`objectStyleEnum`, below),
+- `@external` for type declarations (below).
+
+Renaming the offending identifier, or reaching for `eslint-disable`, is never
+the intended fix for these cases — declaring the contract is. The sections below
+cover the escapes unique to this fork.
+
+### `objectStyleEnum`
+
+A **bare** const-asserted object literal —
+
+```ts
+const Colors = { Blue: "blue", Red: "red" } as const;
+```
+
+— is treated as an `objectStyleEnum`: a common alternative to TypeScript's
+`enum`. The container binding is validated by the `objectStyleEnum` selector,
+and its **top-level keys** are validated as `enumMember` (not
+`objectLiteralProperty`) — so a camelCase-keyed lookup table can't be "fixed" by
+renaming the container to look like an enum; the keys still have to pass as enum
+members. Keys of a _nested_ object value are ordinary `objectLiteralProperty`
+names, since foreign formats don't nest inside a real enum's members.
+
+A type annotation on the binding (`const x: T = {...} as const`) does **not**
+opt out — it's still an `objectStyleEnum`. Only `satisfies` does, because
+`satisfies` is this rule's designated foreign-contract escape: it declares that
+the object conforms to an externally-owned type, so the fix for an awkward key
+is to declare that conformance rather than rename:
+
+```ts
+// Before — objectStyleEnum, `exec`/`spawn` must pass as enumMembers:
+const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const;
+
+// After — `satisfies` declares the foreign contract; the object is a plain
+// `variable` and its properties are plain `objectLiteralProperty` members:
+const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<
+	string,
+	1 | 2
+>;
+```
+
+Violation messages for `objectStyleEnum` names (container and keys) append a
+pointer to this escape.
+
+### `constAsserted` modifier
+
+The `variable` selector accepts a `constAsserted` modifier: true when the
+variable's initializer is a const-asserted object expression, bare
+(`{...} as const`) or `satisfies`-wrapped (`{...} as const satisfies T`). In
+practice this targets the `satisfies`-wrapped form, since bare const assertions
+are claimed by the `objectStyleEnum` validator first. Use it to pin a format on
+const-asserted data objects specifically:
+
+```ts
+const namingConventionOptions = [
+	{
+		format: ["UPPER_CASE"],
+		modifiers: ["constAsserted"],
+		selector: "variable",
+	},
+	{ format: ["camelCase"], selector: "variable" },
+];
+```
+
+### `@external` tag
+
+A JSDoc `@external` tag skips naming validation for `typeProperty` /
+`typeMethod` members whose name comes from a foreign wire format:
+
+- On an `interface` or `type` alias declaration, it exempts **all** of that
+  declaration's members, including members of type literals nested inside it
+  (foreign formats nest).
+- On a single property, it exempts just that member.
+
+The type's own name is unaffected either way — it's still validated via
+`typeLike`.
+
+```ts
+/**
+ * @external
+ */
+interface WireFormat {
+	get_name(): string;
+	user_id: string;
+}
+
+interface Config {
+	DisplayName: string;
+	/** @external */
+	user_id: string;
+}
+```
 
 ## Options
 

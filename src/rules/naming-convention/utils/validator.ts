@@ -5,6 +5,7 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type ts from "typescript";
 import { TypeFlags } from "typescript";
 
+import type { MessageIds } from "../rule";
 import type { ModifierType, PredefinedFormatType, SelectorString, SelectorType } from "./enums";
 import {
 	MetaSelector,
@@ -73,7 +74,11 @@ export function createValidator(
 			return b.selector - a.selector;
 		});
 
-	return (node: ValidatorNode, modifiers: Set<ModifierType> = new Set<ModifierType>()): void => {
+	return (
+		node: ValidatorNode,
+		modifiers: Set<ModifierType> = new Set<ModifierType>(),
+		isObjectStyleEnumName = false,
+	): void => {
 		const originalName =
 			node.type === AST_NODE_TYPES.Identifier ||
 			node.type === AST_NODE_TYPES.PrivateIdentifier
@@ -101,36 +106,73 @@ export function createValidator(
 
 			let name: string | undefined = originalName;
 
-			name = validateUnderscore({ name, config, node, originalName, position: "leading" });
+			name = validateUnderscore({
+				name,
+				config,
+				isObjectStyleEnumName,
+				node,
+				originalName,
+				position: "leading",
+			});
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateUnderscore({ name, config, node, originalName, position: "trailing" });
+			name = validateUnderscore({
+				name,
+				config,
+				isObjectStyleEnumName,
+				node,
+				originalName,
+				position: "trailing",
+			});
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateAffix({ name, config, node, originalName, position: "prefix" });
+			name = validateAffix({
+				name,
+				config,
+				isObjectStyleEnumName,
+				node,
+				originalName,
+				position: "prefix",
+			});
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			name = validateAffix({ name, config, node, originalName, position: "suffix" });
+			name = validateAffix({
+				name,
+				config,
+				isObjectStyleEnumName,
+				node,
+				originalName,
+				position: "suffix",
+			});
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			if (!validateCustom({ name, config, node, originalName })) {
+			if (!validateCustom({ name, config, isObjectStyleEnumName, node, originalName })) {
 				// fail
 				return;
 			}
 
-			if (!validatePredefinedFormat({ name, config, modifiers, node, originalName })) {
+			if (
+				!validatePredefinedFormat({
+					name,
+					config,
+					isObjectStyleEnumName,
+					modifiers,
+					node,
+					originalName,
+				})
+			) {
 				// fail
 				return;
 			}
@@ -183,11 +225,13 @@ export function createValidator(
 	function validateUnderscore({
 		name,
 		config,
+		isObjectStyleEnumName,
 		node,
 		originalName,
 		position,
 	}: {
 		config: NormalizedSelector;
+		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
@@ -249,7 +293,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: "unexpectedUnderscore",
+						messageId: pickMessageId("unexpectedUnderscore", isObjectStyleEnumName),
 						node,
 					});
 					return undefined;
@@ -266,7 +310,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: "missingUnderscore",
+						messageId: pickMessageId("missingUnderscore", isObjectStyleEnumName),
 						node,
 					});
 					return undefined;
@@ -282,7 +326,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: "missingUnderscore",
+						messageId: pickMessageId("missingUnderscore", isObjectStyleEnumName),
 						node,
 					});
 					return undefined;
@@ -296,11 +340,13 @@ export function createValidator(
 	function validateAffix({
 		name,
 		config,
+		isObjectStyleEnumName,
 		node,
 		originalName,
 		position,
 	}: {
 		config: NormalizedSelector;
+		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
@@ -330,7 +376,7 @@ export function createValidator(
 				originalName,
 				position,
 			}),
-			messageId: "missingAffix",
+			messageId: pickMessageId("missingAffix", isObjectStyleEnumName),
 			node,
 		});
 
@@ -340,10 +386,12 @@ export function createValidator(
 	function validateCustom({
 		name,
 		config,
+		isObjectStyleEnumName,
 		node,
 		originalName,
 	}: {
 		config: NormalizedSelector;
+		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
@@ -367,7 +415,7 @@ export function createValidator(
 				custom,
 				originalName,
 			}),
-			messageId: "satisfyCustom",
+			messageId: pickMessageId("satisfyCustom", isObjectStyleEnumName),
 			node,
 		});
 
@@ -377,11 +425,13 @@ export function createValidator(
 	function validatePredefinedFormat({
 		name,
 		config,
+		isObjectStyleEnumName,
 		modifiers,
 		node,
 		originalName,
 	}: {
 		config: NormalizedSelector;
+		isObjectStyleEnumName: boolean;
 		modifiers: Set<ModifierType>;
 		name: string;
 		node: ValidatorNode;
@@ -407,12 +457,39 @@ export function createValidator(
 				originalName,
 				processedName: name,
 			}),
-			messageId: originalName === name ? "doesNotMatchFormat" : "doesNotMatchFormatTrimmed",
+			messageId: pickMessageId(
+				originalName === name ? "doesNotMatchFormat" : "doesNotMatchFormatTrimmed",
+				isObjectStyleEnumName,
+			),
 			node,
 		});
 
 		return false;
 	}
+}
+
+/**
+ * Picks the `*ForeignContract` variant of a message id when the name belongs
+ * to an `objectStyleEnum` - a plain object literal, not a real enum, so the
+ * violation message should point at the `satisfies` escape instead of a
+ * rename.
+ *
+ * @param baseMessageId - The base message id for the violation kind.
+ * @param isObjectStyleEnumName - Whether the name is an objectStyleEnum
+ *   container or key.
+ * @returns The message id to report.
+ */
+function pickMessageId(
+	baseMessageId:
+		| "doesNotMatchFormat"
+		| "doesNotMatchFormatTrimmed"
+		| "missingAffix"
+		| "missingUnderscore"
+		| "satisfyCustom"
+		| "unexpectedUnderscore",
+	isObjectStyleEnumName: boolean,
+): MessageIds {
+	return isObjectStyleEnumName ? `${baseMessageId}ForeignContract` : baseMessageId;
 }
 
 const SelectorsAllowedToHaveTypes =
