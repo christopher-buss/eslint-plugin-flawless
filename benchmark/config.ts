@@ -56,6 +56,7 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/prefer-parameter-destructuring.tsx",
 	},
 	{ ruleId: "purity", testPath: "./cases/all/purity.tsx" },
+	{ ruleId: "react-namespace", testPath: "./cases/all/react-namespace.tsx" },
 ];
 
 // Rules eslint-rule-benchmark structurally cannot run, so they are exempt from
