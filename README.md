@@ -211,6 +211,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                                          |     |     |
 | [padding-after-expect-assertions](src/rules/padding-after-expect-assertions/documentation.md) | Enforce a blank line after `expect.assertions` and `expect.hasAssertions`                        | 🔧  |     |
 | [prefer-destructuring-assignment](src/rules/prefer-destructuring-assignment/documentation.md) | Enforce destructuring assignment for component props                                             | 🔧  |     |
+| [prefer-ending-with-an-expect](src/rules/prefer-ending-with-an-expect/documentation.md)       | Prefer having the last statement in a test be an assertion                                       |     |     |
 | [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                                       | 🔧  |     |
 | [prefer-read-only-props](src/rules/prefer-read-only-props/documentation.md)                   | Enforce that function component props are read-only                                              | 🔧  | 💭  |
 | [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render                          |     |     |

@@ -58,6 +58,10 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/prefer-destructuring-assignment.tsx",
 	},
 	{
+		ruleId: "prefer-ending-with-an-expect",
+		testPath: "./cases/all/prefer-ending-with-an-expect.tsx",
+	},
+	{
 		ruleId: "prefer-parameter-destructuring",
 		testPath: "./cases/all/prefer-parameter-destructuring.tsx",
 	},
