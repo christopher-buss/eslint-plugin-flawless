@@ -20,6 +20,13 @@ const valid: Array<ValidTestCase> = [
 	'it("works", () => { expect["hasAssertions"](); });',
 	// A different member call is untouched.
 	'it("works", () => { expect.anything(); });',
+	// A locally shadowed `expect` is not the test global, so it is ignored.
+	unindent`
+		const expect = createExpect();
+		it("works", () => {
+			expect.hasAssertions();
+		});
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -47,6 +54,26 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		code: unindent`
 			beforeEach(() => {
+				expect.hasAssertions();
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// Resolved through a vitest import (aliases resolve too).
+	{
+		code: unindent`
+			import { expect as assert, it } from "vitest";
+			it("works", () => {
+				assert.hasAssertions();
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// Resolved through a @jest/globals import.
+	{
+		code: unindent`
+			import { expect } from "@jest/globals";
+			it("works", () => {
 				expect.hasAssertions();
 			});
 		`,

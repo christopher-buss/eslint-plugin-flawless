@@ -61,6 +61,14 @@ const valid: Array<ValidTestCase> = [
 			expect(divide(10, 2)).toBe(5);
 		});
 	`,
+	// A locally shadowed `expect` is not the test global, so it is ignored.
+	unindent`
+		const expect = makeExpect();
+		it("divides", () => {
+			expect.assertions(1);
+			expect(divide(10, 2)).toBe(5);
+		});
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -189,6 +197,25 @@ const invalid: Array<InvalidTestCase> = [
 
 					expect(divide(10, 2)).toBe(5);
 				});
+			});
+		`,
+	},
+	// `expect` resolved through a @jest/globals import is still padded.
+	{
+		code: unindent`
+			import { expect } from "@jest/globals";
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			import { expect } from "@jest/globals";
+			it("divides", () => {
+				expect.assertions(1);
+
+				expect(divide(10, 2)).toBe(5);
 			});
 		`,
 	},

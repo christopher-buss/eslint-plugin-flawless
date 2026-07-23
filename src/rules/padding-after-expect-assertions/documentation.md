@@ -16,8 +16,9 @@ declaration from the expectations with a blank line makes the body of the test
 easier to scan.
 
 This rule requires a blank line after such a statement whenever another
-statement follows it. It works for both Jest and Vitest, since it only inspects
-the `expect.assertions` / `expect.hasAssertions` call itself.
+statement follows it. It works for both Jest and Vitest: `expect` is recognised
+as a global or when imported from `"vitest"` or `"@jest/globals"`, and a locally
+shadowed `expect` is ignored.
 
 The padding rules shipped by `eslint-plugin-jest` and `@vitest/eslint-plugin`
 cannot express this. Their `padding-around-expect-groups` matches a statement by

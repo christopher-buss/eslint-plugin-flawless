@@ -18,11 +18,11 @@ This rule reports any `expect.hasAssertions()` call and asks you to replace it
 with the counted form. It does not add or rewrite the count for you — you supply
 the number that matches the test.
 
-Detection is purely syntactic: any non-computed `expect.hasAssertions()` call is
-flagged, whether `expect` is a global or imported from `"vitest"` or
-`"@jest/globals"`. A locally shadowed `expect` is not resolved, so the rare
-`const expect = ...; expect.hasAssertions()` is still reported; disable it
-inline if needed.
+`expect` is resolved the way vitest and jest test helpers are: an `expect` used
+as a global (the default with vitest's `globals: true` or jest's injected
+globals) or imported from `"vitest"` or `"@jest/globals"` is recognised, and
+aliases work. A locally-declared `expect` is ignored. The property access is
+otherwise syntactic — a non-computed `expect.hasAssertions()` call.
 
 ## Examples
 

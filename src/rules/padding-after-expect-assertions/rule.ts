@@ -1,4 +1,7 @@
+import type { ImportBindingDefinition } from "@typescript-eslint/scope-manager";
+import { DefinitionType } from "@typescript-eslint/scope-manager";
 import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
@@ -16,20 +19,73 @@ const messages = {
 };
 
 /**
+ * Resolves the name an identifier refers to, mirroring how eslint-plugin-jest
+ * resolves test functions. An unresolved reference is a global (vitest's
+ * `globals: true` / jest's injected globals); a named import from `"vitest"` or
+ * `"@jest/globals"` resolves to its imported name (so aliases work); anything
+ * bound to a local variable, function, or parameter resolves to `null` and is
+ * ignored.
+ *
+ * @param sourceCode - Provides the scope used to look up the binding.
+ * @param identifier - The identifier to resolve.
+ * @returns The resolved name (`expect`/...), or `null` when the identifier is a
+ *   local binding rather than a test global or a vitest/jest import.
+ */
+function resolveTestGlobalName(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	identifier: TSESTree.Identifier,
+): null | string {
+	const variable = findVariable(sourceCode.getScope(identifier), identifier);
+	if (variable === null) {
+		return identifier.name;
+	}
+
+	const definition = variable.defs.at(0);
+	if (definition === undefined) {
+		return identifier.name;
+	}
+
+	if (definition.type !== DefinitionType.ImportBinding) {
+		return null;
+	}
+
+	const importDefinition: ImportBindingDefinition = definition;
+	const declaration = importDefinition.parent;
+	const source =
+		declaration.type === AST_NODE_TYPES.ImportDeclaration && declaration.source.value;
+	if (source !== "vitest" && source !== "@jest/globals") {
+		return null;
+	}
+
+	const { node } = importDefinition;
+	if (
+		node.type === AST_NODE_TYPES.ImportSpecifier &&
+		node.imported.type === AST_NODE_TYPES.Identifier
+	) {
+		return node.imported.name;
+	}
+
+	return null;
+}
+
+/**
  * Matches a statement that declares the expected assertion count at the top of
  * a test: `expect.assertions(n)` or `expect.hasAssertions()`.
  *
- * Detection is purely syntactic (a non-computed `expect.assertions` /
- * `expect.hasAssertions` call) with no scope analysis, mirroring the deliberate
- * looseness of `@vitest/eslint-plugin`'s own padding rules. A shadowed local
- * `expect` is vanishingly rare, and the only consequence is a harmless blank
- * line.
+ * The `expect` object is resolved so a locally shadowed `expect` is ignored,
+ * while a global or a `"vitest"` / `"@jest/globals"` import is recognized (the
+ * property access is otherwise syntactic — a non-computed `assertions` /
+ * `hasAssertions`).
  *
+ * @param sourceCode - Provides the scope used to resolve `expect`.
  * @param node - The expression statement to inspect.
  * @returns The matched member name (`expect.assertions` / `expect.hasAssertions`)
  *   for the message, or `undefined` when the statement is not an assertion count.
  */
-function getAssertionName({ expression }: TSESTree.ExpressionStatement): string | undefined {
+function getAssertionName(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	{ expression }: TSESTree.ExpressionStatement,
+): string | undefined {
 	if (expression.type !== AST_NODE_TYPES.CallExpression) {
 		return undefined;
 	}
@@ -39,7 +95,6 @@ function getAssertionName({ expression }: TSESTree.ExpressionStatement): string 
 		callee.type !== AST_NODE_TYPES.MemberExpression ||
 		callee.computed ||
 		callee.object.type !== AST_NODE_TYPES.Identifier ||
-		callee.object.name !== "expect" ||
 		callee.property.type !== AST_NODE_TYPES.Identifier
 	) {
 		return undefined;
@@ -47,6 +102,10 @@ function getAssertionName({ expression }: TSESTree.ExpressionStatement): string 
 
 	const { name } = callee.property;
 	if (name !== "assertions" && name !== "hasAssertions") {
+		return undefined;
+	}
+
+	if (resolveTestGlobalName(sourceCode, callee.object) !== "expect") {
 		return undefined;
 	}
 
@@ -127,7 +186,8 @@ function findPaddingAnchor(
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
 		ExpressionStatement(node: TSESTree.ExpressionStatement): void {
-			const name = getAssertionName(node);
+			const { sourceCode } = context;
+			const name = getAssertionName(sourceCode, node);
 			if (name === undefined) {
 				return;
 			}
@@ -142,7 +202,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				return;
 			}
 
-			const { sourceCode } = context;
 			const anchor = findPaddingAnchor(sourceCode, node, nextNode);
 			if (anchor === undefined) {
 				return;
