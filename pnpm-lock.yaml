@@ -125,6 +125,9 @@ overrides:
   eslint-plugin-flawless: link:.
   eslint-plugin-yml: 3.5.0
 
+patchedDependencies:
+  eslint-rule-benchmark: c6c5137ed71cc7e78f6002fe422054ec39e98815fa5b332f2b06f563ba3554ac
+
 importers:
 
   .:
@@ -204,7 +207,7 @@ importers:
         version: 3.5.0(eslint@9.39.4(jiti@2.7.0))
       eslint-rule-benchmark:
         specifier: catalog:utils
-        version: 0.8.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))
+        version: 0.8.0(patch_hash=c6c5137ed71cc7e78f6002fe422054ec39e98815fa5b332f2b06f563ba3554ac)(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))
       eslint-vitest-rule-tester:
         specifier: catalog:testing
         version: 3.1.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)(vitest@4.1.9(@types/node@24.0.13)(vite@8.1.0(@types/node@24.0.13)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))
@@ -6958,7 +6961,7 @@ snapshots:
       natural-compare: 1.4.0
       yaml-eslint-parser: 2.0.0
 
-  eslint-rule-benchmark@0.8.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-rule-benchmark@0.8.0(patch_hash=c6c5137ed71cc7e78f6002fe422054ec39e98815fa5b332f2b06f563ba3554ac)(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@octokit/graphql': 9.0.3
       cac: 6.7.14

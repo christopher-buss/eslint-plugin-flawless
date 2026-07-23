@@ -1,0 +1,77 @@
+diff --git a/dist/core/eslint/create-eslint-instance.js b/dist/core/eslint/create-eslint-instance.js
+index dfb7154047fbaf58e03bcb110f4c7e8c97284cf0..9260e383cf8ed2933f010619dcde97eb29119135 100644
+--- a/dist/core/eslint/create-eslint-instance.js
++++ b/dist/core/eslint/create-eslint-instance.js
+@@ -10,7 +10,7 @@ let jiti = createJiti(import.meta.url, {
+ })
+ async function createESLintInstance(instanceOptions) {
+   let { eslintConfigFile, configDirectory, languages, rule } = instanceOptions
+-  let { path: rulePath, severity, options, ruleId } = rule
++  let { path: rulePath, severity, options, ruleId, fix = true } = rule
+   let ruleModule
+   if (rulePath) {
+     let loadResult = await loadRuleFromFile(jiti, {
+@@ -90,7 +90,7 @@ async function createESLintInstance(instanceOptions) {
+     overrideConfigFile: eslintConfigFile ?? null,
+     overrideConfig: [flatConfig],
+     allowInlineConfig: false,
+-    fix: true,
++    fix,
+   })
+ }
+ export { createESLintInstance }
+diff --git a/dist/runners/run-benchmarks-from-config.js b/dist/runners/run-benchmarks-from-config.js
+index be4c012cd52224c5f761502202164db72cacf9d6..c43b099aadd8631212c3c1c9e0f1f18649438c1c 100644
+--- a/dist/runners/run-benchmarks-from-config.js
++++ b/dist/runners/run-benchmarks-from-config.js
+@@ -51,6 +51,7 @@ async function runBenchmarksFromConfig(parameters) {
+             options: caseItem.options,
+             ruleId: testSpec.ruleId,
+             path: testSpec.rulePath,
++            fix: caseItem.fix ?? testSpec.fix ?? true,
+           }
+           let caseNameSuffix = `Case ${caseIndex + 1}`
+           let testCaseName = `${testSpec.name} - ${caseNameSuffix}`
+diff --git a/dist/types/test-case.d.ts b/dist/types/test-case.d.ts
+index 9f4cf8f3fe42f396c8415a34dfa9dd433a1eb8cd..5f45c254223a309c178123ea54ee582125311a82 100644
+--- a/dist/types/test-case.d.ts
++++ b/dist/types/test-case.d.ts
+@@ -29,6 +29,9 @@ export interface RuleConfig {
+   /** The severity level (0=off, 1=warn, 2=error). */
+   severity: 0 | 1 | 2
+ 
++  /** Whether ESLint applies autofixes during the benchmark. Default: true. */
++  fix?: boolean
++
+   /** The ID of the rule to test. */
+   ruleId: string
+ 
+@@ -64,6 +67,9 @@ export interface Case {
+ 
+   /** Rule severity (0=off, 1=warn, 2=error). Default: 2. */
+   severity?: 0 | 1 | 2
++
++  /** Whether ESLint applies autofixes during the benchmark. Default: true. */
++  fix?: boolean
+ }
+ 
+ /** Represents a single timing measurement. */
+diff --git a/dist/types/user-benchmark-config.d.ts b/dist/types/user-benchmark-config.d.ts
+index 4348a6ed7c2e2960ac71c4e6f7876c0a27c67a23..290b0fab438c9160c1eba75f36cde0a2baecdea1 100644
+--- a/dist/types/user-benchmark-config.d.ts
++++ b/dist/types/user-benchmark-config.d.ts
+@@ -60,6 +60,14 @@ interface Test {
+    */
+   cases: Case[]
+ 
++  /**
++   * Whether ESLint applies autofixes during the benchmark. With fixes on, each
++   * iteration of a fixable rule measures the full multi-pass verify-and-fix
++   * loop (re-parse + re-lint per pass); with fixes off it measures a single
++   * detection pass. Can be overridden per case. Default: true.
++   */
++  fix?: boolean
++
+   /** Name for this group of benchmark cases. Will be used in reports. */
+   name: string
+ }

@@ -15,6 +15,13 @@ overrides:
   eslint-plugin-flawless: link:.
   eslint-plugin-yml: catalog:testing
 
+allowBuilds:
+  esbuild: true
+  simple-git-hooks: true
+
+patchedDependencies:
+  eslint-rule-benchmark: patches/eslint-rule-benchmark.patch
+
 catalogs:
   cli:
     "@antfu/ni": 30.2.0
@@ -58,7 +65,3 @@ catalogs:
   utils:
     eslint-doc-generator: 3.6.0
     eslint-rule-benchmark: 0.8.0
-
-allowBuilds:
-  esbuild: true
-  simple-git-hooks: true
