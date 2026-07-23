@@ -214,6 +214,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [prefer-parameter-destructuring](src/rules/prefer-parameter-destructuring/documentation.md)   | Enforce destructuring parameters in the function signature                                       | 🔧  |     |
 | [prefer-read-only-props](src/rules/prefer-read-only-props/documentation.md)                   | Enforce that function component props are read-only                                              | 🔧  | 💭  |
 | [purity](src/rules/purity/documentation.md)                                                   | Disallow impure calls such as `math.random` or `os.clock` during render                          |     |     |
+| [react-namespace](src/rules/react-namespace/documentation.md)                                 | Prefer named imports for React runtime values and the React namespace for React types            | 🔧  |     |
 | [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                   | Enforce a configured sort order for TOML keys and tables                                         | 🔧  |     |
 | [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)           | Enforce blank lines around top-level YAML block collection keys                                  | 🔧  |     |
 

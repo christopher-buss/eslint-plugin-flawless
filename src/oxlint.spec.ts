@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
 
-// Integration tests: each of the 11 dual-runtime rules is run through the real
+// Integration tests: each of the 12 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
@@ -72,6 +72,33 @@ describe("oxlint integration", () => {
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0]?.code).toBe("flawless(jsx-shorthand-fragment)");
 		expect(fixed).toContain("<><Foo /></>");
+	});
+
+	it("react-namespace reports and fixes a runtime namespace access", () => {
+		const { diagnostics, fixed } = runOxlint({
+			code: 'import React from "react";\nReact.useEffect();\n',
+			filename: "file.tsx",
+			rule: "react-namespace",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(react-namespace)");
+		expect(diagnostics[0]?.message).toContain("'useEffect'");
+		expect(fixed).toContain('import React, { useEffect } from "react";');
+		expect(fixed).toContain("\nuseEffect();");
+	});
+
+	it("react-namespace reports and fixes a bare named type import", () => {
+		const { diagnostics, fixed } = runOxlint({
+			code: 'import type { ReactNode } from "react";\nlet x: ReactNode;\n',
+			filename: "file.tsx",
+			rule: "react-namespace",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(react-namespace)");
+		expect(fixed).toContain('import React from "react";');
+		expect(fixed).toContain("let x: React.ReactNode;");
 	});
 
 	it("max-lines-per-function reports a function over the limit", () => {
