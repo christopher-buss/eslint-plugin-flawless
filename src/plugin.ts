@@ -17,6 +17,7 @@ import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assi
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
 import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
 import { purity } from "./rules/purity/rule";
+import { reactNamespace } from "./rules/react-namespace/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
 
@@ -58,6 +59,7 @@ export const plugin = {
 		"prefer-parameter-destructuring": preferParameterDestructuring,
 		"prefer-read-only-props": preferReadOnlyProps,
 		"purity": purity,
+		"react-namespace": reactNamespace,
 		"toml-sort-keys": tomlSortKeys,
 		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
 	},
