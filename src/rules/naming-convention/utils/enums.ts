@@ -81,6 +81,9 @@ export const Modifier = {
 	"default": 32768,
 	// namespace imports
 	"namespace": 65536,
+	// variables whose initializer is a const-asserted object expression, bare
+	// (`{...} as const`) or `satisfies`-wrapped (`{...} as const satisfies T`)
+	"constAsserted": 131072,
 
 	// make sure TypeModifiers starts at Modifiers + 1 or else sorting won't work
 } as const;
@@ -105,11 +108,11 @@ export type PredefinedFormatString = keyof typeof PredefinedFormat;
 export type PredefinedFormatType = (typeof PredefinedFormat)[keyof typeof PredefinedFormat];
 
 export const TypeModifier = {
-	boolean: 131072,
-	string: 262144,
-	number: 524288,
-	function: 1048576,
-	array: 2097152,
+	boolean: 262144,
+	string: 524288,
+	number: 1048576,
+	function: 2097152,
+	array: 4194304,
 } as const;
 
 export const TypeModifierValueToKey = Object.fromEntries(
@@ -122,8 +125,8 @@ export type TypeModifierType = (typeof TypeModifier)[keyof typeof TypeModifier];
 // weights for the object-form type-reference matchers in `types`; strict
 // (from + name) sorts ahead of loose (name only), and both sort ahead of the
 // built-in type modifiers above. The filter weight (1 << 30) stays highest.
-export const TYPE_REFERENCE_LOOSE_WEIGHT = 1 << 22;
-export const TYPE_REFERENCE_STRICT_WEIGHT = 1 << 23;
+export const TYPE_REFERENCE_LOOSE_WEIGHT = 1 << 23;
+export const TYPE_REFERENCE_STRICT_WEIGHT = 1 << 24;
 
 export const UnderscoreOption = {
 	forbid: 1,

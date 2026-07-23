@@ -231,6 +231,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 			...selectorSchema("variableLike", false, ["unused", "async"]),
 			...selectorSchema("variable", true, [
 				"const",
+				"constAsserted",
 				"destructured",
 				"exported",
 				"global",

@@ -2690,7 +2690,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 			{
 				data: {
@@ -2698,7 +2698,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -2719,7 +2719,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -2944,10 +2944,13 @@ const invalid: Array<InvalidTestCase> = [
 		options: dictatedNameOptions,
 	},
 	{
-		// contextual type - `as const` provides no contextual type
+		// contextual type - `as const` provides no contextual type. The key is
+		// also a top-level objectStyleEnum member, so it's validated as an
+		// enumMember (not an objectLiteralProperty) and gets the ForeignContract
+		// message variant
 		code: "const x = { PascalProp: 1 } as const;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
-		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
+		options: [...dictatedNameOptions, { format: ["camelCase"], selector: "enumMember" }],
 	},
 	{
 		// contextual type - contextual type without the property
