@@ -16,6 +16,7 @@ import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule";
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/rule";
+import { preferExpectAssertionsCount } from "./rules/prefer-expect-assertions-count/rule";
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
 import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
 import { purity } from "./rules/purity/rule";
@@ -60,6 +61,7 @@ export const plugin = {
 		"padding-after-expect-assertions": paddingAfterExpectAssertions,
 		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"prefer-ending-with-an-expect": preferEndingWithAnExpect,
+		"prefer-expect-assertions-count": preferExpectAssertionsCount,
 		"prefer-parameter-destructuring": preferParameterDestructuring,
 		"prefer-read-only-props": preferReadOnlyProps,
 		"purity": purity,
