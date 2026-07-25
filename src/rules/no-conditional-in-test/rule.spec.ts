@@ -206,6 +206,96 @@ const invalid: Array<InvalidTestCase> = [
 			});
 		`,
 	},
+	// A wrapped chain keeps `!` on the object's line — TypeScript forbids a line
+	// break before `!`, so `a\n?.b` may not become `a\n!.b`.
+	{
+		code: unindent`
+			it("works", () => {
+				expect(
+					descend(parsed.tree, "ServerStorage", "TestService")
+						?.$properties,
+				).toBeUndefined();
+			});
+		`,
+		errors: [{ messageId }],
+		options: [{ allowOptionalChaining: false }],
+		output: unindent`
+			it("works", () => {
+				expect(
+					descend(parsed.tree, "ServerStorage", "TestService")!
+						.$properties,
+				).toBeUndefined();
+			});
+		`,
+	},
+	// Wrapped computed member. Replacing in place would yield `items\n![0]`,
+	// which ASI silently reinterprets as `items; ![0];`.
+	{
+		code: unindent`
+			it("works", () => {
+				expect(items
+					?.[0]).toBe(1);
+			});
+		`,
+		errors: [{ messageId }],
+		options: [{ allowOptionalChaining: false }],
+		output: unindent`
+			it("works", () => {
+				expect(items!
+					[0]).toBe(1);
+			});
+		`,
+	},
+	// Wrapped optional call.
+	{
+		code: unindent`
+			it("works", () => {
+				expect(getValue
+					?.()).toBe(1);
+			});
+		`,
+		errors: [{ messageId }],
+		options: [{ allowOptionalChaining: false }],
+		output: unindent`
+			it("works", () => {
+				expect(getValue!
+					()).toBe(1);
+			});
+		`,
+	},
+	// The `!` anchors to the token before `?.`, so a parenthesized object keeps
+	// the assertion outside its closing paren.
+	{
+		code: unindent`
+			it("works", () => {
+				expect((user)?.name).toBe("ada");
+			});
+		`,
+		errors: [{ messageId }],
+		options: [{ allowOptionalChaining: false }],
+		output: unindent`
+			it("works", () => {
+				expect((user)!.name).toBe("ada");
+			});
+		`,
+	},
+	// Multi-link chain where only the outer link wraps.
+	{
+		code: unindent`
+			it("works", () => {
+				expect(a?.b
+					?.c).toBe(1);
+			});
+		`,
+		errors: [{ messageId }],
+		options: [{ allowOptionalChaining: false }],
+		output: unindent`
+			it("works", () => {
+				expect(a!.b!
+					.c).toBe(1);
+			});
+		`,
+	},
 ];
 
 run({

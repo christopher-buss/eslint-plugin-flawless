@@ -69,6 +69,9 @@ const schema: Array<JSONSchema.JSONSchema4> = [
 
 /** A replacement of a single optional-chaining `?.` token. */
 interface OptionalTokenFix {
+	/** Token the `!` is appended to; `!` may not be preceded by a line break. */
+	readonly anchor: TSESTree.Token;
+	/** Text replacing `?.` — `.` for a plain member, empty otherwise. */
 	readonly text: string;
 	readonly token: TSESTree.Token;
 }
@@ -183,12 +186,15 @@ function resolveVitestName(
 }
 
 /**
- * Collects the `?.` tokens along an optional chain's primary spine and the text
- * that replaces each with a non-null assertion. A non-computed member becomes
- * `!.` (`a?.b` -> `a!.b`); a computed member or optional call becomes `!`
- * (`a?.[x]` -> `a![x]`, `fn?.()` -> `fn!()`). Only the object/callee spine is
- * walked — optional chains inside computed keys or call arguments are their own
- * `ChainExpression` nodes and are visited (and fixed) separately.
+ * Collects the `?.` tokens along an optional chain's primary spine and the parts
+ * that convert each into a non-null assertion. The `!` is anchored to the token
+ * preceding `?.` rather than written in place of it, because TypeScript forbids
+ * a line break before `!` — a chain wrapped as `a\n?.b` has to become `a!\n.b`,
+ * not `a\n!.b`. What replaces `?.` is therefore only the connector: `.` for a
+ * plain member (`a?.b` -> `a!.b`), nothing for a computed member or optional
+ * call (`a?.[x]` -> `a![x]`, `fn?.()` -> `fn!()`). Only the object/callee spine
+ * is walked — optional chains inside computed keys or call arguments are their
+ * own `ChainExpression` nodes and are visited (and fixed) separately.
  *
  * @param chain - The chain expression to convert.
  * @param sourceCode - Provides token lookups.
@@ -207,8 +213,9 @@ function collectOptionalTokenFixes(
 				const token = sourceCode.getTokenAfter(node.object, {
 					filter: (candidate) => candidate.value === "?.",
 				});
-				if (token !== null) {
-					fixes.push({ text: node.computed ? "!" : "!.", token });
+				const anchor = token === null ? null : sourceCode.getTokenBefore(token);
+				if (token !== null && anchor !== null) {
+					fixes.push({ anchor, text: node.computed ? "" : ".", token });
 				}
 			}
 
@@ -221,8 +228,9 @@ function collectOptionalTokenFixes(
 				const token = sourceCode.getTokenAfter(node.callee, {
 					filter: (candidate) => candidate.value === "?.",
 				});
-				if (token !== null) {
-					fixes.push({ text: "!", token });
+				const anchor = token === null ? null : sourceCode.getTokenBefore(token);
+				if (token !== null && anchor !== null) {
+					fixes.push({ anchor, text: "", token });
 				}
 			}
 
@@ -305,8 +313,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 			context.report({
 				fix: (fixer) => {
-					return collectOptionalTokenFixes(node, sourceCode).map((optionalFix) => {
-						return fixer.replaceText(optionalFix.token, optionalFix.text);
+					return collectOptionalTokenFixes(node, sourceCode).flatMap((optionalFix) => {
+						return [
+							fixer.insertTextAfter(optionalFix.anchor, "!"),
+							fixer.replaceText(optionalFix.token, optionalFix.text),
+						];
 					});
 				},
 				messageId: MESSAGE_ID,
