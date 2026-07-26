@@ -43,6 +43,12 @@ const DEFAULTS: Config = {
 /** Callee identifiers that name a vitest test block (`describe` is excluded). */
 const TEST_BLOCK_NAMES = new Set(["it", "test"]);
 
+/**
+ * Root identifiers whose call arguments are assertion conditions. Matched by
+ * name as well as by vitest resolution, so `assert` from `node:assert` counts.
+ */
+const ASSERTION_ROOT_NAMES = new Set(["assert", "expect"]);
+
 const messages = {
 	[MESSAGE_ID]: "Avoid having conditionals in tests.",
 };
@@ -186,6 +192,60 @@ function resolveVitestName(
 }
 
 /**
+ * Determines whether a node sits directly in the argument list of an assertion
+ * call (`expect(...)`, `assert(...)`, `assert.ok(...)`, `expect(x).toBe(...)`).
+ * The search walks up to the nearest enclosing call and stops there, so an
+ * argument of some other function nested inside an assertion
+ * (`expect(wrap(a && b))`) does not qualify; it also stops at a function
+ * boundary, since a callback's body runs on the callback's terms rather than as
+ * part of the assertion's condition.
+ *
+ * @param node - The node to locate.
+ * @param sourceCode - Provides the scope used to resolve the callee.
+ * @returns `true` when the node is an argument of an assertion call.
+ */
+function isInAssertionArgument(
+	node: TSESTree.Node,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): boolean {
+	let current = node;
+	for (;;) {
+		const { parent } = current;
+		if (parent === undefined) {
+			return false;
+		}
+
+		if (
+			parent.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+			parent.type === AST_NODE_TYPES.FunctionDeclaration ||
+			parent.type === AST_NODE_TYPES.FunctionExpression
+		) {
+			return false;
+		}
+
+		if (parent.type === AST_NODE_TYPES.CallExpression) {
+			// Having arrived here by walking parent links, `current` is either
+			// the callee or one of the arguments.
+			if (current === parent.callee) {
+				return false;
+			}
+
+			const root = getRootIdentifier(parent.callee);
+			if (root === null) {
+				return false;
+			}
+
+			return (
+				ASSERTION_ROOT_NAMES.has(root.name) ||
+				ASSERTION_ROOT_NAMES.has(resolveVitestName(sourceCode, root) ?? "")
+			);
+		}
+
+		current = parent;
+	}
+}
+
+/**
  * Collects the `?.` tokens along an optional chain's primary spine and the parts
  * that convert each into a non-null assertion. The `!` is anchored to the token
  * preceding `?.` rather than written in place of it, because TypeScript forbids
@@ -326,7 +386,18 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 		"ConditionalExpression": maybeReportConditional,
 		"IfStatement": maybeReportConditional,
-		"LogicalExpression": maybeReportConditional,
+		"LogicalExpression": function (node: TSESTree.LogicalExpression): void {
+			// `&&` in an assertion is a compound condition, not a branch:
+			// both operands feed the one outcome the assertion checks, and
+			// nothing is skipped that would otherwise have been asserted.
+			// `||` and `??` pick between values, so they still hide which
+			// operand was tested.
+			if (node.operator === "&&" && isInAssertionArgument(node, sourceCode)) {
+				return;
+			}
+
+			maybeReportConditional(node);
+		},
 		"SwitchStatement": maybeReportConditional,
 	};
 }

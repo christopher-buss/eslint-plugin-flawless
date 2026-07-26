@@ -86,6 +86,15 @@ export default isentinel(
 		},
 	},
 	{
+		// The samples use the `in` operator to show the narrowing idiom the
+		// assertion exemption exists for, and no-property-in-node is typed, so
+		// it throws on a markdown fence (which is outside the tsconfig project).
+		files: ["src/rules/no-conditional-in-test/documentation.md/**"],
+		rules: {
+			"eslint-plugin/no-property-in-node": "off",
+		},
+	},
+	{
 		// The documentation intentionally shows incorrect samples that the
 		// legacy arrow-style plugin and the oxfmt formatting rule would
 		// rewrite, and its arrow examples are the rule's subject matter.

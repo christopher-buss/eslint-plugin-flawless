@@ -17,6 +17,19 @@ reports conditional logic — `if`, `switch`, ternaries, and logical expressions
 (`&&`/`||`/`??`) — directly inside a vitest `it`/`test` body, including inside
 any functions declared there.
 
+One exception: `&&` in the arguments of an assertion (`expect(…)`, `assert(…)`,
+`assert.ok(…)`, `expect(x).toBe(…)`) is allowed. It is a compound condition
+rather than a branch — both operands feed the single outcome the assertion
+checks, and nothing that would otherwise have been asserted is skipped, so
+`assert(typeof body === "object" && "timeout" in body)` reads as one assertion.
+`||` and `??` stay reported even there, because they pick between values and so
+hide which operand was actually tested. The exception does not cross a function
+boundary: a `&&` inside a callback passed to an assertion
+(`expect(() => f(a && b)).toThrow()`) runs on the callback's terms, not the
+assertion's, and is still reported. An assertion callee is recognised by the
+identifier its chain is rooted at (`expect`/`assert`, or a vitest import aliased
+to one), so `assert` from `node:assert` counts.
+
 This is a port of
 [`jest/no-conditional-in-test`](https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-conditional-in-test.md)
 (MIT), retargeted at **vitest** with wider coverage than
@@ -48,6 +61,11 @@ it("reads a user", () => {
 test("computes a label", () => {
 	expect(flag ? "on" : "off").toBe("on");
 });
+
+it("reads a body", () => {
+	// `||` hides which operand was asserted.
+	assert(body.timeout || body.deadline);
+});
 ```
 
 Examples of **correct** code for this rule:
@@ -55,6 +73,11 @@ Examples of **correct** code for this rule:
 ```js
 it("reads a user", () => {
 	expect(user.role).toBe("admin");
+});
+
+// `&&` in an assertion is one compound condition, not a branch.
+it("reads a body", () => {
+	assert(typeof submitBody === "object" && "timeout" in submitBody);
 });
 
 // Conditional setup outside the test body is fine.
