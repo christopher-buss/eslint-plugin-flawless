@@ -314,14 +314,14 @@ function collectOptionalTokenFixes(
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let config: Config;
 	let sourceCode: Readonly<TSESLint.SourceCode>;
-	let inTestCase = false;
+	const testBlocks: Array<TSESTree.CallExpression> = [];
 
 	/**
-	 * Determines whether a call opens a test block (a resolved vitest `it`/`test`,
+	 * Determines whether a call names a test block (a resolved vitest `it`/`test`,
 	 * or a configured `additionalTestBlockFunctions` name).
 	 *
 	 * @param node - The call to inspect.
-	 * @returns `true` when the call opens a test.
+	 * @returns `true` when the call is rooted at a test block name.
 	 */
 	function isTestBlock(node: TSESTree.CallExpression): boolean {
 		const root = getRootIdentifier(node.callee);
@@ -334,12 +334,57 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
+	 * Determines whether a test block call is a modifier applied to the block
+	 * rather than the call that opens it. In `it.skipIf(cond)("works", fn)` both
+	 * calls are rooted at `it`, but only the outer one takes the test body — the
+	 * inner one sits in its callee position.
+	 *
+	 * @param node - The test block call to inspect.
+	 * @returns `true` when the call is a modifier in a callee chain.
+	 */
+	function isTestBlockModifier(node: TSESTree.CallExpression): boolean {
+		const { parent } = node;
+		return parent.type === AST_NODE_TYPES.CallExpression && parent.callee === node;
+	}
+
+	/**
+	 * Determines whether a node sits in the body of the innermost open test block.
+	 * A node reached through that block's callee — a modifier's arguments
+	 * (`it.skipIf(cond)`, `it.each(cases)`) or a computed key (`it[flag ? …]`) —
+	 * decides whether and how the test runs rather than what it does, so it is not
+	 * part of the body.
+	 *
+	 * @param node - The node to locate.
+	 * @returns `true` when the node is inside a test body.
+	 */
+	function isInTestBody(node: TSESTree.Node): boolean {
+		const block = testBlocks.at(-1);
+		if (block === undefined) {
+			return false;
+		}
+
+		let current: TSESTree.Node = node;
+		for (;;) {
+			const parent: TSESTree.Node | undefined = current.parent;
+			if (parent === undefined) {
+				return false;
+			}
+
+			if (parent === block) {
+				return current !== block.callee;
+			}
+
+			current = parent;
+		}
+	}
+
+	/**
 	 * Reports a conditional node when the traversal is inside a test body.
 	 *
 	 * @param node - The `if`/`switch`/ternary/logical construct to flag.
 	 */
 	function maybeReportConditional(node: TSESTree.Node): void {
-		if (inTestCase) {
+		if (isInTestBody(node)) {
 			context.report({ messageId: MESSAGE_ID, node });
 		}
 	}
@@ -354,20 +399,23 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					options?.allowOptionalChaining ?? DEFAULTS.allowOptionalChaining,
 			};
 			({ sourceCode } = context);
-			inTestCase = false;
+			testBlocks.length = 0;
 		},
 		"CallExpression": function (node: TSESTree.CallExpression): void {
-			if (isTestBlock(node)) {
-				inTestCase = true;
+			// A modifier is not tracked, so the block stays open across it: its
+			// `:exit` fires before the body is walked, which would otherwise
+			// close the block early and leave the body unchecked.
+			if (isTestBlock(node) && !isTestBlockModifier(node)) {
+				testBlocks.push(node);
 			}
 		},
 		"CallExpression:exit": function (node: TSESTree.CallExpression): void {
-			if (isTestBlock(node)) {
-				inTestCase = false;
+			if (testBlocks.at(-1) === node) {
+				testBlocks.pop();
 			}
 		},
 		"ChainExpression": function (node: TSESTree.ChainExpression): void {
-			if (!inTestCase || config.allowOptionalChaining) {
+			if (config.allowOptionalChaining || !isInTestBody(node)) {
 				return;
 			}
 

@@ -117,6 +117,43 @@ const valid: Array<ValidTestCase> = [
 			assert(value, a && b);
 		});
 	`,
+	// A test block modifier's arguments are setup, not the test body: deciding
+	// whether a test runs at all is the point of `skipIf`.
+	unindent`
+		it.skipIf(process.env.CI && flag)("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
+	// `runIf` likewise.
+	unindent`
+		test.runIf(a ?? b)("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
+	// A ternary in a modifier argument.
+	unindent`
+		it.skipIf(flag ? a : b)("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
+	// `||` in a modifier argument.
+	unindent`
+		it.skipIf(isWindows || isCI)("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
+	// A conditional inside a callback in a modifier argument.
+	unindent`
+		it.each(cases.filter((one) => one.enabled || one.forced))("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
+	// A stacked modifier chain.
+	unindent`
+		it.concurrent.skipIf(a && b)("works", () => {
+			expect(value).toBe(1);
+		});
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -215,6 +252,39 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			it("works", () => {
 				doThing(a && b);
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// Exempting a modifier's arguments must not exempt the test body that
+	// follows it.
+	{
+		code: unindent`
+			it.skipIf(flag)("works", () => {
+				if (other) {
+					doThing();
+				}
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// Both parts of a modified test block: the modifier argument is exempt, the
+	// body is not.
+	{
+		code: unindent`
+			it.skipIf(a || b)("works", () => {
+				expect(flag ? "a" : "b").toBe("a");
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// A modifier taking a callback whose body is the test.
+	{
+		code: unindent`
+			it.each(cases)("works", () => {
+				if (flag) {
+					doThing();
+				}
 			});
 		`,
 		errors: [{ messageId }],

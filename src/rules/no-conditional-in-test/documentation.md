@@ -30,6 +30,12 @@ assertion's, and is still reported. An assertion callee is recognised by the
 identifier its chain is rooted at (`expect`/`assert`, or a vitest import aliased
 to one), so `assert` from `node:assert` counts.
 
+Only the test body counts. A test block modifier's arguments — `skipIf`,
+`runIf`, `each`, or a computed key such as `it[flag ? "only" : "skip"]` — decide
+whether and how the test runs rather than what it does, so a conditional there
+is allowed: `it.skipIf(isWindows || isCI)("works", …)` is the intended way to
+express that, and rewriting it would not make the test any less conditional.
+
 This is a port of
 [`jest/no-conditional-in-test`](https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-conditional-in-test.md)
 (MIT), retargeted at **vitest** with wider coverage than
@@ -78,6 +84,11 @@ it("reads a user", () => {
 // `&&` in an assertion is one compound condition, not a branch.
 it("reads a body", () => {
 	assert(typeof submitBody === "object" && "timeout" in submitBody);
+});
+
+// A modifier's arguments decide whether the test runs, not what it checks.
+it.skipIf(isWindows || isCI)("reads a socket", () => {
+	expect(socket.path).toBe("/tmp/app.sock");
 });
 
 // Conditional setup outside the test body is fine.
