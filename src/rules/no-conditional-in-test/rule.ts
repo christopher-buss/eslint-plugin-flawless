@@ -209,12 +209,10 @@ function isInAssertionArgument(
 	sourceCode: Readonly<TSESLint.SourceCode>,
 ): boolean {
 	let current = node;
-	for (;;) {
+	// The walk ends on the node type rather than on a missing parent: ESLint
+	// gives `Program` a `null` parent, which the types describe as `undefined`.
+	while (current.type !== AST_NODE_TYPES.Program) {
 		const { parent } = current;
-		if (parent === undefined) {
-			return false;
-		}
-
 		if (
 			parent.type === AST_NODE_TYPES.ArrowFunctionExpression ||
 			parent.type === AST_NODE_TYPES.FunctionDeclaration ||
@@ -243,6 +241,8 @@ function isInAssertionArgument(
 
 		current = parent;
 	}
+
+	return false;
 }
 
 /**
@@ -364,18 +364,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		let current: TSESTree.Node = node;
-		for (;;) {
-			const parent: TSESTree.Node | undefined = current.parent;
-			if (parent === undefined) {
-				return false;
-			}
-
+		while (current.type !== AST_NODE_TYPES.Program) {
+			const { parent } = current;
 			if (parent === block) {
 				return current !== block.callee;
 			}
 
 			current = parent;
 		}
+
+		return false;
 	}
 
 	/**

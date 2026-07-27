@@ -65,6 +65,14 @@ const valid: Array<ValidTestCase> = [
 	`,
 	// Logical expression outside a test.
 	"const value = fallback || defaultValue;",
+	// Module-scope `&&`: the search for an enclosing assertion call runs out of
+	// ancestors at the program root.
+	unindent`
+		const ready = first !== undefined && second !== undefined;
+		it("works", () => {
+			expect(ready).toBe(true);
+		});
+	`,
 	// `&&` in an assertion is a compound condition, not a branch: it always runs
 	// and always decides the assertion's outcome.
 	unindent`
