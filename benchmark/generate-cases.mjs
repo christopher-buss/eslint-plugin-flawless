@@ -41,9 +41,10 @@ emit(
 emit(
 	"block-to-implicit.ts",
 	"Single-return blocks collapsed to implicit returns. Fixer path, no worker.",
-	Array.from({ length: N_LIGHT }, (_, i) => `const bi${i} = () => { return value${i} + ${i}; };`).join(
-		"\n",
-	),
+	Array.from(
+		{ length: N_LIGHT },
+		(_, i) => `const bi${i} = () => { return value${i} + ${i}; };`,
+	).join("\n"),
 );
 
 // 3. Over-limit implicit arrows with DISTINCT statements: every consult is a
@@ -85,6 +86,151 @@ emit(
 	"realistic.ts",
 	"Large mixed file: mostly valid, some block->implicit, a few over-limit consults.",
 	realistic.join("\n"),
+);
+
+// no-floating-point-equality detailed fixtures. Counts are mirrored in
+// benchmark/config.ts and verified before any timing starts.
+const FLOATING_N = 200;
+
+emit(
+	"floating-call-heavy.ts",
+	"Ordinary call-heavy module with no assertion imports or reports.",
+	Array.from({ length: FLOATING_N * 2 }, (_, i) => `consume(service${i}(value${i}), ${i});`).join(
+		"\n",
+	),
+);
+
+emit(
+	"floating-import-unrelated.ts",
+	"Recognized assertion imports followed almost entirely by unrelated calls.",
+	[
+		'import { expect } from "vitest";',
+		...Array.from(
+			{ length: FLOATING_N * 2 },
+			(_, i) => `consume(service${i}(value${i}), ${i});`,
+		),
+		"expect(result).toEqual(0.3);",
+	].join("\n"),
+);
+
+emit(
+	"floating-literals.ts",
+	"Direct exact/inexact decimal and integer-division comparisons.",
+	Array.from(
+		{ length: FLOATING_N },
+		(_, i) =>
+			`{ value${i} === 0.3; value${i} === 0.5; value${i} === 10 / 3; value${i} === 3 / 2; }`,
+	).join("\n"),
+);
+
+const chains = [];
+for (let i = 0; i < 50; i += 1) {
+	chains.push(`const chain${i}_0 = 0.1 + 0.2;`);
+	for (let depth = 1; depth <= 25; depth += 1) {
+		chains.push(`const chain${i}_${depth} = chain${i}_${depth - 1};`);
+	}
+	for (let reference = 0; reference < 4; reference += 1) {
+		chains.push(`actual${i}_${reference} === chain${i}_25;`);
+	}
+}
+emit(
+	"floating-const-chains.ts",
+	"Deep const chains whose terminal binding is referenced repeatedly.",
+	chains.join("\n"),
+);
+
+const arithmetic = [];
+let expression = "0.1";
+for (let depth = 1; depth <= 80; depth += 1) {
+	expression = `(${expression} + ${depth})`;
+	arithmetic.push(`actual${depth} === ${expression};`);
+}
+emit(
+	"floating-arithmetic-depth.ts",
+	"Increasing literal-arithmetic expression depth.",
+	arithmetic.join("\n"),
+);
+
+const indirect = [];
+for (let i = 0; i < 100; i += 1) {
+	const operand = `records[${i}].measurements.primary.value + offsets[${i}].current`;
+	indirect.push(`${operand} <= 0.3 && ${operand} >= 0.3;`);
+	indirect.push(`${operand} <= 0.3 && ${operand} >= 0.4;`);
+}
+emit(
+	"floating-indirect-long.ts",
+	"Matching and near-miss indirect comparisons with long operands.",
+	indirect.join("\n"),
+);
+
+emit(
+	"floating-assertions.ts",
+	"Assertion-heavy file using every supported matcher shape.",
+	[
+		'import { expect } from "vitest";',
+		'import assert from "node:assert/strict";',
+		...Array.from({ length: 100 }, (_, i) => `expect(actual${i}).not.toBe(0.3);`),
+		...Array.from({ length: 100 }, (_, i) => `assert.strictEqual(actual${i}, 10 / 3);`),
+		...Array.from({ length: 100 }, (_, i) => `assert.notStrictEqual(actual${i}, 0.1 + 0.2);`),
+	].join("\n"),
+);
+
+emit(
+	"floating-switches.ts",
+	"Switch-heavy file with exact and inexact case labels.",
+	Array.from(
+		{ length: 100 },
+		(_, i) =>
+			`switch (value${i}) { case 0.3: consume(value${i}); break; case 1 / 3: retry(); break; case 0.5: break; }`,
+	).join("\n"),
+);
+
+const floatingRealistic = ['import { expect } from "vitest";'];
+for (let i = 0; i < 300; i += 1) {
+	switch (i % 10) {
+		case 0:
+			floatingRealistic.push(`export const direct${i} = actual${i} === 0.3;`);
+			break;
+		case 1:
+			floatingRealistic.push(`export const exact${i} = actual${i} === 0.5;`);
+			break;
+		case 2:
+			floatingRealistic.push(
+				`const expected${i} = 0.1 + 0.2; export const alias${i} = actual${i} === expected${i};`,
+			);
+			break;
+		case 3:
+			floatingRealistic.push(
+				`export const indirect${i} = actual${i} <= 1.1 && actual${i} >= 1.1;`,
+			);
+			break;
+		case 4:
+			floatingRealistic.push(`export const ordinary${i} = service${i}(actual${i});`);
+			break;
+		case 5:
+			floatingRealistic.push(`expect(actual${i}).toBe(0.3);`);
+			break;
+		case 6:
+			floatingRealistic.push(`switch (actual${i}) { case 0.3: consume(actual${i}); }`);
+			break;
+		case 7:
+			floatingRealistic.push(`export const division${i} = actual${i} !== 10 / 3;`);
+			break;
+		case 8:
+			floatingRealistic.push(
+				`export const tolerance${i} = Math.abs(actual${i} - 0.3) < Number.EPSILON;`,
+			);
+			break;
+		default:
+			floatingRealistic.push(
+				`let mutable${i} = 0.1 + 0.2; export const mutableUse${i} = actual${i} === mutable${i};`,
+			);
+	}
+}
+emit(
+	"floating-realistic.ts",
+	"Realistic mix of comparisons, assertions, switches, aliases, and unrelated work.",
+	floatingRealistic.join("\n"),
 );
 
 console.info(`Wrote fixtures to ${casesDir}`);

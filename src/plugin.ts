@@ -10,6 +10,7 @@ import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { noConditionalInTest } from "./rules/no-conditional-in-test/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
+import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
 import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
@@ -55,6 +56,7 @@ export const plugin = {
 		"naming-convention": namingConvention,
 		"no-conditional-in-test": noConditionalInTest,
 		"no-export-default-arrow": noExportDefaultArrow,
+		"no-floating-point-equality": noFloatingPointEquality,
 		"no-redundant-tsconfig-options": noRedundantTsconfigOptions,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,

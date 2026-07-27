@@ -1,4 +1,11 @@
+import { Linter } from "eslint";
 import { defineConfig } from "eslint-rule-benchmark";
+import tsParser from "@typescript-eslint/parser";
+
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import builtPlugin from "../dist/index.mjs";
 
@@ -26,6 +33,95 @@ import builtPlugin from "../dist/index.mjs";
 
 const RULE_PATH = "../dist/index.mjs";
 const RULE_ID = "arrow-return-style";
+const FLOATING_RULE_ID = "no-floating-point-equality";
+const EMPTY_RULE_PATH = "./empty-rule.mjs";
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+const FLOATING_CASES = [
+	{
+		expectedIssues: 0,
+		name: "call-heavy, no assertions",
+		testPath: "./cases/floating-call-heavy.ts",
+	},
+	{
+		expectedIssues: 0,
+		name: "recognized import, unrelated calls",
+		testPath: "./cases/floating-import-unrelated.ts",
+	},
+	{
+		expectedIssues: 400,
+		name: "direct exact/inexact literals",
+		testPath: "./cases/floating-literals.ts",
+	},
+	{
+		expectedIssues: 200,
+		name: "deep repeated const chains",
+		testPath: "./cases/floating-const-chains.ts",
+	},
+	{
+		expectedIssues: 80,
+		name: "increasing arithmetic depth",
+		testPath: "./cases/floating-arithmetic-depth.ts",
+	},
+	{
+		expectedIssues: 100,
+		name: "matching and near-miss indirect comparisons",
+		testPath: "./cases/floating-indirect-long.ts",
+	},
+	{ expectedIssues: 300, name: "assertion-heavy", testPath: "./cases/floating-assertions.ts" },
+	{ expectedIssues: 200, name: "switch-heavy", testPath: "./cases/floating-switches.ts" },
+	{ expectedIssues: 180, name: "realistic mixed", testPath: "./cases/floating-realistic.ts" },
+] as const;
+
+// Fail before timing if a generated fixture stops exercising the path its
+// benchmark row claims to measure.
+const issueCounter = new Linter({ configType: "flat" });
+for (const fixture of FLOATING_CASES) {
+	const absolutePath = path.resolve(HERE, fixture.testPath);
+	const messages = issueCounter.verify(
+		readFileSync(absolutePath, "utf8"),
+		[
+			{
+				files: ["**/*.ts"],
+				languageOptions: { parser: tsParser },
+				plugins: { flawless: builtPlugin },
+				rules: { [`flawless/${FLOATING_RULE_ID}`]: "error" },
+			},
+		],
+		{ filename: path.basename(absolutePath) },
+	);
+	if (messages.length !== fixture.expectedIssues) {
+		throw new Error(
+			`${fixture.testPath}: expected ${fixture.expectedIssues} issue(s), received ${messages.length}`,
+		);
+	}
+}
+
+const floatingImplementations = [
+	{ label: "flawless", ruleId: FLOATING_RULE_ID, rulePath: RULE_PATH },
+	{ label: "parser baseline", ruleId: `baseline/${FLOATING_RULE_ID}`, rulePath: EMPTY_RULE_PATH },
+];
+const sonarRulePath = process.env.SONAR_S1244_RULE_PATH;
+if (sonarRulePath !== undefined) {
+	floatingImplementations.push({
+		label: "Sonar S1244",
+		ruleId: `sonar/${FLOATING_RULE_ID}`,
+		rulePath: sonarRulePath,
+	});
+}
+
+const floatingTests = FLOATING_CASES.flatMap((fixture) =>
+	floatingImplementations.map((implementation) => ({
+		name: `${FLOATING_RULE_ID}: ${fixture.name} [${implementation.label}]`,
+		ruleId: implementation.ruleId,
+		rulePath: implementation.rulePath,
+		fix: false,
+		iterations: 30,
+		timeout: 1000,
+		warmup: { enabled: true, iterations: 5 },
+		cases: [{ testPath: fixture.testPath }],
+	})),
+);
 
 // One coarse run per rule. arrow-return-style is profiled in detail below, so it
 // is intentionally absent here. A rule needing options (to report at all) passes
@@ -100,7 +196,7 @@ const UNSUPPORTED = new Set([
 // throw aborts config loading and nukes EVERY result (arrow included) on any PR
 // that adds a rule, whereas this lets the existing benchmarks still measure while
 // CI (and a local `pnpm bench`) still goes red until a fixture is added.
-const benched = new Set([RULE_ID, ...COARSE.map((entry) => entry.ruleId)]);
+const benched = new Set([RULE_ID, FLOATING_RULE_ID, ...COARSE.map((entry) => entry.ruleId)]);
 const missing = Object.keys(builtPlugin.rules).filter(
 	(ruleId) => !benched.has(ruleId) && !UNSUPPORTED.has(ruleId),
 );
@@ -200,6 +296,7 @@ export default defineConfig({
 			rulePath: RULE_PATH,
 			cases: [{ testPath: "./cases/realistic.ts" }],
 		},
+		...floatingTests,
 		...coarseTests,
 	],
 });

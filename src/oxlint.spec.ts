@@ -229,4 +229,34 @@ describe("oxlint integration", () => {
 		expect(diagnostics[0]?.code).toBe("flawless(padding-after-expect-assertions)");
 		expect(fixed).toContain("expect.assertions(1);\n\n\texpect(1).toBe(1);");
 	});
+	it("no-floating-point-equality reports a direct comparison", () => {
+		const { diagnostics } = runOxlint({
+			code: "export const matches = actual === 0.3;\n",
+			filename: "file.ts",
+			rule: "no-floating-point-equality",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-floating-point-equality)");
+	});
+
+	it("no-floating-point-equality follows a const binding", () => {
+		const { diagnostics } = runOxlint({
+			code: "const expected = 0.1 + 0.2;\nexport const matches = actual === expected;\n",
+			filename: "file.ts",
+			rule: "no-floating-point-equality",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+	});
+
+	it("no-floating-point-equality recognizes an imported assertion", () => {
+		const { diagnostics } = runOxlint({
+			code: 'import { expect } from "vitest";\nexpect(actual).not.toBe(0.3);\n',
+			filename: "file.ts",
+			rule: "no-floating-point-equality",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+	});
 });
