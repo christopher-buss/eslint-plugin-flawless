@@ -69,6 +69,38 @@ const valid: Array<ValidTestCase> = [
 			expect(divide(10, 2)).toBe(5);
 		});
 	`,
+	// An `expect` imported from an unrelated module is not the test global.
+	unindent`
+		import { expect } from "./helpers";
+		it("divides", () => {
+			expect.assertions(1);
+			expect(divide(10, 2)).toBe(5);
+		});
+	`,
+	// `settings.jest.globalPackage` replaces the default sources, so the
+	// built-in ones stop being recognized once it is set.
+	{
+		code: unindent`
+			import { expect } from "vitest";
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
+	// A non-string setting is ignored, but the import is still not a default
+	// source, so nothing is reported.
+	{
+		code: unindent`
+			import { expect } from "@rbxts/jest-globals";
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		settings: { jest: { globalPackage: 42 } },
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -218,6 +250,64 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+	},
+	// A bun:test import resolves to the same `expect`.
+	{
+		code: unindent`
+			import { expect } from "bun:test";
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			import { expect } from "bun:test";
+			it("divides", () => {
+				expect.assertions(1);
+
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+	},
+	// A jest re-export named by `settings.jest.globalPackage` is recognized,
+	// the way eslint-plugin-jest treats the setting.
+	{
+		code: unindent`
+			import { expect } from "@rbxts/jest-globals";
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			import { expect } from "@rbxts/jest-globals";
+			it("divides", () => {
+				expect.assertions(1);
+
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
+	// The setting leaves a global `expect` alone: it is not an import.
+	{
+		code: unindent`
+			it("divides", () => {
+				expect.assertions(1);
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			it("divides", () => {
+				expect.assertions(1);
+
+				expect(divide(10, 2)).toBe(5);
+			});
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
 	// Both statements on one line: the same-line branch adds a full blank line.
 	{

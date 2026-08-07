@@ -27,6 +27,24 @@ const valid: Array<ValidTestCase> = [
 			expect.hasAssertions();
 		});
 	`,
+	// An `expect` imported from an unrelated module is not the test global.
+	unindent`
+		import { expect } from "./helpers";
+		it("works", () => {
+			expect.hasAssertions();
+		});
+	`,
+	// `settings.jest.globalPackage` replaces the default sources, so the
+	// built-in ones stop being recognized once it is set.
+	{
+		code: unindent`
+			import { expect } from "vitest";
+			it("works", () => {
+				expect.hasAssertions();
+			});
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -78,6 +96,27 @@ const invalid: Array<InvalidTestCase> = [
 			});
 		`,
 		errors: [{ messageId }],
+	},
+	// Resolved through a bun:test import.
+	{
+		code: unindent`
+			import { expect } from "bun:test";
+			it("works", () => {
+				expect.hasAssertions();
+			});
+		`,
+		errors: [{ messageId }],
+	},
+	// Resolved through the re-export named by `settings.jest.globalPackage`.
+	{
+		code: unindent`
+			import { expect } from "@rbxts/jest-globals";
+			it("works", () => {
+				expect.hasAssertions();
+			});
+		`,
+		errors: [{ messageId }],
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
 ];
 

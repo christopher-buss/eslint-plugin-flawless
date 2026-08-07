@@ -5,6 +5,7 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { getTestGlobalSources } from "../../utils/test-globals";
 
 export const RULE_NAME = "padding-after-expect-assertions";
 
@@ -21,19 +22,21 @@ const messages = {
 /**
  * Resolves the name an identifier refers to, mirroring how eslint-plugin-jest
  * resolves test functions. An unresolved reference is a global (vitest's
- * `globals: true` / jest's injected globals); a named import from `"vitest"` or
- * `"@jest/globals"` resolves to its imported name (so aliases work); anything
+ * `globals: true` / jest's injected globals); a named import from one of the
+ * test global sources resolves to its imported name (so aliases work); anything
  * bound to a local variable, function, or parameter resolves to `null` and is
  * ignored.
  *
  * @param sourceCode - Provides the scope used to look up the binding.
  * @param identifier - The identifier to resolve.
+ * @param sources - The modules whose named exports count as test globals.
  * @returns The resolved name (`expect`/...), or `null` when the identifier is a
- *   local binding rather than a test global or a vitest/jest import.
+ *   local binding rather than a test global or a test framework import.
  */
 function resolveTestGlobalName(
 	sourceCode: Readonly<TSESLint.SourceCode>,
 	identifier: TSESTree.Identifier,
+	sources: ReadonlySet<string>,
 ): null | string {
 	const variable = findVariable(sourceCode.getScope(identifier), identifier);
 	if (variable === null) {
@@ -53,7 +56,7 @@ function resolveTestGlobalName(
 	const declaration = importDefinition.parent;
 	const source =
 		declaration.type === AST_NODE_TYPES.ImportDeclaration && declaration.source.value;
-	if (source !== "vitest" && source !== "@jest/globals") {
+	if (source === false || !sources.has(source)) {
 		return null;
 	}
 
@@ -73,18 +76,20 @@ function resolveTestGlobalName(
  * a test: `expect.assertions(n)` or `expect.hasAssertions()`.
  *
  * The `expect` object is resolved so a locally shadowed `expect` is ignored,
- * while a global or a `"vitest"` / `"@jest/globals"` import is recognized (the
+ * while a global or an import from a test global source is recognized (the
  * property access is otherwise syntactic — a non-computed `assertions` /
  * `hasAssertions`).
  *
  * @param sourceCode - Provides the scope used to resolve `expect`.
  * @param node - The expression statement to inspect.
+ * @param sources - The modules whose named exports count as test globals.
  * @returns The matched member name (`expect.assertions` / `expect.hasAssertions`)
  *   for the message, or `undefined` when the statement is not an assertion count.
  */
 function getAssertionName(
 	sourceCode: Readonly<TSESLint.SourceCode>,
 	{ expression }: TSESTree.ExpressionStatement,
+	sources: ReadonlySet<string>,
 ): string | undefined {
 	if (expression.type !== AST_NODE_TYPES.CallExpression) {
 		return undefined;
@@ -105,7 +110,7 @@ function getAssertionName(
 		return undefined;
 	}
 
-	if (resolveTestGlobalName(sourceCode, callee.object) !== "expect") {
+	if (resolveTestGlobalName(sourceCode, callee.object, sources) !== "expect") {
 		return undefined;
 	}
 
@@ -184,10 +189,15 @@ function findPaddingAnchor(
  * @returns The rule listener.
  */
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
+	let sources: ReadonlySet<string>;
+
 	return {
+		before(): void {
+			sources = getTestGlobalSources(context.settings);
+		},
 		ExpressionStatement(node: TSESTree.ExpressionStatement): void {
 			const { sourceCode } = context;
-			const name = getAssertionName(sourceCode, node);
+			const name = getAssertionName(sourceCode, node, sources);
 			if (name === undefined) {
 				return;
 			}

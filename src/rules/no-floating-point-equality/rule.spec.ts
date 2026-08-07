@@ -132,6 +132,15 @@ const valid: Array<ValidTestCase> = [
 			assert.strictEqual(actual, 0.3)
 		}
 	`,
+	// `settings.jest.globalPackage` replaces the default sources, so the
+	// built-in ones stop being recognized once it is set.
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(actual).toBe(0.3)
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -240,6 +249,14 @@ const invalid: Array<InvalidTestCase> = [
 			bunExpect(actual)["toBe"](0.3)
 		`,
 		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "@rbxts/jest-globals"
+			expect(actual).toBe(0.3)
+		`,
+		errors: [error],
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
 	{
 		code: unindent`

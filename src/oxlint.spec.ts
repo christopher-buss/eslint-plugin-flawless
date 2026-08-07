@@ -229,6 +229,28 @@ describe("oxlint integration", () => {
 		expect(diagnostics[0]?.code).toBe("flawless(padding-after-expect-assertions)");
 		expect(fixed).toContain("expect.assertions(1);\n\n\texpect(1).toBe(1);");
 	});
+	it("padding-after-expect-assertions honours settings.jest.globalPackage", () => {
+		// The jest re-export is only recognized through the setting, so this
+		// proves `context.settings` reaches the rule under oxlint's runtime.
+		const code =
+			"import { expect, it } from \"@rbxts/jest-globals\";\nit('x', () => {\n\texpect.assertions(1);\n\texpect(1).toBe(1);\n});\n";
+		const withSetting = runOxlint({
+			code,
+			filename: "file.ts",
+			rule: "padding-after-expect-assertions",
+			settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+		});
+		const withoutSetting = runOxlint({
+			code,
+			filename: "file.ts",
+			rule: "padding-after-expect-assertions",
+		});
+
+		expect(withSetting.diagnostics).toHaveLength(1);
+		expect(withSetting.fixed).toContain("expect.assertions(1);\n\n\texpect(1).toBe(1);");
+		expect(withoutSetting.diagnostics).toHaveLength(0);
+	});
+
 	it("no-floating-point-equality reports a direct comparison", () => {
 		const { diagnostics } = runOxlint({
 			code: "export const matches = actual === 0.3;\n",
