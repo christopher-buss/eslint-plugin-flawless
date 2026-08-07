@@ -20,9 +20,30 @@ the number that matches the test.
 
 `expect` is resolved the way vitest and jest test helpers are: an `expect` used
 as a global (the default with vitest's `globals: true` or jest's injected
-globals) or imported from `"vitest"` or `"@jest/globals"` is recognised, and
-aliases work. A locally-declared `expect` is ignored. The property access is
-otherwise syntactic — a non-computed `expect.hasAssertions()` call.
+globals) or imported from `"vitest"`, `"@jest/globals"`, or `"bun:test"` is
+recognised, and aliases work. A locally-declared `expect` is ignored. The
+property access is otherwise syntactic — a non-computed `expect.hasAssertions()`
+call.
+
+## Settings
+
+A project that imports the test globals from a re-export names that package with
+`settings.jest.globalPackage`, the same setting `eslint-plugin-jest` reads:
+
+```js
+export default [
+	{
+		settings: {
+			jest: { globalPackage: "@rbxts/jest-globals" },
+		},
+	},
+];
+```
+
+As in `eslint-plugin-jest`, the setting takes a single package name and
+_replaces_ the built-in sources rather than adding to them, so an `expect`
+imported from `"vitest"` is no longer recognised once it is set. A global
+`expect` stays recognised either way.
 
 ## Examples
 

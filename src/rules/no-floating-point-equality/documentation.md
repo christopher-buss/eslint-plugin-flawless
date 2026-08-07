@@ -20,7 +20,11 @@ The rule reports:
   `value < 0.3 || value > 0.3`.
 - Floating-point-sensitive `switch` case labels.
 - `toBe` assertions made through an explicitly imported `expect` from `vitest`,
-  `@jest/globals`, or `bun:test`, including `.not.toBe`.
+  `@jest/globals`, or `bun:test`, including `.not.toBe`. A project that imports
+  the test globals from a re-export names that package with
+  `settings.jest.globalPackage` (the same setting `eslint-plugin-jest` reads,
+  e.g. `{ jest: { globalPackage: "@rbxts/jest-globals" } }`). The setting takes
+  a single package name and _replaces_ the three built-in sources.
 - Node `strictEqual` and `notStrictEqual` assertions imported from `assert`,
   `assert/strict`, `node:assert`, or `node:assert/strict`. Default, namespace,
   named, and aliased imports are supported.

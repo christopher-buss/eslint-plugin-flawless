@@ -17,8 +17,28 @@ easier to scan.
 
 This rule requires a blank line after such a statement whenever another
 statement follows it. It works for both Jest and Vitest: `expect` is recognised
-as a global or when imported from `"vitest"` or `"@jest/globals"`, and a locally
-shadowed `expect` is ignored.
+as a global or when imported from `"vitest"`, `"@jest/globals"`, or
+`"bun:test"`, and a locally shadowed `expect` is ignored.
+
+## Settings
+
+A project that imports the test globals from a re-export names that package with
+`settings.jest.globalPackage`, the same setting `eslint-plugin-jest` reads:
+
+```js
+export default [
+	{
+		settings: {
+			jest: { globalPackage: "@rbxts/jest-globals" },
+		},
+	},
+];
+```
+
+As in `eslint-plugin-jest`, the setting takes a single package name and
+_replaces_ the built-in sources rather than adding to them, so an `expect`
+imported from `"vitest"` is no longer recognised once it is set. A global
+`expect` stays recognised either way.
 
 The padding rules shipped by `eslint-plugin-jest` and `@vitest/eslint-plugin`
 cannot express this. Their `padding-around-expect-groups` matches a statement by

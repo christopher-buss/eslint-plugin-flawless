@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/util
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { getTestGlobalSources } from "../../utils/test-globals";
 
 export const RULE_NAME = "no-floating-point-equality";
 
@@ -11,7 +12,6 @@ export type MessageIds = typeof MESSAGE_ID;
 export type Options = [];
 
 const ASSERT_SOURCES = new Set(["assert", "assert/strict", "node:assert", "node:assert/strict"]);
-const EXPECT_SOURCES = new Set(["@jest/globals", "bun:test", "vitest"]);
 const ASSERT_METHODS = new Set(["notStrictEqual", "strictEqual"]);
 const EQUALITY_OPERATORS = new Set(["!=", "!==", "==", "==="]);
 const CONSTANT_OPERATORS = new Set(["%", "*", "**", "+", "-", "/"]);
@@ -186,6 +186,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let constStates: Map<TSESLint.Scope.Variable, ConstState>;
 	let constNames: Set<string>;
 	let tokenSequences: WeakMap<TSESTree.Node, ReadonlyArray<string>>;
+	let expectSources: ReadonlySet<string>;
 
 	function resolveVariable(identifier: TSESTree.Identifier): null | TSESLint.Scope.Variable {
 		const cached = resolvedVariables.get(identifier);
@@ -280,7 +281,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 
 				if (
-					EXPECT_SOURCES.has(source) &&
+					expectSources.has(source) &&
 					specifier.type === AST_NODE_TYPES.ImportSpecifier &&
 					importName(specifier) === "expect"
 				) {
@@ -561,6 +562,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			constStates = new Map();
 			constNames = new Set();
 			tokenSequences = new WeakMap();
+			expectSources = getTestGlobalSources(context.settings);
 			indexConstBindings();
 			scanAssertionImports(sourceCode.ast);
 		},

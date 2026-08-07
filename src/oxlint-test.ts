@@ -32,6 +32,8 @@ export interface RunOxlintOptions {
 	readonly options?: ReadonlyArray<unknown>;
 	/** The rule key without the plugin prefix, e.g. `purity`. */
 	readonly rule: string;
+	/** Shared settings written to the generated `.oxlintrc.json`. */
+	readonly settings?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -64,12 +66,18 @@ export function ensureOxlintPluginBuilt(): void {
  * @param options - The rule, fixture, and rule options to run.
  * @returns The reported diagnostics and the `--fix` output.
  */
-export function runOxlint({ code, filename, options, rule }: RunOxlintOptions): RunOxlintResult {
+export function runOxlint({
+	code,
+	filename,
+	options,
+	rule,
+	settings,
+}: RunOxlintOptions): RunOxlintResult {
 	ensureOxlintPluginBuilt();
 
 	const directory = mkdtempSync(path.join(tmpdir(), "flawless-oxlint-"));
 	try {
-		const configPath = writeConfig(directory, rule, options);
+		const configPath = writeConfig(directory, rule, options, settings);
 		const filePath = path.join(directory, filename);
 		writeFileSync(filePath, code);
 
@@ -94,6 +102,7 @@ function writeConfig(
 	directory: string,
 	rule: string,
 	options: ReadonlyArray<unknown> | undefined,
+	settings: Readonly<Record<string, unknown>> | undefined,
 ): string {
 	const configPath = path.join(directory, ".oxlintrc.json");
 	const entry = options === undefined ? "error" : ["error", ...options];
@@ -104,6 +113,7 @@ function writeConfig(
 			jsPlugins: [builtPluginPath],
 			plugins: [],
 			rules: { [`flawless/${rule}`]: entry },
+			...(settings === undefined ? {} : { settings }),
 		}),
 	);
 	return configPath;
