@@ -1106,6 +1106,48 @@ const valid: Array<ValidTestCase> = [
 			{ format: ["PascalCase"], modifiers: ["constAsserted"], selector: "variable" },
 		],
 	},
+	// objectStyleEnumMember: members of a bare const-asserted object and members
+	// of a real enum can be configured independently
+	{
+		code: unindent`
+			const LOVE_KICK_TIMINGS = { chargeStartTime: 0.7, duration: 4 } as const;
+			enum UnitState { Idle, Attacking }
+		`,
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
+	},
+	// objectStyleEnumMember: with no config of its own it falls back to the
+	// `enumMember` config, so a pre-existing enumMember rule keeps governing
+	// object-style enum keys
+	{
+		code: unindent`
+			const Status = { Ready: "ready" } as const;
+			enum RealStatus { Ready }
+		`,
+		options: [{ format: ["StrictPascalCase"], selector: "enumMember" }],
+	},
+	// objectStyleEnumMember: `format: null` opts object-style enum keys out of
+	// the `enumMember` fallback without loosening real enum members
+	{
+		code: "const TIMINGS = { chargeStartTime: 0.7 } as const;",
+		options: [
+			{ format: null, selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
+	},
+	// objectStyleEnumMember: `satisfies` still escapes - the keys of a
+	// satisfies-wrapped object are dictated by the contextual type, so the
+	// objectStyleEnumMember format never applies to them
+	{
+		code: "interface BasePart { CanCollide: boolean } const EXPECTED_PART_PROPERTIES = { CanCollide: false } as const satisfies Partial<BasePart>;",
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["strictCamelCase"], selector: "objectLiteralProperty" },
+		],
+	},
 	// @external: skips validation for every typeProperty/typeMethod of the
 	// tagged declaration; the declaration's own name is still validated
 	{
@@ -2868,14 +2910,15 @@ const invalid: Array<InvalidTestCase> = [
 			{ format: ["camelCase"], selector: "variable" },
 		],
 	},
-	// objectStyleEnum: keys are validated as enumMembers - the message and
-	// reported type reflect that, and teach the `satisfies` escape
+	// objectStyleEnum: keys are validated as objectStyleEnumMembers, which fall
+	// back to the `enumMember` config - the message and reported type reflect
+	// the split-off selector, and teach the `satisfies` escape
 	{
 		code: "const COLORS = { red: 'red' } as const;",
 		errors: [
 			{
 				message:
-					"Enum Member name `red` must match one of the following formats: PascalCase If this is data conforming to an external shape, declare it with `satisfies` instead.",
+					"Object Style Enum Member name `red` must match one of the following formats: PascalCase If this is data conforming to an external shape, declare it with `satisfies` instead.",
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
@@ -2885,7 +2928,7 @@ const invalid: Array<InvalidTestCase> = [
 		],
 	},
 	// objectStyleEnum: nested object values are ordinary objectLiteralProperty
-	// names, not enumMembers - only the top-level `Nested` key is affected
+	// names, not enum members - only the top-level `Nested` key is affected
 	{
 		code: "const CONFIG = { nested: { red: 'red' } } as const;",
 		errors: [
@@ -2893,7 +2936,7 @@ const invalid: Array<InvalidTestCase> = [
 				data: {
 					name: "nested",
 					formats: "PascalCase",
-					type: "Enum Member",
+					type: "Object Style Enum Member",
 				},
 				messageId: "doesNotMatchFormatForeignContract",
 			},
@@ -2903,6 +2946,60 @@ const invalid: Array<InvalidTestCase> = [
 			{ format: ["PascalCase"], selector: "enumMember" },
 			{ format: ["camelCase"], selector: "objectLiteralProperty" },
 		],
+	},
+	// objectStyleEnumMember: an explicit config wins over the `enumMember`
+	// fallback for object-style enum keys
+	{
+		code: "const TIMINGS = { ChargeStartTime: 0.7 } as const;",
+		errors: [
+			{
+				data: {
+					name: "ChargeStartTime",
+					formats: "strictCamelCase",
+					type: "Object Style Enum Member",
+				},
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
+	},
+	// objectStyleEnumMember: real enum members stay on `enumMember` - a loose
+	// objectStyleEnumMember config doesn't reach them
+	{
+		code: "enum InvalidState { idle }",
+		errors: [
+			{
+				data: {
+					name: "idle",
+					formats: "StrictPascalCase",
+					type: "Enum Member",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
+	},
+	// objectStyleEnumMember: the `enumMember` fallback still reports, so
+	// pre-existing configs keep catching object-style enum keys
+	{
+		code: "const Status = { ready: 'ready' } as const;",
+		errors: [
+			{
+				data: {
+					name: "ready",
+					formats: "StrictPascalCase",
+					type: "Object Style Enum Member",
+				},
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [{ format: ["StrictPascalCase"], selector: "enumMember" }],
 	},
 	// @external: doesn't leak to sibling members - only the tagged property is
 	// skipped
@@ -3212,8 +3309,9 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		// contextual type - `as const` provides no contextual type. The key is
 		// also a top-level objectStyleEnum member, so it's validated as an
-		// enumMember (not an objectLiteralProperty) and gets the ForeignContract
-		// message variant
+		// objectStyleEnumMember (not an objectLiteralProperty) - here through
+		// the `enumMember` fallback - and gets the ForeignContract message
+		// variant
 		code: "const x = { PascalProp: 1 } as const;",
 		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: [...dictatedNameOptions, { format: ["camelCase"], selector: "enumMember" }],

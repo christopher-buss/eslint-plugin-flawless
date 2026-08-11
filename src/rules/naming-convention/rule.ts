@@ -252,17 +252,18 @@ function create(
 
 					// The keys of an object-style enum (`const X = {...} as
 					// const`) are a closed set of member names, not
-					// object-literal properties - validate them as enumMembers so
-					// a laundering rename can't sneak a foreign-shaped key past
-					// this rule; the intended escape is `satisfies` (see
-					// isObjectStyleEnumKey).
+					// object-literal properties - validate them as
+					// objectStyleEnumMembers (which fall back to `enumMember`
+					// configs) so a laundering rename can't sneak a
+					// foreign-shaped key past this rule; the intended escape is
+					// `satisfies` (see isObjectStyleEnumKey).
 					if (isObjectStyleEnumKey(node)) {
 						const enumModifiers = new Set<ModifierType>();
 						if (requiresQuoting(node.key, compilerOptions.target)) {
 							enumModifiers.add(Modifier.requiresQuotes);
 						}
 
-						validators.enumMember(node.key, enumModifiers, true);
+						validators.objectStyleEnumMember(node.key, enumModifiers, true);
 						return;
 					}
 

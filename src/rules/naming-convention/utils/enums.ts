@@ -12,23 +12,27 @@ export const Selector = {
 	parameterProperty: 16,
 	classicAccessor: 32,
 	enumMember: 64,
-	classMethod: 128,
-	objectLiteralMethod: 256,
-	typeMethod: 512,
-	classProperty: 1024,
-	objectLiteralProperty: 2048,
-	typeProperty: 4096,
-	autoAccessor: 8192,
+	// must stay above `enumMember`: object-style enum members fall back to
+	// `enumMember` configs, and the higher value makes an explicit
+	// `objectStyleEnumMember` config win the descending selector sort
+	objectStyleEnumMember: 128,
+	classMethod: 256,
+	objectLiteralMethod: 512,
+	typeMethod: 1024,
+	classProperty: 2048,
+	objectLiteralProperty: 4096,
+	typeProperty: 8192,
+	autoAccessor: 16384,
 
 	// typeLike
-	class: 16384,
-	interface: 32768,
-	typeAlias: 65536,
-	enum: 131072,
-	typeParameter: 262144,
+	class: 32768,
+	interface: 65536,
+	typeAlias: 131072,
+	enum: 262144,
+	typeParameter: 524288,
 
 	// other
-	import: 524288,
+	import: 1048576,
 } as const;
 
 export type SelectorString = keyof typeof Selector;
@@ -38,11 +42,11 @@ export const MetaSelector = {
 	/* eslint-disable no-inline-comments -- Comments improve readability here */
 	default: -1,
 	variableLike: 15, // 0 | 1 | 2 | 4 | 8
-	memberLike: 16368, // 0 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192
-	typeLike: 507904, // 0 | 16384 | 32768 | 65536 | 131072 | 262144
-	method: 896, // 0 | 128 | 256 | 512
-	property: 7168, // 0 | 1024 | 2048 | 4096
-	accessor: 8224, // 0 | 32 | 8192
+	memberLike: 32752, // 0 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384
+	typeLike: 1015808, // 0 | 32768 | 65536 | 131072 | 262144 | 524288
+	method: 1792, // 0 | 256 | 512 | 1024
+	property: 14336, // 0 | 2048 | 4096 | 8192
+	accessor: 16416, // 0 | 32 | 16384
 	/* eslint-enable no-inline-comments */
 } as const;
 

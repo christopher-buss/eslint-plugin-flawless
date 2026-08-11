@@ -29,11 +29,18 @@ export function createValidator(
 ): (node: ValidatorNode) => void {
 	// make sure the "highest priority" configs are checked first
 	const selectorType = Selector[type];
+	// `objectStyleEnumMember` is a split-off of `enumMember`: a config written
+	// for `enumMember` still governs object-style enum members, so that adding
+	// this selector didn't silently un-validate them. An explicit
+	// `objectStyleEnumMember` config carries the higher selector value and so
+	// sorts ahead of the `enumMember` fallback below.
+	const matchedSelectors =
+		type === "objectStyleEnumMember" ? selectorType | Selector.enumMember : selectorType;
 	const configs = allConfigs
 		// gather all of the applicable selectors
 		.filter((configItem) => {
 			return (
-				(configItem.selector & selectorType) !== 0 ||
+				(configItem.selector & matchedSelectors) !== 0 ||
 				configItem.selector === MetaSelector.default
 			);
 		})
