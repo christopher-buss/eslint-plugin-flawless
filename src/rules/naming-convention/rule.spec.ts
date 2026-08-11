@@ -1570,6 +1570,14 @@ const valid: Array<ValidTestCase> = [
 		code: "interface Config { PascalProp: number; other: number } declare const base: Config; const x: Config = { ...base, PascalProp: 1 };",
 		options: dictatedNameOptions,
 	},
+	{
+		// foreign-contract hint - the fix the hint teaches actually works: a
+		// mock builder that can't infer `T` from its argument gives the literal
+		// no useful contextual type until `satisfies` supplies one, and then
+		// both the method and the property names are dictated
+		code: "interface Players { ApiEndpoint: string; GetPlayerByUserId(userId: number): undefined; } declare function fromPartial<T>(mock: Partial<Record<string, unknown>>): T; const players = fromPartial<Players>({ GetPlayerByUserId(userId: number) { return undefined; }, ApiEndpoint: 'x' } satisfies Partial<Players>);",
+		options: dictatedNameOptions,
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -1878,7 +1886,7 @@ const invalid: Array<InvalidTestCase> = [
 					type: "Object Literal Property",
 				},
 				line: 3,
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -2296,7 +2304,14 @@ const invalid: Array<InvalidTestCase> = [
           'a a',
         }
       `,
-		errors: Array(13).fill({ messageId: "doesNotMatchFormat" }),
+		// the object literal's own property and method lead the list, so they
+		// carry the `satisfies` hint; its accessors and every class, interface,
+		// type and enum member below keep the base message
+		errors: [
+			{ messageId: "doesNotMatchFormatForeignContract" },
+			{ messageId: "doesNotMatchFormatForeignContract" },
+			...Array.from({ length: 11 }, () => ({ messageId: "doesNotMatchFormat" })),
+		],
 		options: [
 			{
 				format: ["snake_case"],
@@ -2436,7 +2451,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "snake_case",
 					type: "Object Literal Method",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 			{
 				data: {
@@ -2444,7 +2459,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "snake_case",
 					type: "Object Literal Method",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 			{
 				data: {
@@ -2452,7 +2467,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "snake_case",
 					type: "Object Literal Method",
 				},
-				messageId: "doesNotMatchFormat",
+				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
 		options: [
@@ -3267,25 +3282,27 @@ const invalid: Array<InvalidTestCase> = [
 		// contextual type - no contextual type means the name is the author's
 		// choice; property still validated
 		code: "const x = { PascalProp: 1 };",
-		errors: [{ messageId: "doesNotMatchFormat" }],
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
 	},
 	{
 		// contextual type - no contextual type, method
 		code: "const x = { GetThing() { return 1; } };",
-		errors: [{ messageId: "doesNotMatchFormat" }],
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
 	},
 	{
 		// contextual type - a string index signature does not dictate the
 		// specific name
 		code: "const x: Record<string, number> = { PascalProp: 1 };",
-		errors: [{ messageId: "doesNotMatchFormat" }],
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
 	},
 	{
 		// contextual type - per-property granularity: declared member skipped,
-		// index-signature-only member still validated
+		// index-signature-only member still validated. The literal already
+		// carries a `satisfies` clause, so the hint would be noise - base
+		// message
 		code: "interface Config { Declared: number; [key: string]: number } const x = { Declared: 1, NotDeclared: 2 } satisfies Config;",
 		errors: [
 			{
@@ -3303,7 +3320,7 @@ const invalid: Array<InvalidTestCase> = [
 		// contextual type - generic self-inference guard: `T` is inferred from
 		// the literal itself, so the name is still the author's choice
 		code: "declare function identity<T>(x: T): T; identity({ PascalProp: 1 });",
-		errors: [{ messageId: "doesNotMatchFormat" }],
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
 	},
 	{
@@ -3319,6 +3336,70 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		// contextual type - contextual type without the property
 		code: "const x: object = { PascalProp: 1 };",
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
+		options: dictatedNameOptions,
+	},
+	// foreign-contract hint - an object-literal method whose name no contextual
+	// type dictates is teachable: `satisfies` is the fix when the shape is
+	// externally owned. Shaped after a mock builder whose parameter type can't
+	// infer `T` from the literal
+	{
+		code: "interface Players { GetPlayerByUserId(userId: number): undefined; } declare function fromPartial<T>(mock: Partial<Record<string, unknown>>): T; const players = fromPartial<Players>({ GetPlayerByUserId(userId: number) { return undefined; } });",
+		errors: [
+			{
+				message:
+					"Object Literal Method name `GetPlayerByUserId` must match one of the following formats: strictCamelCase If this is data conforming to an external shape, declare it with `satisfies` instead.",
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["objectLiteralMethod", "objectLiteralProperty"],
+			},
+		],
+	},
+	// foreign-contract hint - the same for a plain object-literal property
+	{
+		code: "const config = { ApiEndpoint: 'x' };",
+		errors: [
+			{
+				message:
+					"Object Literal Property name `ApiEndpoint` must match one of the following formats: strictCamelCase If this is data conforming to an external shape, declare it with `satisfies` instead.",
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "objectLiteralProperty" }],
+	},
+	// foreign-contract hint - author-owned declarations keep the base message;
+	// only object-literal members can reach for `satisfies`
+	{
+		code: "class Foo { ApiEndpoint = 1; GetThing() { return 1; } }",
+		errors: [
+			{
+				data: {
+					name: "ApiEndpoint",
+					formats: "strictCamelCase",
+					type: "Class Property",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				data: {
+					name: "GetThing",
+					formats: "strictCamelCase",
+					type: "Class Method",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: ["classProperty", "classMethod"] }],
+	},
+	// foreign-contract hint - `as const satisfies` already declares
+	// conformance, so a key that contract doesn't name keeps the base message
+	// (the const assertion sits between the literal and its `satisfies` clause)
+	{
+		code: "interface Config { [key: string]: number } const x = { Known: 1 } as const satisfies Config;",
 		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: dictatedNameOptions,
 	},

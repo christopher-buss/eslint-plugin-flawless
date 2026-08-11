@@ -84,7 +84,7 @@ export function createValidator(
 	return (
 		node: ValidatorNode,
 		modifiers: Set<ModifierType> = new Set<ModifierType>(),
-		isObjectStyleEnumName = false,
+		showForeignContractHint = false,
 	): void => {
 		const originalName =
 			node.type === AST_NODE_TYPES.Identifier ||
@@ -116,10 +116,10 @@ export function createValidator(
 			name = validateUnderscore({
 				name,
 				config,
-				isObjectStyleEnumName,
 				node,
 				originalName,
 				position: "leading",
+				showForeignContractHint,
 			});
 			if (name === undefined) {
 				// fail
@@ -129,10 +129,10 @@ export function createValidator(
 			name = validateUnderscore({
 				name,
 				config,
-				isObjectStyleEnumName,
 				node,
 				originalName,
 				position: "trailing",
+				showForeignContractHint,
 			});
 			if (name === undefined) {
 				// fail
@@ -142,10 +142,10 @@ export function createValidator(
 			name = validateAffix({
 				name,
 				config,
-				isObjectStyleEnumName,
 				node,
 				originalName,
 				position: "prefix",
+				showForeignContractHint,
 			});
 			if (name === undefined) {
 				// fail
@@ -155,17 +155,17 @@ export function createValidator(
 			name = validateAffix({
 				name,
 				config,
-				isObjectStyleEnumName,
 				node,
 				originalName,
 				position: "suffix",
+				showForeignContractHint,
 			});
 			if (name === undefined) {
 				// fail
 				return;
 			}
 
-			if (!validateCustom({ name, config, isObjectStyleEnumName, node, originalName })) {
+			if (!validateCustom({ name, config, node, originalName, showForeignContractHint })) {
 				// fail
 				return;
 			}
@@ -174,10 +174,10 @@ export function createValidator(
 				!validatePredefinedFormat({
 					name,
 					config,
-					isObjectStyleEnumName,
 					modifiers,
 					node,
 					originalName,
+					showForeignContractHint,
 				})
 			) {
 				// fail
@@ -232,17 +232,17 @@ export function createValidator(
 	function validateUnderscore({
 		name,
 		config,
-		isObjectStyleEnumName,
 		node,
 		originalName,
 		position,
+		showForeignContractHint,
 	}: {
 		config: NormalizedSelector;
-		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
 		position: "leading" | "trailing";
+		showForeignContractHint: boolean;
 	}): string | undefined {
 		const option =
 			position === "leading" ? config.leadingUnderscore : config.trailingUnderscore;
@@ -300,7 +300,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: pickMessageId("unexpectedUnderscore", isObjectStyleEnumName),
+						messageId: pickMessageId("unexpectedUnderscore", showForeignContractHint),
 						node,
 					});
 					return undefined;
@@ -317,7 +317,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: pickMessageId("missingUnderscore", isObjectStyleEnumName),
+						messageId: pickMessageId("missingUnderscore", showForeignContractHint),
 						node,
 					});
 					return undefined;
@@ -333,7 +333,7 @@ export function createValidator(
 							originalName,
 							position,
 						}),
-						messageId: pickMessageId("missingUnderscore", isObjectStyleEnumName),
+						messageId: pickMessageId("missingUnderscore", showForeignContractHint),
 						node,
 					});
 					return undefined;
@@ -347,17 +347,17 @@ export function createValidator(
 	function validateAffix({
 		name,
 		config,
-		isObjectStyleEnumName,
 		node,
 		originalName,
 		position,
+		showForeignContractHint,
 	}: {
 		config: NormalizedSelector;
-		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
 		position: "prefix" | "suffix";
+		showForeignContractHint: boolean;
 	}): string | undefined {
 		const affixes = config[position];
 		if (!affixes || affixes.length === 0) {
@@ -383,7 +383,7 @@ export function createValidator(
 				originalName,
 				position,
 			}),
-			messageId: pickMessageId("missingAffix", isObjectStyleEnumName),
+			messageId: pickMessageId("missingAffix", showForeignContractHint),
 			node,
 		});
 
@@ -393,15 +393,15 @@ export function createValidator(
 	function validateCustom({
 		name,
 		config,
-		isObjectStyleEnumName,
 		node,
 		originalName,
+		showForeignContractHint,
 	}: {
 		config: NormalizedSelector;
-		isObjectStyleEnumName: boolean;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
+		showForeignContractHint: boolean;
 	}): boolean {
 		const { custom } = config;
 		if (!custom) {
@@ -422,7 +422,7 @@ export function createValidator(
 				custom,
 				originalName,
 			}),
-			messageId: pickMessageId("satisfyCustom", isObjectStyleEnumName),
+			messageId: pickMessageId("satisfyCustom", showForeignContractHint),
 			node,
 		});
 
@@ -432,17 +432,17 @@ export function createValidator(
 	function validatePredefinedFormat({
 		name,
 		config,
-		isObjectStyleEnumName,
 		modifiers,
 		node,
 		originalName,
+		showForeignContractHint,
 	}: {
 		config: NormalizedSelector;
-		isObjectStyleEnumName: boolean;
 		modifiers: Set<ModifierType>;
 		name: string;
 		node: ValidatorNode;
 		originalName: string;
+		showForeignContractHint: boolean;
 	}): boolean {
 		const formats = config.format;
 		if (!formats || formats.length === 0) {
@@ -466,7 +466,7 @@ export function createValidator(
 			}),
 			messageId: pickMessageId(
 				originalName === name ? "doesNotMatchFormat" : "doesNotMatchFormatTrimmed",
-				isObjectStyleEnumName,
+				showForeignContractHint,
 			),
 			node,
 		});
@@ -476,14 +476,13 @@ export function createValidator(
 }
 
 /**
- * Picks the `*ForeignContract` variant of a message id when the name belongs
- * to an `objectStyleEnum` - a plain object literal, not a real enum, so the
- * violation message should point at the `satisfies` escape instead of a
- * rename.
+ * Picks the `*ForeignContract` variant of a message id when the name lives on
+ * an object literal, so the violation message can point at the `satisfies`
+ * escape instead of a rename.
  *
  * @param baseMessageId - The base message id for the violation kind.
- * @param isObjectStyleEnumName - Whether the name is an objectStyleEnum
- *   container or key.
+ * @param showForeignContractHint - Whether the `satisfies` escape applies to
+ *   this name.
  * @returns The message id to report.
  */
 function pickMessageId(
@@ -494,9 +493,9 @@ function pickMessageId(
 		| "missingUnderscore"
 		| "satisfyCustom"
 		| "unexpectedUnderscore",
-	isObjectStyleEnumName: boolean,
+	showForeignContractHint: boolean,
 ): MessageIds {
-	return isObjectStyleEnumName ? `${baseMessageId}ForeignContract` : baseMessageId;
+	return showForeignContractHint ? `${baseMessageId}ForeignContract` : baseMessageId;
 }
 
 const SelectorsAllowedToHaveTypes =

@@ -86,6 +86,33 @@ Renaming the offending identifier, or reaching for `eslint-disable`, is never
 the intended fix for these cases — declaring the contract is. The sections below
 cover the escapes unique to this fork.
 
+Violation messages append a pointer to the `satisfies` escape wherever declaring
+a contract could still change the outcome — that is, on `objectStyleEnum` names
+(container and keys) and on `objectLiteralProperty` / `objectLiteralMethod`
+members. The hint is omitted where `satisfies` has nothing left to offer:
+author-owned declarations (variables, functions, classes, type members) never
+carry it, and neither does a member of a literal that already has a `satisfies`
+clause — such a member is outside the declared contract (an excess property, or
+one matched only by an index signature), so a second clause wouldn't help. A
+member whose name the contextual type _does_ declare never reports at all.
+
+```ts
+// Reported, with the hint: no contextual type dictates `GetPlayerByUserId`,
+// because `fromPartial` can't infer its shape from this argument.
+const players = fromPartial<Players>({
+	GetPlayerByUserId(userId: number): Player | undefined {
+		return cache.get(userId);
+	},
+});
+
+// The fix the hint teaches — `satisfies` names the owner of the shape:
+const players = fromPartial<Players>({
+	GetPlayerByUserId(userId: number): Player | undefined {
+		return cache.get(userId);
+	},
+} satisfies Partial<Players>);
+```
+
 ### `objectStyleEnum`
 
 A **bare** const-asserted object literal —
@@ -121,7 +148,7 @@ const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<
 ```
 
 Violation messages for `objectStyleEnum` names (container and keys) append a
-pointer to this escape.
+pointer to this escape, as do those for ordinary object-literal members.
 
 ### `objectStyleEnumMember` selector
 

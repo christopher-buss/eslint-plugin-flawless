@@ -91,11 +91,11 @@ export type ValidatorFunction = (
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,
 	modifiers?: Set<ModifierType>,
 	/**
-	 * True when this name is the container binding or a key of an
-	 * `objectStyleEnum` — an object literal, not a real enum, so a violation
-	 * message should point authors at the `satisfies` escape rather than a
-	 * rename.
+	 * True when the name lives on an object literal - an `objectStyleEnum`
+	 * container/key, or an ordinary object-literal property/method - so a
+	 * violation message should point authors at the `satisfies` escape rather
+	 * than a rename.
 	 */
-	isObjectStyleEnumName?: boolean,
+	showForeignContractHint?: boolean,
 ) => void;
 export type ParsedOptions = Record<SelectorString, ValidatorFunction>;
