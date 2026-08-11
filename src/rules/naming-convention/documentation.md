@@ -96,7 +96,7 @@ const Colors = { Blue: "blue", Red: "red" } as const;
 
 — is treated as an `objectStyleEnum`: a common alternative to TypeScript's
 `enum`. The container binding is validated by the `objectStyleEnum` selector,
-and its **top-level keys** are validated as `enumMember` (not
+and its **top-level keys** are validated as `objectStyleEnumMember` (not
 `objectLiteralProperty`) — so a camelCase-keyed lookup table can't be "fixed" by
 renaming the container to look like an enum; the keys still have to pass as enum
 members. Keys of a _nested_ object value are ordinary `objectLiteralProperty`
@@ -109,7 +109,7 @@ the object conforms to an externally-owned type, so the fix for an awkward key
 is to declare that conformance rather than rename:
 
 ```ts
-// Before — objectStyleEnum, `exec`/`spawn` must pass as enumMembers:
+// Before — objectStyleEnum, `exec`/`spawn` must pass as objectStyleEnumMembers:
 const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const;
 
 // After — `satisfies` declares the foreign contract; the object is a plain
@@ -122,6 +122,54 @@ const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<
 
 Violation messages for `objectStyleEnum` names (container and keys) append a
 pointer to this escape.
+
+### `objectStyleEnumMember` selector
+
+`objectStyleEnumMember` matches the top-level keys of a bare const-asserted
+object; `enumMember` matches the members of a real TypeScript `enum`. The two
+can be configured independently — useful in a codebase that uses real enums and
+also uses `as const` for ordinary immutable data:
+
+```ts
+const namingConventionOptions = [
+	{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+	{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+	{ format: ["StrictPascalCase"], selector: "enumMember" },
+];
+```
+
+```ts
+// Correct — data object keys follow objectStyleEnumMember:
+const LOVE_KICK_TIMINGS = { chargeStartTime: 0.7, duration: 4 } as const;
+
+// Correct — real enum members follow enumMember:
+enum UnitState {
+	Idle,
+	Attacking,
+}
+
+// Incorrect — enumMember requires StrictPascalCase:
+enum InvalidState {
+	idle,
+}
+```
+
+When no `objectStyleEnumMember` config matches, object-style enum keys fall back
+to the `enumMember` config, so an existing `enumMember` rule keeps governing
+them. To exempt them instead, configure the selector with `format: null`:
+
+```ts
+const namingConventionOptions = [
+	{ format: null, selector: "objectStyleEnumMember" },
+	{ format: ["StrictPascalCase"], selector: "enumMember" },
+];
+```
+
+The `satisfies` escape above is unaffected: a `satisfies`-wrapped object is not
+an `objectStyleEnum`, so neither `objectStyleEnumMember` nor the `enumMember`
+fallback reaches its keys. Keys named by the contextual type are skipped
+entirely; keys the contextual type does not name (for example under a
+`Record<string, T>` index signature) are validated as `objectLiteralProperty`.
 
 ### `constAsserted` modifier
 

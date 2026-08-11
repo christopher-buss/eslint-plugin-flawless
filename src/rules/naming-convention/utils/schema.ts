@@ -338,6 +338,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 				"override",
 			]),
 			...selectorSchema("enumMember", false, ["requiresQuotes"]),
+			...selectorSchema("objectStyleEnumMember", false, ["requiresQuotes"]),
 
 			...selectorSchema("typeLike", false, ["abstract", "exported", "unused"]),
 			...selectorSchema("class", false, ["abstract", "exported", "unused"]),
