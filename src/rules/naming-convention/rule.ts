@@ -36,10 +36,15 @@ export type MessageIds =
 	| "unexpectedUnderscoreForeignContract";
 
 // The `*ForeignContract` variants are reported instead of their base
-// counterpart when the name belongs to an `objectStyleEnum` - a plain object
-// literal, not a real enum. They append a pointer to the `satisfies` escape,
-// since renaming the container or a key is never the intended fix for data
-// that's meant to conform to an externally-owned shape.
+// counterpart when the name lives on an object literal - an `objectStyleEnum`
+// container/key, or an ordinary objectLiteralProperty/objectLiteralMethod.
+// They append a pointer to the `satisfies` escape, since renaming a key is
+// never the intended fix for data that's meant to conform to an
+// externally-owned shape. Members whose names are already dictated by a
+// contextual type never reach a report at all (see
+// `isDictatedByContextualType`), so the hint only shows where `satisfies`
+// would actually change the outcome. Author-owned declarations - classes,
+// functions, variables, type members - keep the base message.
 const FOREIGN_CONTRACT_HINT =
 	" If this is data conforming to an external shape, declare it with `satisfies` instead.";
 
@@ -128,12 +133,13 @@ function create(
 			| TSESTree.TSMethodSignatureNonComputedName
 			| TSESTree.TSPropertySignatureNonComputedName,
 		modifiers: Set<ModifierType>,
+		showForeignContractHint = false,
 	): void {
 		if (requiresQuoting(key, compilerOptions.target)) {
 			modifiers.add(Modifier.requiresQuotes);
 		}
 
-		validator(key, modifiers);
+		validator(key, modifiers, showForeignContractHint);
 	}
 
 	const { unusedVariables } = collectVariables(context);
@@ -268,7 +274,7 @@ function create(
 					}
 
 					const modifiers = new Set<ModifierType>([Modifier.public]);
-					handleMember(validator, node, modifiers);
+					handleMember(validator, node, modifiers, canSuggestSatisfies(node));
 				},
 				validator: validators.objectLiteralProperty,
 			},
@@ -375,7 +381,12 @@ function create(
 					modifiers.add(Modifier.async);
 				}
 
-				handleMember(validator, node, modifiers);
+				handleMember(
+					validator,
+					node,
+					modifiers,
+					node.type === AST_NODE_TYPES.Property && canSuggestSatisfies(node),
+				);
 			},
 			validator: validators.objectLiteralMethod,
 		},
@@ -1124,6 +1135,37 @@ function isObjectStyleEnumKey(node: TSESTree.PropertyNonComputedName): boolean {
 	return (
 		declarator.type === AST_NODE_TYPES.VariableDeclarator && declarator.parent.kind === "const"
 	);
+}
+
+/**
+ * Determines whether a naming violation on an object-literal member should
+ * teach the `satisfies` escape. It should when the enclosing literal doesn't
+ * already carry a `satisfies` clause - a member that violates naming *despite*
+ * such a clause isn't covered by that contract (it's an excess property, or
+ * matched only by an index signature), so repeating the suggestion would be
+ * noise. Members whose names the contextual type does dictate never reach a
+ * report at all.
+ *
+ * @param node - The non-computed object literal property or method node.
+ * @returns True if the `satisfies` hint applies to this member.
+ */
+function canSuggestSatisfies(node: TSESTree.PropertyNonComputedName): boolean {
+	const objectExpression = node.parent;
+	if (objectExpression.type !== AST_NODE_TYPES.ObjectExpression) {
+		return false;
+	}
+
+	// `{...} as const satisfies T` puts the assertion between the literal and
+	// its `satisfies` clause.
+	let current: TSESTree.Node = objectExpression.parent;
+	while (
+		current.type === AST_NODE_TYPES.TSAsExpression ||
+		current.type === AST_NODE_TYPES.TSTypeAssertion
+	) {
+		current = current.parent;
+	}
+
+	return current.type !== AST_NODE_TYPES.TSSatisfiesExpression;
 }
 
 const EXTERNAL_JSDOC_TAG_PATTERN = /@external\b/u;
