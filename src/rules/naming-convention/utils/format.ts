@@ -118,6 +118,14 @@ export const AllowedWordsFormats: ReadonlySet<PredefinedFormatType> = new Set([
  * `targetCFrame`. The rewrite is length-preserving and only ever lowercases,
  * so it cannot make a name that already passed start failing.
  *
+ * Allowed words are written in their API spelling, so they start with a
+ * capital that `strictCamelCase` lowercases. At index 0 only, the word also
+ * matches with its first character lowercased, and the whole word then folds to
+ * lowercase - `motor6DWeld` with `Motor6D` allowed becomes `motor6dWeld`. The
+ * relaxed form stays off elsewhere because there it is the only thing that
+ * keeps a missing hump boundary an error: `target` run straight on to
+ * `motor6DPart` must still fail.
+ *
  * @param name - The name being validated.
  * @param allowedWords - The words to fold into single humps, longest first.
  * @returns The name with each matched word's tail lowercased.
@@ -130,8 +138,15 @@ export function applyAllowedWords(name: string, allowedWords: ReadonlyArray<stri
 		// eslint-disable-next-line ts/no-non-null-assertion -- Controlled loop
 		const previous = index === 0 ? undefined : name[index - 1]!;
 		const atHumpBoundary = previous === undefined || !isUppercaseChar(previous);
+		// A single pass keeps the longest-first order of `allowedWords`, so a
+		// shorter relaxed word can never beat a longer exact one.
 		const word = atHumpBoundary
-			? allowedWords.find((candidate) => name.startsWith(candidate, index))
+			? allowedWords.find((candidate) => {
+					return (
+						name.startsWith(candidate, index) ||
+						(index === 0 && name.startsWith(lowercaseInitial(candidate)))
+					);
+				})
 			: undefined;
 
 		if (word === undefined) {
@@ -140,11 +155,17 @@ export function applyAllowedWords(name: string, allowedWords: ReadonlyArray<stri
 			continue;
 		}
 
-		result += word[0] + word.slice(1).toLowerCase();
+		result += name.startsWith(word, index)
+			? word.slice(0, 1) + word.slice(1).toLowerCase()
+			: word.toLowerCase();
 		index += word.length;
 	}
 
 	return result;
+}
+
+function lowercaseInitial(word: string): string {
+	return word.slice(0, 1).toLowerCase() + word.slice(1);
 }
 
 export const FormatCheckersMap: Readonly<Record<PredefinedFormatType, (name: string) => boolean>> =

@@ -1,5 +1,6 @@
 // cspell:ignore isfoo, goodfun, VanFooBar, typeparam, myfoo, syncbar
 // cspell:ignore CFrame, Cframe, cframe, CFRAME, UDim, RGBA, Rgba
+// cspell:ignore targetmotor
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 
@@ -1628,6 +1629,37 @@ const valid: Array<ValidTestCase> = [
 		code: "const targetCframe = 1;",
 		options: [{ format: ["strictCamelCase"], selector: "variable" }],
 		settings: { flawless: { namingConvention: { allowedWords: "CFrame" } } },
+	},
+	{
+		// allowedWords - the word also matches at the start of the name with its
+		// first character lowercased, which is what strictCamelCase asks for
+		code: "const motor6DWeld = 1;",
+		options: [{ allowedWords: ["Motor6D"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - a leading word that is all capitals folds whole
+		code: "const uIPadding = 1;",
+		options: [
+			{ allowedWords: ["UIPadding"], format: ["strictCamelCase"], selector: "variable" },
+		],
+	},
+	{
+		// allowedWords - the already-folded spelling keeps passing
+		code: "const motor6dWeld = 1;",
+		options: [{ allowedWords: ["Motor6D"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - the mid-name match is untouched by the leading match
+		code: "const targetMotor6DPart = 1;",
+		options: [{ allowedWords: ["Motor6D"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - StrictPascalCase already matched the API spelling at
+		// index 0, so it is unchanged
+		code: "interface Motor6DConfig { value: number }",
+		options: [
+			{ allowedWords: ["Motor6D"], format: ["StrictPascalCase"], selector: "typeLike" },
+		],
 	},
 ];
 
@@ -3554,6 +3586,20 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: [], format: ["strictCamelCase"], selector: "variable" }],
 		settings: { flawless: { namingConvention: { allowedWords: ["CFrame"] } } },
+	},
+	{
+		// allowedWords - the lowercased first character is accepted at index 0
+		// only, so a missing hump boundary mid-name still reports
+		code: "const targetmotor6DPart = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["Motor6D"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - a word still cannot split an existing hump: `Frame`
+		// sits behind the `C` of `CFrame`
+		code: "const targetCFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["Frame"], format: ["strictCamelCase"], selector: "variable" }],
 	},
 ];
 
