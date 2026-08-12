@@ -15,6 +15,7 @@ import type {
 	UnderscoreOptionString,
 	UnderscoreOptionType,
 } from "./enums";
+import type { AllowedWordIndex } from "./format";
 
 export type Context = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 
@@ -78,9 +79,9 @@ export interface NormalizedMatchRegex {
 export interface NormalizedSelector {
 	/**
 	 * Deduplicated and sorted longest-first so the longest word wins when two
-	 * overlap (`UDim2` over `UDim`).
+	 * overlap (`UDim2` over `UDim`), then bucketed by first character.
 	 */
-	allowedWords: ReadonlyArray<string> | undefined;
+	allowedWords: AllowedWordIndex | undefined;
 	custom: NormalizedMatchRegex | undefined;
 	filter: NormalizedMatchRegex | undefined;
 	/**

@@ -451,20 +451,24 @@ export function createValidator(
 
 		if (!modifiers.has(Modifier.requiresQuotes)) {
 			const { allowedWords } = config;
-			// only the strict formats reject consecutive capitals, so they are
-			// the only ones the word list applies to; computed lazily and reused
+			// the rewrite only ever lowercases, so a name that already passes
+			// cannot need it - most names never pay for the word list at all.
+			// Computed lazily and reused across formats when they do.
 			let relaxedName: string | undefined;
 
 			for (const format of formats) {
 				const checker = FormatCheckersMap[format];
-				let candidate = name;
-				if (allowedWords !== undefined && AllowedWordsFormats.has(format)) {
-					relaxedName ??= applyAllowedWords(name, allowedWords);
-					candidate = relaxedName;
+				if (checker(name)) {
+					return true;
 				}
 
-				if (checker(candidate)) {
-					return true;
+				// only the strict formats reject consecutive capitals, so they
+				// are the only ones the word list applies to
+				if (allowedWords !== undefined && AllowedWordsFormats.has(format)) {
+					relaxedName ??= applyAllowedWords(name, allowedWords);
+					if (checker(relaxedName)) {
+						return true;
+					}
 				}
 			}
 		}
