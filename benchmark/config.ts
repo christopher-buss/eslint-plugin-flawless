@@ -140,6 +140,10 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/naming-convention.tsx",
 	},
 	{
+		ruleId: "no-conditional-empty-object-spread",
+		testPath: "./cases/all/no-conditional-empty-object-spread.tsx",
+	},
+	{
 		ruleId: "no-conditional-in-test",
 		testPath: "./cases/all/no-conditional-in-test.tsx",
 	},
