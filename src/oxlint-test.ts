@@ -42,8 +42,24 @@ export interface RunOxlintOptions {
 export interface RunOxlintResult {
 	/** Diagnostics reported by the rule. */
 	readonly diagnostics: Array<OxlintDiagnostic>;
+}
+
+/**
+ * The result of linting *and* fixing a fixture with a single flawless rule.
+ */
+export interface RunOxlintFixResult extends RunOxlintResult {
 	/** File contents after `oxlint --fix`. */
 	readonly fixed: string;
+}
+
+/** A fixture directory holding a generated config and the file to lint. */
+interface OxlintFixture {
+	/** Path of the generated `.oxlintrc.json`. */
+	readonly configPath: string;
+	/** The temporary directory, used as the oxlint working directory. */
+	readonly directory: string;
+	/** Path of the fixture file. */
+	readonly filePath: string;
 }
 
 /**
@@ -60,42 +76,33 @@ export function ensureOxlintPluginBuilt(): void {
 }
 
 /**
- * Lints (and separately fixes) a fixture with one flawless rule using the real
- * oxlint binary and the built `dist/oxlint.mjs` plugin.
+ * Lints a fixture with one flawless rule using the real oxlint binary and the
+ * built `dist/oxlint.mjs` plugin. One oxlint process per call.
+ *
+ * @param options - The rule, fixture, and rule options to run.
+ * @returns The reported diagnostics.
+ */
+export function runOxlint(options: RunOxlintOptions): RunOxlintResult {
+	return withFixture(options, ({ configPath, directory, filePath }) => {
+		return { diagnostics: lint(configPath, filePath, directory) };
+	});
+}
+
+/**
+ * Lints a fixture and then fixes it in a second oxlint process. Two processes
+ * are unavoidable: `oxlint --fix` reports only the issues it could *not* fix,
+ * so the diagnostics must come from a separate lint run. Prefer
+ * {@linkcode runOxlint} when the test does not assert on the fixed output.
  *
  * @param options - The rule, fixture, and rule options to run.
  * @returns The reported diagnostics and the `--fix` output.
  */
-export function runOxlint({
-	code,
-	filename,
-	options,
-	rule,
-	settings,
-}: RunOxlintOptions): RunOxlintResult {
-	ensureOxlintPluginBuilt();
-
-	const directory = mkdtempSync(path.join(tmpdir(), "flawless-oxlint-"));
-	try {
-		const configPath = writeConfig(directory, rule, options, settings);
-		const filePath = path.join(directory, filename);
-		writeFileSync(filePath, code);
-
-		const stdout = invokeOxlint(["--config", configPath, "-f", "json", filePath], directory);
-		const parsed = JSON.parse(stdout) as {
-			diagnostics: Array<{ code: string; message: string }>;
-		};
-		const diagnostics = parsed.diagnostics
-			.filter((diagnostic) => diagnostic.code.startsWith("flawless("))
-			.map(({ code: diagnosticCode, message }) => ({ code: diagnosticCode, message }));
-
+export function runOxlintFix(options: RunOxlintOptions): RunOxlintFixResult {
+	return withFixture(options, ({ configPath, directory, filePath }) => {
+		const diagnostics = lint(configPath, filePath, directory);
 		invokeOxlint(["--config", configPath, "--fix", filePath], directory);
-		const fixed = readFileSync(filePath, "utf8");
-
-		return { diagnostics, fixed };
-	} finally {
-		rmSync(directory, { force: true, recursive: true });
-	}
+		return { diagnostics, fixed: readFileSync(filePath, "utf8") };
+	});
 }
 
 function writeConfig(
@@ -119,6 +126,24 @@ function writeConfig(
 	return configPath;
 }
 
+function withFixture<T>(
+	{ code, filename, options, rule, settings }: RunOxlintOptions,
+	run: (fixture: OxlintFixture) => T,
+): T {
+	ensureOxlintPluginBuilt();
+
+	const directory = mkdtempSync(path.join(tmpdir(), "flawless-oxlint-"));
+	try {
+		const configPath = writeConfig(directory, rule, options, settings);
+		const filePath = path.join(directory, filename);
+		writeFileSync(filePath, code);
+
+		return run({ configPath, directory, filePath });
+	} finally {
+		rmSync(directory, { force: true, recursive: true });
+	}
+}
+
 function invokeOxlint(args: Array<string>, cwd: string): string {
 	try {
 		return execFileSync(process.execPath, [oxlintBin, ...args], { cwd, encoding: "utf8" });
@@ -132,4 +157,14 @@ function invokeOxlint(args: Array<string>, cwd: string): string {
 
 		throw err;
 	}
+}
+
+function lint(configPath: string, filePath: string, cwd: string): Array<OxlintDiagnostic> {
+	const stdout = invokeOxlint(["--config", configPath, "-f", "json", filePath], cwd);
+	const parsed = JSON.parse(stdout) as {
+		diagnostics: Array<{ code: string; message: string }>;
+	};
+	return parsed.diagnostics
+		.filter((diagnostic) => diagnostic.code.startsWith("flawless("))
+		.map(({ code, message }) => ({ code, message }));
 }
