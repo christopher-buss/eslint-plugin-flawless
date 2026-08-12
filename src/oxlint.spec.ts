@@ -298,4 +298,16 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 
 		expect(diagnostics).toHaveLength(1);
 	});
+
+	it("no-conditional-empty-object-spread reports a conditional empty-object spread", () => {
+		const { diagnostics } = runOxlint({
+			code: "const options = { ...(timeout !== undefined ? { timeout } : {}) };\n",
+			filename: "file.ts",
+			rule: "no-conditional-empty-object-spread",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-conditional-empty-object-spread)");
+		expect(diagnostics[0]?.message).toContain("conditional empty-object spread");
+	});
 });
