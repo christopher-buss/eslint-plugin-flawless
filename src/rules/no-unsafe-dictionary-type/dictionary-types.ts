@@ -84,6 +84,10 @@ export function createTypeEnvironment(program: TSESTree.Program): TypeEnvironmen
 	return { aliases, interfaces, shadowedBuiltIns };
 }
 
+export function typeReferenceName(type: TSESTree.TSTypeReference): null | string {
+	return type.typeName.type === AST_NODE_TYPES.Identifier ? type.typeName.name : null;
+}
+
 export function classifyUnsafeDictionaryValue(
 	valueType: TSESTree.TypeNode,
 	environment: TypeEnvironment,
@@ -116,10 +120,6 @@ function declaredStatement(statement: TSESTree.ProgramStatement): null | TSESTre
 		statement.type === AST_NODE_TYPES.ExportDefaultDeclaration
 		? (statement.declaration ?? null)
 		: statement;
-}
-
-function typeReferenceName(type: TSESTree.TSTypeReference): null | string {
-	return type.typeName.type === AST_NODE_TYPES.Identifier ? type.typeName.name : null;
 }
 
 function isBuiltIn(name: string, environment: TypeEnvironment): boolean {

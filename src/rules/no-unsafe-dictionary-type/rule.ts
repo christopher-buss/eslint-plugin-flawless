@@ -7,6 +7,7 @@ import {
 	classifyUnsafeDictionaryValue,
 	createTypeEnvironment,
 	type TypeEnvironment,
+	typeReferenceName,
 } from "./dictionary-types";
 
 export const RULE_NAME = "no-unsafe-dictionary-type";
@@ -24,10 +25,6 @@ const messages = {
 
 function isTypeNode(node: TSESTree.Node): node is TSESTree.TypeNode {
 	return node.type.startsWith("TS") && node.type !== AST_NODE_TYPES.TSTypeAnnotation;
-}
-
-function typeReferenceName(type: TSESTree.TSTypeReference): null | string {
-	return type.typeName.type === AST_NODE_TYPES.Identifier ? type.typeName.name : null;
 }
 
 function isInsideTypeAliasDeclaration(node: TSESTree.Node): boolean {
