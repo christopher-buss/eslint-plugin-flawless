@@ -2918,7 +2918,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormatForeignContract",
+				messageId: "doesNotMatchFormat",
 			},
 			{
 				data: {
@@ -2926,7 +2926,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormatForeignContract",
+				messageId: "doesNotMatchFormat",
 			},
 		],
 		options: [
@@ -2947,7 +2947,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormatForeignContract",
+				messageId: "doesNotMatchFormat",
 			},
 		],
 		options: [
@@ -2968,7 +2968,7 @@ const invalid: Array<InvalidTestCase> = [
 					formats: "UPPER_CASE",
 					type: "Object Style Enum",
 				},
-				messageId: "doesNotMatchFormatForeignContract",
+				messageId: "doesNotMatchFormat",
 			},
 		],
 		options: [
@@ -3453,6 +3453,47 @@ const invalid: Array<InvalidTestCase> = [
 		code: "interface Config { [key: string]: number } const x = { Known: 1 } as const satisfies Config;",
 		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: dictatedNameOptions,
+	},
+	// foreign-contract hint - the objectStyleEnum *container* name is the
+	// author's own choice, never a name an external shape dictates, so it keeps
+	// the base message
+	{
+		code: "const PORTAL_TIMINGS = { closeTime: 3.5, openTime: 1.7 } as const;",
+		errors: [
+			{
+				message:
+					"Object Style Enum name `PORTAL_TIMINGS` must match one of the following formats: strictCamelCase",
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "objectStyleEnum" }],
+	},
+	// foreign-contract hint - container and key split: only the key, whose name
+	// an external shape could dictate, carries the hint
+	{
+		code: "const COLORS = { Red: 'red' } as const;",
+		errors: [
+			{
+				data: {
+					name: "COLORS",
+					formats: "strictCamelCase",
+					type: "Object Style Enum",
+				},
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				data: {
+					name: "Red",
+					formats: "strictCamelCase",
+					type: "Object Style Enum Member",
+				},
+				messageId: "doesNotMatchFormatForeignContract",
+			},
+		],
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnum" },
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+		],
 	},
 	{
 		// allowedWords - unset, so the API spelling still reports

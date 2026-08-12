@@ -106,10 +106,11 @@ export type ValidatorFunction = (
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,
 	modifiers?: Set<ModifierType>,
 	/**
-	 * True when the name lives on an object literal - an `objectStyleEnum`
-	 * container/key, or an ordinary object-literal property/method - so a
-	 * violation message should point authors at the `satisfies` escape rather
-	 * than a rename.
+	 * True when the name is a *member* of an object literal - an
+	 * `objectStyleEnum` key, or an ordinary object-literal property/method - so
+	 * a violation message should point authors at the `satisfies` escape rather
+	 * than a rename. Container bindings are excluded: no external shape
+	 * dictates the name a value is bound to.
 	 */
 	showForeignContractHint?: boolean,
 ) => void;
