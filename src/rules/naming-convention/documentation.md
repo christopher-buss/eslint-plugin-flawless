@@ -86,15 +86,17 @@ Renaming the offending identifier, or reaching for `eslint-disable`, is never
 the intended fix for these cases — declaring the contract is. The sections below
 cover the escapes unique to this fork.
 
-Violation messages append a pointer to the `satisfies` escape wherever declaring
-a contract could still change the outcome — that is, on `objectStyleEnum` names
-(container and keys) and on `objectLiteralProperty` / `objectLiteralMethod`
-members. The hint is omitted where `satisfies` has nothing left to offer:
-author-owned declarations (variables, functions, classes, type members) never
-carry it, and neither does a member of a literal that already has a `satisfies`
-clause — such a member is outside the declared contract (an excess property, or
-one matched only by an index signature), so a second clause wouldn't help. A
-member whose name the contextual type _does_ declare never reports at all.
+Violation messages append a pointer to the `satisfies` escape wherever the
+offending name could be one an external shape dictates — that is, on the
+_members_ of an object literal: `objectStyleEnumMember` keys and
+`objectLiteralProperty` / `objectLiteralMethod` members. The hint is omitted
+where `satisfies` has nothing left to offer: author-owned declarations
+(variables, functions, classes, type members, and the `objectStyleEnum`
+container binding itself — no foreign shape names a binding) never carry it, and
+neither does a member of a literal that already has a `satisfies` clause — such
+a member is outside the declared contract (an excess property, or one matched
+only by an index signature), so a second clause wouldn't help. A member whose
+name the contextual type _does_ declare never reports at all.
 
 ```ts
 // Reported, with the hint: no contextual type dictates `GetPlayerByUserId`,
@@ -147,8 +149,9 @@ const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<
 >;
 ```
 
-Violation messages for `objectStyleEnum` names (container and keys) append a
-pointer to this escape, as do those for ordinary object-literal members.
+Violation messages for object-style enum _keys_ append a pointer to this escape,
+as do those for ordinary object-literal members. A violation on the container
+binding does not: that name is the author's own, so renaming it is the fix.
 
 ### `objectStyleEnumMember` selector
 

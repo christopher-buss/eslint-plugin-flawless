@@ -36,15 +36,17 @@ export type MessageIds =
 	| "unexpectedUnderscoreForeignContract";
 
 // The `*ForeignContract` variants are reported instead of their base
-// counterpart when the name lives on an object literal - an `objectStyleEnum`
-// container/key, or an ordinary objectLiteralProperty/objectLiteralMethod.
-// They append a pointer to the `satisfies` escape, since renaming a key is
-// never the intended fix for data that's meant to conform to an
-// externally-owned shape. Members whose names are already dictated by a
+// counterpart when the violating name is a *member* of an object literal - an
+// `objectStyleEnum` key, or an ordinary objectLiteralProperty /
+// objectLiteralMethod. They append a pointer to the `satisfies` escape, since
+// renaming a key is never the intended fix for data that's meant to conform to
+// an externally-owned shape. Members whose names are already dictated by a
 // contextual type never reach a report at all (see
 // `isDictatedByContextualType`), so the hint only shows where `satisfies`
 // would actually change the outcome. Author-owned declarations - classes,
-// functions, variables, type members - keep the base message.
+// functions, variables, type members, and the `objectStyleEnum` container
+// binding itself - keep the base message: no external shape dictates those
+// names.
 const FOREIGN_CONTRACT_HINT =
 	" If this is data conforming to an external shape, declare it with `satisfies` instead.";
 
@@ -746,9 +748,13 @@ function create(
 					}
 
 					// Use the appropriate validator based on whether it's an
-					// object-style enum
+					// object-style enum. The container binding keeps the base
+					// message: the violation is the author's own choice of
+					// binding name, not a name an external shape dictates, so
+					// the `satisfies` hint would be noise - only the keys of
+					// the literal can be foreign-shaped.
 					if (isObjectStyleEnum) {
-						validators.objectStyleEnum(id, modifiers, true);
+						validators.objectStyleEnum(id, modifiers);
 					} else {
 						validator(id, modifiers);
 					}

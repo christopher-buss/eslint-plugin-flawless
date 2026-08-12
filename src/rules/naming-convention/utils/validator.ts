@@ -487,9 +487,9 @@ export function createValidator(
 }
 
 /**
- * Picks the `*ForeignContract` variant of a message id when the name lives on
- * an object literal, so the violation message can point at the `satisfies`
- * escape instead of a rename.
+ * Picks the `*ForeignContract` variant of a message id when the name is a
+ * member of an object literal, so the violation message can point at the
+ * `satisfies` escape instead of a rename.
  *
  * @param baseMessageId - The base message id for the violation kind.
  * @param showForeignContractHint - Whether the `satisfies` escape applies to
