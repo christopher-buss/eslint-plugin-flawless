@@ -59,6 +59,39 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 		},
 		type: "array",
 	},
+	typeArgumentOfConfig: {
+		additionalItems: false,
+		description:
+			"Restricts the selector to declarations written inside the explicit type arguments of a call to one of the listed functions, e.g. the `LogLevel` property in `withAttributes<{ LogLevel: Level }>(instance)`. Where `types` describes the declaration's value type, this describes where the declaration is written.",
+		items: {
+			$ref: "#/$defs/typeArgumentReferenceMatcher",
+		},
+		type: "array",
+	},
+	typeArgumentReferenceMatcher: {
+		additionalProperties: false,
+		anyOf: [
+			{ required: ["name"], type: "object" },
+			{ required: ["from"], type: "object" },
+		],
+		description:
+			"Callee matcher. The callee is resolved through TypeScript's symbol table, so a renamed import still matches. `from` on its own matches every function the module declares.",
+		properties: {
+			name: {
+				description:
+					"Name the called function is declared with. A default export matches the name written on its declaration rather than the internal `default`.",
+				minLength: 1,
+				type: "string",
+			},
+			from: {
+				description:
+					"Module specifier the called function must be declared in. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source.",
+				minLength: 1,
+				type: "string",
+			},
+		},
+		type: "object",
+	},
 	typeMatcher: {
 		oneOf: [
 			{
@@ -152,6 +185,11 @@ function selectorSchema(
 			enum: [selectorString],
 			type: "string",
 		},
+		// a syntactic-position constraint composes with every selector, so it is
+		// not gated on `allowType` the way `types` is
+		typeArgumentOf: {
+			$ref: "#/$defs/typeArgumentOfConfig",
+		},
 	};
 
 	if (modifiers && modifiers.length > 0) {
@@ -219,6 +257,9 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 					type: "string",
 				},
 				type: "array",
+			},
+			typeArgumentOf: {
+				$ref: "#/$defs/typeArgumentOfConfig",
 			},
 			types: {
 				additionalItems: false,

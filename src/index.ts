@@ -3,7 +3,11 @@ import type { Linter } from "eslint";
 import { configs } from "./configs";
 import { plugin } from "./plugin";
 
-export type { TypeMatcher, TypeReference } from "./rules/naming-convention/utils";
+export type {
+	TypeArgumentReference,
+	TypeMatcher,
+	TypeReference,
+} from "./rules/naming-convention/utils";
 
 export default {
 	...plugin,

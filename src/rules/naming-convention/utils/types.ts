@@ -43,6 +43,28 @@ export interface TypeReference {
 	returns?: TypeReference;
 }
 
+/**
+ * Object-form entry in a selector's `typeArgumentOf` array. At least one of
+ * `name` or `from` must be present (enforced by the rule schema).
+ *
+ * Where `types` describes the declaration's own *value type*, this describes
+ * the declaration's *syntactic position*: it applies only to declarations
+ * written inside the explicit type arguments of a matching call.
+ */
+export interface TypeArgumentReference {
+	/**
+	 * Name the called function is declared with. Omit to match every function
+	 * the module declares. A default export matches the name written on its
+	 * declaration, not the internal `default`.
+	 */
+	name?: string;
+	/**
+	 * Module specifier the called function must be declared in. On its own (no
+	 * `name`) it matches every function the module declares.
+	 */
+	from?: string;
+}
+
 export type TypeMatcher = TypeModifierString | TypeReference;
 
 export interface NamingSelector {
@@ -68,6 +90,11 @@ export interface NamingSelector {
 	selector: Array<IndividualAndMetaSelectorsString> | IndividualAndMetaSelectorsString;
 	suffix?: Array<string>;
 	trailingUnderscore?: UnderscoreOptionString;
+	/**
+	 * Restricts the selector to declarations written inside the explicit type
+	 * arguments of a call to one of the listed functions.
+	 */
+	typeArgumentOf?: Array<TypeArgumentReference>;
 	types?: Array<TypeMatcher>;
 }
 
@@ -101,6 +128,7 @@ export interface NormalizedSelector {
 	selector: MetaSelectorType | SelectorType;
 	suffix: Array<string> | undefined;
 	trailingUnderscore: undefined | UnderscoreOptionType;
+	typeArgumentOf: Array<TypeArgumentReference> | undefined;
 	types: Array<TypeModifierType | TypeReference> | undefined;
 }
 export type ValidatorFunction = (
