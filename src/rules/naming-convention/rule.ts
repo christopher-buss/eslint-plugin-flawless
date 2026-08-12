@@ -144,6 +144,45 @@ function create(
 		validator(key, modifiers, showForeignContractHint);
 	}
 
+	/**
+	 * Validates the string-literal keys named by a `Record<...>` key argument
+	 * or by a mapped type. Those name properties exactly as a
+	 * `TSPropertySignature` does, but produce no member node of their own, so
+	 * rewriting `interface X { EmitCount: T }` as `Record<"EmitCount", T>` used
+	 * to slip past `typeProperty` entirely.
+	 *
+	 * @param validator - The `typeProperty` validator.
+	 * @param keySource - The type node in key position.
+	 * @param valueType - The type node the keys map to; the selector's `types`
+	 *   matcher reads this rather than the key literal.
+	 * @param isReadonly - True when the named properties come out readonly.
+	 */
+	function handleLiteralKeys(
+		validator: ValidatorFunction,
+		keySource: TSESTree.TypeNode | undefined,
+		valueType: TSESTree.TypeNode | undefined,
+		isReadonly: boolean,
+	): void {
+		for (const literal of collectStringLiteralTypes(keySource)) {
+			// Skip keys of a type that's declared to mirror a foreign wire
+			// format
+			if (isExternalMember(literal, context.sourceCode)) {
+				continue;
+			}
+
+			const modifiers = new Set<ModifierType>([Modifier.public]);
+			if (isReadonly) {
+				modifiers.add(Modifier.readonly);
+			}
+
+			if (requiresQuoting(literal, compilerOptions.target)) {
+				modifiers.add(Modifier.requiresQuotes);
+			}
+
+			validator(literal, modifiers, false, valueType);
+		}
+	}
+
 	const { unusedVariables } = collectVariables(context);
 	function isUnused(name: string, initialScope: null | TSESLint.Scope.Scope): boolean {
 		let variable: null | TSESLint.Scope.Variable = null;
@@ -618,6 +657,25 @@ function create(
 			validator: validators.interface,
 		},
 
+		// A mapped type names properties just like an interface body does, so
+		// its literal keys are validated as `typeProperty` too - otherwise
+		// `{ [K in "EmitCount"]: T }` is the next bypass after `Record`.
+		"TSMappedType": {
+			handler: (node: TSESTree.TSMappedType, validator): void => {
+				// An `as` clause renames the key, so it - not the constraint -
+				// is what names the resulting properties.
+				const keySource = node.nameType ?? node.constraint;
+
+				handleLiteralKeys(
+					validator,
+					keySource,
+					node.typeAnnotation,
+					node.readonly === true || node.readonly === "+" || isWrappedInReadonly(node),
+				);
+			},
+			validator: validators.typeProperty,
+		},
+
 		// #endregion enumMember
 
 		// #region class
@@ -696,6 +754,30 @@ function create(
 				validator(node.name, modifiers);
 			},
 			validator: validators.typeParameter,
+		},
+
+		// `Record<"EmitCount", T>` declares the same property as
+		// `interface X { EmitCount: T }`, but produces no TSPropertySignature -
+		// without this handler the interface form errors while the structurally
+		// identical Record form is silently accepted. Matched by name: an alias
+		// of the built-in isn't recognized.
+		'TSTypeReference[typeName.type = "Identifier"][typeName.name = "Record"]': {
+			handler: (node: TSESTree.TSTypeReference, validator): void => {
+				const parameters = node.typeArguments?.params;
+				// Only the two-argument built-in shape; the first argument is
+				// the key position, the second the value type.
+				if (parameters?.length !== 2) {
+					return;
+				}
+
+				handleLiteralKeys(
+					validator,
+					parameters[0],
+					parameters[1],
+					isWrappedInReadonly(node),
+				);
+			},
+			validator: validators.typeProperty,
 		},
 
 		// #endregion enum
@@ -1260,6 +1342,96 @@ function isExternalMember(node: TSESTree.Node, sourceCode: TSESLint.SourceCode):
 
 	const enclosing = findEnclosingTypeDeclaration(node);
 	return enclosing !== undefined && hasExternalJsDocumentTag(enclosing, sourceCode);
+}
+
+/**
+ * Collects the inline string-literal types written in key position - a single
+ * `TSLiteralType`, or a union of them. A named union (`Record<SomeUnion, T>`)
+ * yields nothing: it holds no literal to check, and its members are validated
+ * where they're declared. Non-string literals (numeric keys) and template
+ * literal types are left alone too - neither names a fixed identifier a format
+ * could apply to.
+ *
+ * @param node - The type node in key position.
+ * @returns Every string-literal node the key position names, in source order.
+ */
+function collectStringLiteralTypes(node: TSESTree.TypeNode | undefined): Array<TSESTree.Literal> {
+	if (node === undefined) {
+		return [];
+	}
+
+	if (node.type === AST_NODE_TYPES.TSUnionType) {
+		return node.types.flatMap((inner) => collectStringLiteralTypes(inner));
+	}
+
+	if (node.type !== AST_NODE_TYPES.TSLiteralType) {
+		return [];
+	}
+
+	const { literal } = node;
+	if (literal.type !== AST_NODE_TYPES.Literal || typeof literal.value !== "string") {
+		return [];
+	}
+
+	return [literal];
+}
+
+/**
+ * Names the generic whose type arguments enclose `node` - `Partial` for the
+ * instantiation in `Partial<X>`. Covers the plain type-reference form and the
+ * heritage-clause form (`interface A extends Readonly<X> {}`), which parses to
+ * a different node type but wraps its type arguments the same way.
+ *
+ * @param node - The node owning the type-argument list.
+ * @returns The generic's name, or undefined if it isn't a plain identifier.
+ */
+function getGenericWrapperName(node: TSESTree.Node): string | undefined {
+	if (node.type === AST_NODE_TYPES.TSTypeReference) {
+		return node.typeName.type === AST_NODE_TYPES.Identifier ? node.typeName.name : undefined;
+	}
+
+	if (
+		node.type === AST_NODE_TYPES.TSInterfaceHeritage ||
+		node.type === AST_NODE_TYPES.TSClassImplements
+	) {
+		return node.expression.type === AST_NODE_TYPES.Identifier
+			? node.expression.name
+			: undefined;
+	}
+
+	return undefined;
+}
+
+const READONLY_TYPE_NAME = "Readonly";
+
+/**
+ * Walks up the chain of generic type wrappers around `node`, looking for
+ * `Readonly<...>`: the properties named by `Readonly<Partial<Record<"K", V>>>`
+ * come out readonly, so their keys carry the `readonly` modifier just as an
+ * interface's `readonly` members do. Matched by name - an alias of the built-in
+ * isn't recognized.
+ *
+ * @param node - The type node to walk up from.
+ * @returns True if a `Readonly<...>` wrapper encloses `node`.
+ */
+function isWrappedInReadonly(node: TSESTree.Node): boolean {
+	let current: TSESTree.Node = node;
+
+	while (current.parent?.type === AST_NODE_TYPES.TSTypeParameterInstantiation) {
+		const wrapper = current.parent.parent;
+		const name = getGenericWrapperName(wrapper);
+		if (name === undefined) {
+			return false;
+		}
+
+		if (name === READONLY_TYPE_NAME) {
+			return true;
+		}
+
+		current = wrapper;
+	}
+
+	return false;
 }
 
 function isValidIdentifierText(name: string, languageVersion: ScriptTarget): boolean {

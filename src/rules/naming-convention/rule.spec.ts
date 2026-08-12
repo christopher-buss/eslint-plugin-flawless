@@ -1661,6 +1661,117 @@ const valid: Array<ValidTestCase> = [
 			{ allowedWords: ["Motor6D"], format: ["StrictPascalCase"], selector: "typeLike" },
 		],
 	},
+	// literal keys - a `Record` key argument names properties, so its literals
+	// are validated as typeProperty; well-named ones pass
+	{
+		code: 'type Emitter = Record<"emitCount" | "emitDelay", number>;',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - a named union has no literal in key position; its members
+	// are validated where they are declared
+	{
+		code: unindent`
+			type EmitterKey = "EmitCount" | "EmitDelay";
+			type Emitter = Record<EmitterKey, number>;
+		`,
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - an index signature names nothing
+	{
+		code: "type Emitter = Record<string, number>;",
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - key position only: a literal in value position is a value,
+	// not a name
+	{
+		code: 'type Emitter<K extends string> = Record<K, "PascalValue">;',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - `@external` on the enclosing type alias covers the literal
+	// keys inside it, the same as it covers TSPropertySignature members
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			type Attributes = Record<"EmitCount" | "EmitDelay", number>;
+		`,
+		options: [
+			{ format: ["PascalCase"], selector: "typeAlias" },
+			{ format: ["strictCamelCase"], selector: "typeProperty" },
+		],
+	},
+	// literal keys - leadingUnderscore applies, so a trimmed key is checked on
+	// what is left
+	{
+		code: 'type Phases = Record<"_defaultPhase", number>;',
+		options: [
+			{
+				format: ["strictCamelCase"],
+				leadingUnderscore: "allowSingleOrDouble",
+				selector: "typeProperty",
+			},
+		],
+	},
+	// literal keys - a key that can't be written as an identifier carries the
+	// requiresQuotes modifier, so a config written for quoted names claims it
+	// before the strict fallback does
+	{
+		code: 'type Attributes = Record<"emit-count", number>;',
+		options: [
+			{ format: null, modifiers: ["requiresQuotes"], selector: "typeProperty" },
+			{ format: ["strictCamelCase"], selector: "typeProperty" },
+		],
+	},
+	// literal keys - `types` matches on the type of the property the key names,
+	// not on the key literal's own (always string) type
+	{
+		code: 'type Attributes = Record<"emitCount", number>;',
+		options: [
+			{ format: ["UPPER_CASE"], selector: "typeProperty", types: ["string"] },
+			{ format: ["strictCamelCase"], selector: "typeProperty" },
+		],
+	},
+	// literal keys - a bare `Record` is not readonly, so a readonly-only config
+	// leaves its keys alone
+	{
+		code: 'type Attributes = Record<"EmitCount", number>;',
+		options: [
+			{
+				format: ["strictCamelCase"],
+				modifiers: ["readonly"],
+				selector: "typeProperty",
+			},
+		],
+	},
+	// literal keys - a user-defined generic named something else is not a
+	// property-naming construct
+	{
+		code: unindent`
+			type Tagged<K extends string> = { tag: K };
+			type Attributes = Tagged<"EmitCount">;
+		`,
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - mapped types name properties the same way
+	{
+		code: 'type Emitter = { [K in "emitCount"]: number };',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - a mapped type over a named union has no literal to check
+	{
+		code: unindent`
+			type EmitterKey = "EmitCount";
+			type Emitter = { [K in EmitterKey]: number };
+		`,
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - an `as` clause renames the key, so the constraint no
+	// longer names the resulting property
+	{
+		code: 'type Emitter = { [K in "EmitCount" as "emitCount"]: number };',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -3600,6 +3711,134 @@ const invalid: Array<InvalidTestCase> = [
 		code: "const targetCFrame = 1;",
 		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["Frame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	// literal keys - one report per bad key, positioned on the literal
+	{
+		code: 'type Attributes = Record<"EmitCount", string>;',
+		errors: [
+			{
+				column: 26,
+				data: {
+					name: "EmitCount",
+					formats: "strictCamelCase",
+					type: "Type Property",
+				},
+				endColumn: 37,
+				line: 1,
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - every arm of an inline union is its own property name
+	{
+		code: 'type Attributes = Record<"EmitCount" | "EmitDelay" | "EmitRate", number>;',
+		errors: [
+			{
+				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				data: { name: "EmitDelay", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+			{
+				data: { name: "EmitRate", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - wrapping the `Record` in utility types doesn't hide it
+	{
+		code: 'type Attributes = Readonly<Partial<Record<"EmitCount", number>>>;',
+		errors: [
+			{
+				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - a `Readonly<...>` wrapper makes the named properties
+	// readonly, so a readonly-only config claims them
+	{
+		code: 'type Attributes = Readonly<Record<"EmitCount", number>>;',
+		errors: [
+			{
+				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{ format: ["strictCamelCase"], modifiers: ["readonly"], selector: "typeProperty" },
+		],
+	},
+	// literal keys - a heritage clause is reached too
+	{
+		code: 'interface Attributes extends Readonly<Record<"DisplayName", string>> {}',
+		errors: [
+			{
+				data: { name: "DisplayName", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - mapped types are the next bypass after `Record`
+	{
+		code: 'type Attributes = { [K in "EmitCount"]?: number };',
+		errors: [
+			{
+				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - an `as` clause is what names the resulting property, so it
+	// is the literal that gets checked
+	{
+		code: 'type Attributes = { [K in "emitCount" as "EmitCount"]: number };',
+		errors: [
+			{
+				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
+	},
+	// literal keys - `types` reads the type of the named property, so a
+	// string-typed config claims a key whose value type is `string`
+	{
+		code: 'type Attributes = Record<"emitCount", string>;',
+		errors: [
+			{
+				data: { name: "emitCount", formats: "UPPER_CASE", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [
+			{ format: ["UPPER_CASE"], selector: "typeProperty", types: ["string"] },
+			{ format: ["strictCamelCase"], selector: "typeProperty" },
+		],
+	},
+	// literal keys - `@external` doesn't leak past the declaration it tags
+	{
+		code: unindent`
+			/**
+			 * @external
+			 */
+			type Attributes = Record<"EmitCount", number>;
+			type Other = Record<"EmitDelay", number>;
+		`,
+		errors: [
+			{
+				data: { name: "EmitDelay", formats: "strictCamelCase", type: "Type Property" },
+				messageId: "doesNotMatchFormat",
+			},
+		],
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 ];
 

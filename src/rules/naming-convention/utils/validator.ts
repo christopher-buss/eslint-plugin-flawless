@@ -85,6 +85,7 @@ export function createValidator(
 		node: ValidatorNode,
 		modifiers: Set<ModifierType> = new Set<ModifierType>(),
 		showForeignContractHint = false,
+		typeNode: TSESTree.Node = node,
 	): void => {
 		const originalName =
 			node.type === AST_NODE_TYPES.Identifier ||
@@ -106,7 +107,7 @@ export function createValidator(
 				continue;
 			}
 
-			if (!isCorrectType(node, config, context, selectorType)) {
+			if (!isCorrectType(typeNode, config, context, selectorType)) {
 				// is not the correct type
 				continue;
 			}

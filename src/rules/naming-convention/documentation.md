@@ -250,6 +250,52 @@ interface Config {
 }
 ```
 
+## String-literal property keys
+
+`Record<"EmitCount", T>` declares the same property as
+`interface X { EmitCount: T }`, but produces no property signature for the rule
+to report on. Left unhandled, that made the rule trivial to bypass: the
+interface form errors, and the mechanical rewrite to `Record` was silently
+accepted.
+
+String literals in key position are therefore validated as `typeProperty` — the
+same selector, deliberately. A format set for interface properties means it for
+these too, and a separate selector would default to unconfigured for everyone
+who has already asked for one.
+
+```ts
+interface ParticleEmitterAttributes {
+	readonly EmitCount?: AttributeValue; // reported
+}
+
+// Reported too — structurally the same declaration:
+type ParticleEmitterAttributes = Readonly<
+	Partial<Record<"EmitCount", AttributeValue>>
+>;
+```
+
+Covered:
+
+- The **first** type argument of `Record<K, V>`, at any nesting depth
+  (`Readonly<Partial<Record<"K", V>>>`), including inside an `extends` clause.
+  Matched by name — an alias of the built-in is not recognized.
+- A mapped type's constraint (`{ [K in "EmitCount"]?: T }`), or its `as` clause
+  where it has one, since that is what names the resulting property.
+
+Not covered — none of these is a name this rule owns:
+
+- Value position: the literal in `Record<K, "PascalValue">` is a value.
+- Named unions: `Record<EmitterKey, T>` holds no literal in key position, and
+  its members are validated where they are declared.
+- Index signatures: `Record<string, T>` names nothing.
+
+From there the keys behave like any other `typeProperty`: `@external` on the
+enclosing declaration exempts them, underscore and affix trimming applies, and
+the `readonly` / `requiresQuotes` modifiers are set where they hold. `readonly`
+holds when a `Readonly<...>` wrapper or a mapped-type `readonly` modifier makes
+the named properties readonly. A selector's `types` matcher reads the type of
+the **value** the key maps to, not the key literal's own (always string) type.
+
 ## Options
 
 This rule is a fork of
