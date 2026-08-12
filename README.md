@@ -207,6 +207,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [naming-convention](src/rules/naming-convention/documentation.md)                             | Enforce naming conventions for everything across a codebase                                      |     | 💭  |
 | [no-conditional-in-test](src/rules/no-conditional-in-test/documentation.md)                   | Disallow conditional logic in tests                                                              | 🔧  |     |
 | [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                 | Disallow anonymous arrow functions as export default declarations                                | 🔧  |     |
+| [no-floating-point-equality](src/rules/no-floating-point-equality/documentation.md)           | Disallow exact equality checks involving floating-point-sensitive values                         |     |     |
 | [no-redundant-tsconfig-options](src/rules/no-redundant-tsconfig-options/documentation.md)     | Disallow tsconfig options that redundantly re-set a value already provided by an extended config | 🔧  |     |
 | [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                                      |     |     |
 | [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                                          |     |     |

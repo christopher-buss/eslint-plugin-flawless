@@ -16,7 +16,7 @@ import {
 	TypeModifierValueToKey,
 	UnderscoreOption,
 } from "./enums";
-import { FormatCheckersMap } from "./format";
+import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format";
 import { isMetaSelector, isMethodOrPropertySelector, selectorTypeToMessageString } from "./shared";
 import type { Context, NormalizedSelector, TypeReference } from "./types";
 
@@ -450,9 +450,20 @@ export function createValidator(
 		}
 
 		if (!modifiers.has(Modifier.requiresQuotes)) {
+			const { allowedWords } = config;
+			// only the strict formats reject consecutive capitals, so they are
+			// the only ones the word list applies to; computed lazily and reused
+			let relaxedName: string | undefined;
+
 			for (const format of formats) {
 				const checker = FormatCheckersMap[format];
-				if (checker(name)) {
+				let candidate = name;
+				if (allowedWords !== undefined && AllowedWordsFormats.has(format)) {
+					relaxedName ??= applyAllowedWords(name, allowedWords);
+					candidate = relaxedName;
+				}
+
+				if (checker(candidate)) {
 					return true;
 				}
 			}

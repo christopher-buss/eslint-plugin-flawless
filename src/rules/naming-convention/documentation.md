@@ -254,6 +254,66 @@ This rule is a fork of
 and accepts the same selector-based options. The extensions unique to this fork
 are documented below.
 
+### `allowedWords`
+
+`strictCamelCase` and `StrictPascalCase` reject two capitals in a row, which
+puts them at odds with platform APIs that ship their own casing. On Roblox,
+`new CFrame()` has to be stored in `targetCframe`, and the identifier stops
+matching the type it holds.
+
+`allowedWords` lists words that may keep their own casing inside a name. The
+rest of the name is still checked normally:
+
+```js
+const namingConventionOptions = [
+	{
+		allowedWords: ["CFrame", "UDim2", "UDim", "TweenInfo"],
+		format: ["strictCamelCase"],
+		selector: "variable",
+	},
+];
+```
+
+```ts
+const targetCFrame = new CFrame(); // ok
+const targetCFrameValue = 0; // ok
+const target_CFrame = 0; // still an error
+```
+
+Rather than repeat the list on every selector, declare it once in shared
+settings. Selectors inherit it unless they declare their own `allowedWords`,
+which **replaces** the shared list — so `allowedWords: []` opts a single
+selector back out:
+
+```js
+export default [
+	{
+		settings: {
+			flawless: {
+				namingConvention: { allowedWords: ["CFrame", "UDim2", "UDim"] },
+			},
+		},
+	},
+];
+```
+
+Details worth knowing:
+
+- Matching is literal and case-sensitive — `CFRAME` is not `CFrame`.
+- A word only matches at a **hump boundary**: at the start of the name, or after
+  a character that is not uppercase. A word can therefore never split an
+  existing hump — `Frame` does not match inside `fooCFrame`, which stays an
+  error.
+- Where two words overlap, the longest one wins (`UDim2` over `UDim`).
+- The word list applies to `strictCamelCase` and `StrictPascalCase` only. The
+  other formats are unaffected, so it cannot loosen `snake_case` or
+  `UPPER_CASE`.
+- It runs after prefix / suffix / underscore trimming, on the same name the
+  format check sees.
+- `strictCamelCase` still requires a lowercase first character: `CFrameGoal` is
+  an error for a variable. Write `cframeGoal` (or `cFrameGoal`) — both already
+  pass without any configuration.
+
 ### `types`
 
 Each entry in a selector's `types` array is one of:
