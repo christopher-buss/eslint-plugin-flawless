@@ -209,6 +209,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                 | Disallow anonymous arrow functions as export default declarations                                | 🔧  |     |
 | [no-floating-point-equality](src/rules/no-floating-point-equality/documentation.md)           | Disallow exact equality checks involving floating-point-sensitive values                         |     |     |
 | [no-redundant-tsconfig-options](src/rules/no-redundant-tsconfig-options/documentation.md)     | Disallow tsconfig options that redundantly re-set a value already provided by an extended config | 🔧  |     |
+| [no-shared-mocks](src/rules/no-shared-mocks/documentation.md)                                 | Disallow mocks created once and shared between tests                                             |     |     |
 | [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)         | Disallow unnecessary usage of 'useCallback'                                                      |     |     |
 | [no-unnecessary-use-memo](src/rules/no-unnecessary-use-memo/documentation.md)                 | Disallow unnecessary usage of 'useMemo'                                                          |     |     |
 | [padding-after-expect-assertions](src/rules/padding-after-expect-assertions/documentation.md) | Enforce a blank line after `expect.assertions` and `expect.hasAssertions`                        | 🔧  |     |
