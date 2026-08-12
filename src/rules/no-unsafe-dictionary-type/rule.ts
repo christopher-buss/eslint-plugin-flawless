@@ -1,0 +1,143 @@
+import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import { createFlawlessRule } from "../../util";
+import {
+	classifyUnsafeDictionary,
+	classifyUnsafeDictionaryValue,
+	createTypeEnvironment,
+	type TypeEnvironment,
+} from "./dictionary-types";
+
+export const RULE_NAME = "no-unsafe-dictionary-type";
+
+const MESSAGE_ID = "unsafeDictionary";
+
+export type MessageIds = typeof MESSAGE_ID;
+
+type Options = [];
+
+const messages = {
+	[MESSAGE_ID]:
+		"This object dictionary's direct value type is an unsafe {{value}} escape hatch. Replace it with a concrete owner/schema-derived value type and parse external data at its boundary.",
+};
+
+function isTypeNode(node: TSESTree.Node): node is TSESTree.TypeNode {
+	return node.type.startsWith("TS") && node.type !== AST_NODE_TYPES.TSTypeAnnotation;
+}
+
+function typeReferenceName(type: TSESTree.TSTypeReference): null | string {
+	return type.typeName.type === AST_NODE_TYPES.Identifier ? type.typeName.name : null;
+}
+
+function isInsideTypeAliasDeclaration(node: TSESTree.Node): boolean {
+	let current = node.parent;
+	while (current !== undefined && current.type !== AST_NODE_TYPES.Program) {
+		if (current.type === AST_NODE_TYPES.TSTypeAliasDeclaration) {
+			return true;
+		}
+
+		current = current.parent;
+	}
+
+	return false;
+}
+
+function isPlainAliasConsumerUse(node: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
+	if (
+		node.type !== AST_NODE_TYPES.TSTypeReference ||
+		(node.typeArguments?.params.length ?? 0) > 0
+	) {
+		return false;
+	}
+
+	const name = typeReferenceName(node);
+	return name !== null && environment.aliases.has(name) && !isInsideTypeAliasDeclaration(node);
+}
+
+function shouldReportType(node: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
+	if (isPlainAliasConsumerUse(node, environment)) {
+		return false;
+	}
+
+	if (classifyUnsafeDictionary(node, environment) === null) {
+		return false;
+	}
+
+	let current = node.parent;
+	while (current.type !== AST_NODE_TYPES.Program) {
+		if (isTypeNode(current) && classifyUnsafeDictionary(current, environment) !== null) {
+			return false;
+		}
+
+		current = current.parent;
+	}
+
+	return true;
+}
+
+function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
+	let environment: null | TypeEnvironment = null;
+	function reportIfUnsafe(node: TSESTree.TypeNode): void {
+		if (environment === null || !shouldReportType(node, environment)) {
+			return;
+		}
+
+		const unsafe = classifyUnsafeDictionary(node, environment);
+		if (unsafe !== null) {
+			context.report({
+				data: { value: unsafe.unsafeValue },
+				messageId: MESSAGE_ID,
+				node,
+			});
+		}
+	}
+
+	return {
+		Program(node: TSESTree.Program): void {
+			environment = createTypeEnvironment(node);
+		},
+		TSIndexSignature(node: TSESTree.TSIndexSignature): void {
+			if (
+				environment === null ||
+				node.typeAnnotation === undefined ||
+				node.parent.type === AST_NODE_TYPES.TSTypeLiteral
+			) {
+				return;
+			}
+
+			const unsafe = classifyUnsafeDictionaryValue(
+				node.typeAnnotation.typeAnnotation,
+				environment,
+			);
+			if (unsafe !== null) {
+				context.report({
+					data: { value: unsafe.unsafeValue },
+					messageId: MESSAGE_ID,
+					node,
+				});
+			}
+		},
+		TSMappedType: reportIfUnsafe,
+		TSTypeLiteral: reportIfUnsafe,
+		TSTypeReference: reportIfUnsafe,
+	};
+}
+
+export const noUnsafeDictionaryType = createFlawlessRule<Options, MessageIds>({
+	name: RULE_NAME,
+	createOnce,
+	defaultOptions: [],
+	meta: {
+		docs: {
+			description: "Disallow unsafe object dictionary value types",
+			recommended: false,
+			requiresTypeChecking: false,
+		},
+		fixable: undefined,
+		hasSuggestions: false,
+		messages,
+		schema: [],
+		type: "problem",
+	},
+});
