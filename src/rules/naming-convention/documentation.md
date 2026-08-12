@@ -321,7 +321,7 @@ Each entry in a selector's `types` array is one of:
 - a built-in type modifier: `"array"`, `"boolean"`, `"function"`, `"number"`,
   `"string"` (matched against the widened TS type, as upstream), or
 - a **type-reference matcher**: `{ from?: string, name?: string, returns?: … }`
-  with at least one of `name` / `returns` present.
+  with at least one of `name` / `from` / `returns` present.
 
 A type-reference matcher matches when the value's type resolves to a symbol
 named `name` — checked against the type's `aliasSymbol` first, then its
@@ -384,6 +384,36 @@ const namingConventionOptions = [
 	},
 ];
 ```
+
+#### Module-only matchers
+
+`from` also stands on its own. `{ from: "@rbxts/react" }` matches **every** type
+the module declares, whatever its name — one entry instead of a list that goes
+stale each time the library adds a type:
+
+```ts
+const componentNaming = [
+	{
+		format: ["StrictPascalCase"],
+		selector: "variable",
+		types: [{ from: "@rbxts/react" }],
+	},
+];
+```
+
+Two things to know before reaching for it:
+
+- **Union arms are matched individually.** A union satisfies the selector only
+  when every arm matches, so a module-only matcher does not match
+  `React.ElementType` (`string | ComponentType<P>`) — the `string` arm is
+  declared by no module. Name the union type itself instead —
+  `{ name: "ElementType", from: "@rbxts/react" }`.
+- **It is broad.** `{ from: "@rbxts/react" }` also covers `Binding`,
+  `RefObject`, `Dispatch`, and `ReactNode`. To use it as a fallback behind
+  narrower rules, put the specific matchers on a selector that already outranks
+  it — an extra `modifiers` entry, or a `filter` — because a module-only matcher
+  and a `name` + `from` matcher carry the same type weight and so do not sort
+  against each other.
 
 For sorting purposes, strict matchers (a `from` constraint at any depth,
 including inside `returns`) take priority over loose matchers (no `from`), and

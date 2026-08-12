@@ -24,13 +24,16 @@ export interface MatchRegex {
 }
 
 /**
- * Object-form entry in a selector's `types` array. At least one of `name` or
- * `returns` must be present (enforced by the rule schema).
+ * Object-form entry in a selector's `types` array. At least one of `name`,
+ * `from`, or `returns` must be present (enforced by the rule schema).
  */
 export interface TypeReference {
-	/** Symbol name the value's type must resolve to. */
+	/** Symbol name the value's type must resolve to. Omit to match any name. */
 	name?: string;
-	/** Module specifier the matched symbol must be declared in. */
+	/**
+	 * Module specifier the matched symbol must be declared in. On its own (no
+	 * `name`) it matches every type the module declares.
+	 */
 	from?: string;
 	/**
 	 * Matches callable types by return type: at least one call signature's

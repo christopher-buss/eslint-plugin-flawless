@@ -76,10 +76,10 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 		anyOf: [
 			{ required: ["name"], type: "object" },
 			{ required: ["returns"], type: "object" },
+			{ required: ["from"], type: "object" },
 		],
-		dependencies: { from: ["name"] },
 		description:
-			"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to. `returns` instead (or additionally) matches callable types by the return type of their call signatures.",
+			"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to. `from` on its own matches every type the module declares, whatever its name. `returns` instead (or additionally) matches callable types by the return type of their call signatures.",
 		properties: {
 			name: {
 				description:
@@ -89,7 +89,7 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 			},
 			from: {
 				description:
-					"Module specifier the type must originate from. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source.",
+					"Module specifier the type must originate from. Bare package name (e.g. `@rbxts/jecs`) matches `/node_modules/<from>/` in the declaration path. Path-form (starts with `.`, `/`, or a Windows drive letter) matches the declaration path with extension stripped. Omit to match any source. Supply it without `name` to match every type the module declares.",
 				minLength: 1,
 				type: "string",
 			},
