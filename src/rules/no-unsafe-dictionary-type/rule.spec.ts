@@ -20,6 +20,15 @@ const valid: Array<ValidTestCase> = [
 		type Values = Readonly<Record<string, Value>>;
 	`,
 	unindent`
+		type Marker = { optional? };
+		type Values = Record<string, Marker>;
+	`,
+	unindent`
+		type Source = Record<string, string>;
+		type Selected = Pick<Source, "name">;
+		type Remaining = Omit<Source, "name">;
+	`,
+	unindent`
 		type Result = unknown;
 		type Metadata = object;
 	`,
@@ -78,6 +87,13 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			type Unsafe = unknown;
 			type Values = Partial<Record<string, Unsafe>>;
+		`,
+		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			export type Unsafe = Record<string, unknown>;
+			declare const values: Unsafe;
 		`,
 		errors: [{ messageId }],
 	},

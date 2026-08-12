@@ -98,18 +98,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			environment = createTypeEnvironment(node);
 		},
 		TSIndexSignature(node: TSESTree.TSIndexSignature): void {
+			const valueType = node.typeAnnotation?.typeAnnotation;
 			if (
 				environment === null ||
-				node.typeAnnotation === undefined ||
+				valueType === undefined ||
 				node.parent.type === AST_NODE_TYPES.TSTypeLiteral
 			) {
 				return;
 			}
 
-			const unsafe = classifyUnsafeDictionaryValue(
-				node.typeAnnotation.typeAnnotation,
-				environment,
-			);
+			const unsafe = classifyUnsafeDictionaryValue(valueType, environment);
 			if (unsafe !== null) {
 				context.report({
 					data: { value: unsafe.unsafeValue },

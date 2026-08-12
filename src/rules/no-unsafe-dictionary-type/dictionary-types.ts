@@ -5,7 +5,6 @@ const BUILT_INS = new Set([
 	"Omit",
 	"Partial",
 	"Pick",
-	"PropertyKey",
 	"Readonly",
 	"Record",
 	"Required",
@@ -145,7 +144,7 @@ function isUnappliedReferenceTo(type: TSESTree.TypeNode, name: string): boolean 
 	return (
 		unwrapped.type === AST_NODE_TYPES.TSTypeReference &&
 		typeReferenceName(unwrapped) === name &&
-		(unwrapped.typeArguments === undefined || unwrapped.typeArguments.params.length === 0)
+		(unwrapped.typeArguments?.params.length ?? 0) === 0
 	);
 }
 
@@ -154,12 +153,12 @@ function isNeverType(type: TSESTree.TypeNode): boolean {
 }
 
 function isEffectivelyEmptyMember(member: TSESTree.TypeElement): boolean {
-	return (
-		member.type === AST_NODE_TYPES.TSPropertySignature &&
-		member.optional &&
-		member.typeAnnotation !== undefined &&
-		isNeverType(member.typeAnnotation.typeAnnotation)
-	);
+	if (member.type !== AST_NODE_TYPES.TSPropertySignature) {
+		return false;
+	}
+
+	const memberType = member.typeAnnotation?.typeAnnotation;
+	return member.optional && memberType !== undefined && isNeverType(memberType);
 }
 
 function isEffectivelyEmptyTypeLiteral(type: TSESTree.TSTypeLiteral): boolean {
@@ -207,7 +206,7 @@ function aliasSubstitution(
 	const arguments_ = type.typeArguments?.params ?? [];
 	const next = new Map(base);
 	for (const [index, parameter] of parameters.entries()) {
-		const argument = arguments_[index] ?? parameter.default;
+		const argument = arguments_[index] ?? parameter.default ?? undefined;
 		if (argument === undefined) {
 			return null;
 		}
@@ -319,15 +318,17 @@ function dictionaryValueTypes(
 
 	if (unwrapped.type === AST_NODE_TYPES.TSTypeLiteral) {
 		return unwrapped.members.flatMap((member): ReadonlyArray<ResolvedType> => {
-			return member.type === AST_NODE_TYPES.TSIndexSignature &&
-				member.typeAnnotation !== undefined
-				? [{ substitutions, type: member.typeAnnotation.typeAnnotation }]
-				: [];
+			if (member.type !== AST_NODE_TYPES.TSIndexSignature) {
+				return [];
+			}
+
+			const valueType = member.typeAnnotation?.typeAnnotation;
+			return valueType === undefined ? [] : [{ substitutions, type: valueType }];
 		});
 	}
 
 	if (unwrapped.type === AST_NODE_TYPES.TSMappedType) {
-		return unwrapped.typeAnnotation === undefined
+		return unwrapped.typeAnnotation?.type === undefined
 			? []
 			: [{ substitutions, type: unwrapped.typeAnnotation }];
 	}

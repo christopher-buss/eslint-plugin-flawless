@@ -313,7 +313,7 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 
 	it("no-unsafe-dictionary-type reports an unsafe aliased dictionary value", () => {
 		const { diagnostics } = runOxlint({
-			code: "type Dictionary<Value> = Record<string, Value>;\ntype Values = Dictionary<unknown>;\n",
+			code: "type Marker = { optional? };\ntype Safe = Record<string, Marker>;\ntype Dictionary<Value> = Record<string, Value>;\ntype Values = Dictionary<unknown>;\n",
 			filename: "file.ts",
 			rule: "no-unsafe-dictionary-type",
 		});
