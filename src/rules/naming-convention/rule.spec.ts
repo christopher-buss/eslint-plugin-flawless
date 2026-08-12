@@ -1,8 +1,12 @@
 // cspell:ignore isfoo, goodfun, VanFooBar, typeparam, myfoo, syncbar
 // cspell:ignore CFrame, Cframe, cframe, CFRAME, UDim, RGBA, Rgba
-// cspell:ignore targetmotor
+// cspell:ignore targetmotor, callees
+import tsParser from "@typescript-eslint/parser";
+
+import { Linter } from "eslint";
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
+import { expect, it } from "vitest";
 
 import { run } from "../test";
 import { namingConvention, type Options, RULE_NAME } from "./rule";
@@ -3857,6 +3861,12 @@ const fromMatchDirectory = path.resolve(
 	"../../../fixtures/naming-convention/from-match",
 );
 const fromMatchCase = path.join(fromMatchDirectory, "case.ts");
+const fromMatchParserOptions = {
+	ecmaVersion: "latest",
+	project: path.join(fromMatchDirectory, "tsconfig.json"),
+	sourceType: "module",
+	tsconfigRootDir: fromMatchDirectory,
+} as const;
 
 run({
 	name: `${RULE_NAME}/from-match`,
@@ -3894,12 +3904,7 @@ run({
 			],
 		},
 	],
-	parserOptions: {
-		ecmaVersion: "latest",
-		project: path.join(fromMatchDirectory, "tsconfig.json"),
-		sourceType: "module",
-		tsconfigRootDir: fromMatchDirectory,
-	},
+	parserOptions: fromMatchParserOptions,
 	rule: namingConvention,
 	valid: [
 		{
@@ -4007,6 +4012,386 @@ run({
 			],
 		},
 	],
+});
+
+// `typeArgumentOf` constrains a selector by *where the declaration sits*: inside
+// the explicit type arguments of a call whose callee resolves to a configured
+// function. Resolving the callee needs real module resolution, so these cases
+// reuse the `from-match` fixture project, which ships
+// `src/shared/with-attributes.ts` (default export `withAttributes`, named
+// exports `withTags` and `withMetadata`).
+const withAttributesModule = "./src/shared/with-attributes";
+
+// The canonical config: attribute names inside a `withAttributes` type argument
+// may be PascalCase, every other type property stays strictCamelCase.
+const typeArgumentOfOptions: Options = [
+	{
+		format: ["strictCamelCase", "StrictPascalCase"],
+		leadingUnderscore: "allowSingleOrDouble",
+		selector: "typeProperty",
+		typeArgumentOf: [{ name: "withAttributes", from: withAttributesModule }],
+	},
+	{ format: ["strictCamelCase"], selector: "typeProperty" },
+];
+
+run({
+	name: `${RULE_NAME}/type-argument-of`,
+	invalid: [
+		{
+			// unrelated local function of the same name: `from` points at the
+			// fixture module, so the local declaration does not match and the
+			// property falls back to strictCamelCase
+			code: unindent`
+				function withAttributes<T extends object>(instance: object): T {
+					return instance as T;
+				}
+
+				withAttributes<{ LogLevel: string }>({});
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// the identical property outside the call still reports: only the
+			// declaration inside the type argument is exempt
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+
+				type Invalid = { LogLevel: string };
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// wrong `from`: right callee name, wrong declaring module
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ name: "withAttributes", from: "./src/shared/local-thing" }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// a type argument of a *different* call is not covered by the
+			// configured callee
+			code: unindent`
+				import withAttributes, { withTags } from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+				withTags<{ LogLevel: string }>({});
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// type arguments of a *type reference* are not a call's type
+			// arguments, so the constraint does not reach them
+			code: unindent`
+				import { type Attributes } from "./src/shared/with-attributes";
+
+				type Wrapped = Attributes<{ LogLevel: string }>;
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ from: withAttributesModule }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// the documented end state: the attribute declaration passes, while
+			// the same name written as a type alias member or an object literal
+			// key still reports
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({}).LogLevel;
+
+				type Example = { LogLevel: string };
+				const example = { LogLevel: "Debug" };
+			`,
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+				{
+					data: {
+						name: "LogLevel",
+						formats: "strictCamelCase",
+						type: "Object Literal Property",
+					},
+					messageId: "doesNotMatchFormatForeignContract",
+				},
+			],
+			filename: fromMatchCase,
+			options: [
+				...typeArgumentOfOptions,
+				{ format: ["strictCamelCase"], selector: "objectLiteralProperty" },
+			],
+		},
+	],
+	parserOptions: fromMatchParserOptions,
+	rule: namingConvention,
+	valid: [
+		{
+			// direct default import
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({}).LogLevel;
+			`,
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// aliased default import - the callee is resolved through its
+			// symbol, so the local name it is bound to does not matter
+			code: unindent`
+				import attributes from "./src/shared/with-attributes";
+
+				attributes<{ LogLevel: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// named import
+			code: unindent`
+				import { withTags } from "./src/shared/with-attributes";
+
+				withTags<{ LogLevel: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ name: "withTags", from: withAttributesModule }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// aliased named import
+			code: unindent`
+				import { withTags as tagged } from "./src/shared/with-attributes";
+
+				tagged<{ LogLevel: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ name: "withTags", from: withAttributesModule }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// nested type literals: the constraint holds anywhere inside the
+			// call's explicit type arguments, at any depth
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{
+					LogLevel: string;
+					Telemetry: {
+						SampleRate: number;
+						Nested: { DeepValue: string };
+					};
+				}>({});
+			`,
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// several configured callees in one selector
+			code: unindent`
+				import withAttributes, { withMetadata } from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+				withMetadata<{ BuildId: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [
+						{ name: "withAttributes", from: withAttributesModule },
+						{ name: "withMetadata", from: withAttributesModule },
+					],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// precedence: the constrained selector outranks an otherwise
+			// equivalent unconstrained one even when it is declared *after* it
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: [
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ name: "withAttributes", from: withAttributesModule }],
+				},
+			],
+		},
+		{
+			// `new` expressions carry type arguments the same way calls do
+			code: unindent`
+				import { AttributeMap } from "./src/shared/with-attributes";
+
+				new AttributeMap<{ LogLevel: string }>({ LogLevel: "Debug" });
+			`,
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ name: "AttributeMap", from: withAttributesModule }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+		{
+			// a `Record` key inside the type argument declares a property just
+			// as a type literal does, and is covered the same way
+			code: unindent`
+				import withAttributes from "./src/shared/with-attributes";
+
+				withAttributes<Record<"LogLevel", string>>({});
+			`,
+			filename: fromMatchCase,
+			options: typeArgumentOfOptions,
+		},
+		{
+			// `from` on its own matches every callee the module declares
+			code: unindent`
+				import withAttributes, { withTags } from "./src/shared/with-attributes";
+
+				withAttributes<{ LogLevel: string }>({});
+				withTags<{ BuildId: string }>({});
+			`,
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["StrictPascalCase"],
+					selector: "typeProperty",
+					typeArgumentOf: [{ from: withAttributesModule }],
+				},
+				{ format: ["strictCamelCase"], selector: "typeProperty" },
+			],
+		},
+	],
+});
+
+/**
+ * Schema coverage: an unusable option is rejected at config load rather than
+ * silently ignored. `Linter#verify` throws when rule options fail the schema, so
+ * a config that throws is a rejected config. The parser is wired up (without a
+ * `project`) so that an accepted config gets far enough to run the rule.
+ *
+ * @param option - The rule option to validate.
+ */
+function verifyWithOptions(option: unknown): void {
+	new Linter().verify("const example = 1;", {
+		languageOptions: { parser: tsParser },
+		plugins: { flawless: { rules: { [RULE_NAME]: namingConvention } } },
+		rules: { [`flawless/${RULE_NAME}`]: ["error", option] },
+	} as unknown as Linter.Config);
+}
+
+it.each([
+	[
+		"neither name nor from",
+		{ format: ["camelCase"], selector: "typeProperty", typeArgumentOf: [{}] },
+	],
+	[
+		"unknown property",
+		{
+			format: ["camelCase"],
+			selector: "typeProperty",
+			typeArgumentOf: [{ name: "withAttributes", returns: { name: "X" } }],
+		},
+	],
+	[
+		"not an array",
+		{
+			format: ["camelCase"],
+			selector: "typeProperty",
+			typeArgumentOf: { name: "withAttributes" },
+		},
+	],
+	[
+		"empty name",
+		{ format: ["camelCase"], selector: "typeProperty", typeArgumentOf: [{ name: "" }] },
+	],
+])("rejects a `typeArgumentOf` config with %s", (_label, option) => {
+	expect(() => {
+		verifyWithOptions(option);
+	}).toThrow();
+});
+
+it.each([
+	["name only", [{ name: "withAttributes" }]],
+	["from only", [{ from: "./src/shared/with-attributes" }]],
+	["name and from", [{ name: "withAttributes", from: "./src/shared/with-attributes" }]],
+])("accepts a `typeArgumentOf` config with %s", (_label, typeArgumentOf) => {
+	expect(() => {
+		verifyWithOptions({ format: ["camelCase"], selector: "typeProperty", typeArgumentOf });
+	}).not.toThrow();
 });
 
 // ruleTester.run('naming-convention', rule, {

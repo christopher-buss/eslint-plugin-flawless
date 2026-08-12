@@ -4,6 +4,8 @@ import {
 	Modifier,
 	PredefinedFormat,
 	Selector,
+	TYPE_ARGUMENT_LOOSE_WEIGHT,
+	TYPE_ARGUMENT_STRICT_WEIGHT,
 	TYPE_REFERENCE_LOOSE_WEIGHT,
 	TYPE_REFERENCE_STRICT_WEIGHT,
 	TypeModifier,
@@ -121,6 +123,15 @@ function normalizeOption(
 		}
 	}
 
+	if (option.typeArgumentOf) {
+		for (const reference of option.typeArgumentOf) {
+			weight |=
+				reference.from !== undefined
+					? TYPE_ARGUMENT_STRICT_WEIGHT
+					: TYPE_ARGUMENT_LOOSE_WEIGHT;
+		}
+	}
+
 	// give selectors with a filter the _highest_ priority
 	if (option.filter !== undefined) {
 		weight |= 1 << 30;
@@ -167,6 +178,7 @@ function normalizeOption(
 			option.trailingUnderscore !== undefined
 				? UnderscoreOption[option.trailingUnderscore]
 				: undefined,
+		typeArgumentOf: option.typeArgumentOf ?? undefined,
 		types:
 			option.types?.map((type) => (typeof type === "string" ? TypeModifier[type] : type)) ??
 			undefined,

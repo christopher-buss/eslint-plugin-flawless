@@ -7,6 +7,7 @@ export { selectorTypeToMessageString } from "./shared";
 export type {
 	Context,
 	NamingSelector,
+	TypeArgumentReference,
 	TypeMatcher,
 	TypeReference,
 	ValidatorFunction,

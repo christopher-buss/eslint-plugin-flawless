@@ -475,6 +475,104 @@ both take priority over the built-in type modifiers.
 The `TypeMatcher` and `TypeReference` types are exported from the package root
 so consumers can strongly type their config.
 
+### `typeArgumentOf`
+
+Some names are not the author's choice: they are keys of a shape handed to a
+helper, and the helper's contract - not the codebase's casing rules - decides
+how they are spelled. On Roblox, instance attributes are PascalCase, so a helper
+that declares them takes a PascalCase type literal:
+
+```ts
+const logLevel = withAttributes<{ LogLevel: Level }>(Workspace).LogLevel;
+```
+
+`typeArgumentOf` restricts a selector to declarations written inside the
+**explicit type arguments** of a call to one of the listed functions. Where
+`types` describes the declaration's _value type_, `typeArgumentOf` describes
+_where the declaration is written_ - the two never overlap, so a selector's
+behaviour stays readable:
+
+```js
+const namingConventionOptions = [
+	{
+		format: ["strictCamelCase", "StrictPascalCase"],
+		leadingUnderscore: "allowSingleOrDouble",
+		selector: "typeProperty",
+		typeArgumentOf: [
+			{
+				name: "withAttributes",
+				from: "./src/shared/modules/utilities/roblox/with-attributes",
+			},
+		],
+	},
+	{ format: ["strictCamelCase"], selector: "typeProperty" },
+];
+```
+
+Examples of **correct** code with that config:
+
+```ts
+import withAttributes from "./src/shared/modules/utilities/roblox/with-attributes";
+
+const logLevel = withAttributes<{ LogLevel: Level }>(Workspace).LogLevel;
+
+// nesting is unrestricted - the constraint holds anywhere inside the call's
+// type arguments
+withAttributes<{
+	LogLevel: Level;
+	Telemetry: { SampleRate: number };
+}>(Workspace);
+```
+
+Examples of **incorrect** code with that config:
+
+```ts
+// outside the call, the ordinary `typeProperty` rule applies
+interface Example {
+	LogLevel: Level;
+}
+
+// a local function of the same name does not match: `from` pins the module the
+// callee is declared in
+function withAttributes<T extends object>(instance: object): T {
+	return instance as T;
+}
+
+withAttributes<{ LogLevel: Level }>(Workspace);
+```
+
+Each entry takes `name`, `from`, or both:
+
+- `name` is the name the called function is **declared** with. The callee is
+  resolved through TypeScript's symbol table rather than compared textually, so
+  a renamed import (`import attributes from "./with-attributes"`) still matches,
+  and an unrelated local function of the same name does not. Default exports
+  match the name written on the declaration -
+  `export default function withAttributes() {}` is configured as
+  `withAttributes`, not as `default`.
+- `from` uses the same semantics as the `types` matcher above: a bare package
+  specifier matches `/node_modules/<from>/` in the declaration's path, a
+  path-form specifier matches the declaration path with `.ts` / `.tsx` / `.d.ts`
+  stripped. On its own it matches every function the module declares.
+
+Details worth knowing:
+
+- Only **explicit** type arguments count. An inferred type argument has no
+  syntax to sit inside, and type arguments written on a type reference
+  (`Attributes<{ LogLevel: Level }>`) are not a call.
+- Type arguments of `new` expressions are matched the same way as call
+  expressions.
+- The constraint applies to every selector, not only `typeProperty`: it is a
+  question about position, so it composes with whatever the type argument
+  happens to declare.
+- A constrained selector **outranks** an otherwise equivalent unconstrained one,
+  whichever order they are declared in, and outranks `types` matchers too - it
+  narrows to one call site rather than to a type. A `from` constraint sorts
+  ahead of a `name`-only one.
+
+The `TypeArgumentReference` type is exported from the package root alongside
+`TypeMatcher` and `TypeReference`.
+
 ## Further Reading
 
 (Optional: Links to relevant roblox-ts documentation, GitHub issues, or related
