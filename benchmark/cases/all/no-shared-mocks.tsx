@@ -1,0 +1,43 @@
+// Coarse benchmark fixture for flawless/no-shared-mocks.
+// Each mock is created once at module scope and asserted on from a test, so
+// the rule reports on every one.
+const mock0 = jest.fn();
+it("t0", () => { expect(mock0).toHaveBeenCalledOnce(); });
+const mock1 = jest.fn();
+it("t1", () => { expect(mock1).toHaveBeenCalledOnce(); });
+const mock2 = jest.fn();
+it("t2", () => { expect(mock2).toHaveBeenCalledOnce(); });
+const mock3 = jest.fn();
+it("t3", () => { expect(mock3).toHaveBeenCalledOnce(); });
+const mock4 = jest.fn();
+it("t4", () => { expect(mock4).toHaveBeenCalledOnce(); });
+const mock5 = jest.fn();
+it("t5", () => { expect(mock5).toHaveBeenCalledOnce(); });
+const mock6 = jest.fn();
+it("t6", () => { expect(mock6).toHaveBeenCalledOnce(); });
+const mock7 = jest.fn();
+it("t7", () => { expect(mock7).toHaveBeenCalledOnce(); });
+const mock8 = jest.fn();
+it("t8", () => { expect(mock8).toHaveBeenCalledOnce(); });
+const mock9 = jest.fn();
+it("t9", () => { expect(mock9).toHaveBeenCalledOnce(); });
+const mock10 = jest.fn();
+it("t10", () => { expect(mock10).toHaveBeenCalledOnce(); });
+const mock11 = jest.fn();
+it("t11", () => { expect(mock11).toHaveBeenCalledOnce(); });
+const mock12 = jest.fn();
+it("t12", () => { expect(mock12).toHaveBeenCalledOnce(); });
+const mock13 = jest.fn();
+it("t13", () => { expect(mock13).toHaveBeenCalledOnce(); });
+const mock14 = jest.fn();
+it("t14", () => { expect(mock14).toHaveBeenCalledOnce(); });
+const mock15 = jest.fn();
+it("t15", () => { expect(mock15).toHaveBeenCalledOnce(); });
+const mock16 = jest.fn();
+it("t16", () => { expect(mock16).toHaveBeenCalledOnce(); });
+const mock17 = jest.fn();
+it("t17", () => { expect(mock17).toHaveBeenCalledOnce(); });
+const mock18 = jest.fn();
+it("t18", () => { expect(mock18).toHaveBeenCalledOnce(); });
+const mock19 = jest.fn();
+it("t19", () => { expect(mock19).toHaveBeenCalledOnce(); });

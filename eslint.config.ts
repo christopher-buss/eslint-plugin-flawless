@@ -86,6 +86,14 @@ export default isentinel(
 		},
 	},
 	{
+		// The documentation intentionally shows the module-scope mocks this rule
+		// reports, and the allowed `jest.mock` sample is one of them by design.
+		files: ["src/rules/no-shared-mocks/documentation.md/**"],
+		rules: {
+			"flawless/no-shared-mocks": "off",
+		},
+	},
+	{
 		// The samples use the `in` operator to show the narrowing idiom the
 		// assertion exemption exists for, and no-property-in-node is typed, so
 		// it throws on a markdown fence (which is outside the tsconfig project).

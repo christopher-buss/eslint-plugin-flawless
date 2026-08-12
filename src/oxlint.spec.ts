@@ -2,8 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { ensureOxlintPluginBuilt, runOxlint, runOxlintFix } from "./oxlint-test";
 
-// Integration tests: each of the 12 dual-runtime rules is run through the real
-// oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
+// Integration tests: the dual-runtime rules are run through the real oxlint
+// binary loading the built `dist/oxlint.mjs` plugin, proving the
 // `createOnce` bridge works end-to-end (diagnostics, `{{data}}` interpolation,
 // options, and fixes). Rule *semantics* are covered exhaustively by the ESLint
 // `RuleTester` specs; this suite verifies the oxlint runtime path per rule.
@@ -197,6 +197,20 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		// resolves under oxlint's runtime too.
 		expect(fixed).toContain("const file = () => 1");
 		expect(fixed).toContain("export default file");
+	});
+
+	it("no-shared-mocks reports a shared mock but not a module mock factory's", () => {
+		// Both halves lean on scope-manager references under oxlint's runtime:
+		// `shared` is observed from a test, `plumbing` only from the factory.
+		const { diagnostics } = runOxlint({
+			code: 'const shared = jest.fn();\nconst plumbing = jest.fn();\njest.mock("./m", () => ({ run: plumbing }));\nit("t", () => { expect(shared).toHaveBeenCalled(); });\n',
+			filename: "file.ts",
+			rule: "no-shared-mocks",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-shared-mocks)");
+		expect(diagnostics[0]?.message).toContain("'shared'");
 	});
 
 	it("no-unnecessary-use-memo reports an empty-deps useMemo", () => {
