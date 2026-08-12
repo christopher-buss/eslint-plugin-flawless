@@ -538,7 +538,11 @@ function symbolMatchesTypeReference(
 	symbol: ts.Symbol | undefined,
 	reference: TypeReference,
 ): boolean {
-	if (symbol === undefined || reference.name === undefined || symbol.name !== reference.name) {
+	if (symbol === undefined) {
+		return false;
+	}
+
+	if (reference.name !== undefined && symbol.name !== reference.name) {
 		return false;
 	}
 
@@ -561,7 +565,7 @@ function symbolMatchesTypeReference(
 	return false;
 }
 
-function matchesNamedTypeReference(type: ts.Type, reference: TypeReference): boolean {
+function matchesSymbolTypeReference(type: ts.Type, reference: TypeReference): boolean {
 	if (isAnyType(type)) {
 		return false;
 	}
@@ -576,7 +580,7 @@ function matchesNamedTypeReference(type: ts.Type, reference: TypeReference): boo
 
 	if (type.isIntersection() || type.isUnion()) {
 		for (const inner of type.types) {
-			if (matchesNamedTypeReference(inner, reference)) {
+			if (matchesSymbolTypeReference(inner, reference)) {
 				return true;
 			}
 		}
@@ -613,12 +617,21 @@ function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean 
 	}
 
 	// an empty matcher would match every type; the schema requires at least one
-	// of `name` / `returns`, so treat it as a non-match defensively
-	if (reference.name === undefined && reference.returns === undefined) {
+	// of `name` / `from` / `returns`, so treat it as a non-match defensively
+	if (
+		reference.name === undefined &&
+		reference.from === undefined &&
+		reference.returns === undefined
+	) {
 		return false;
 	}
 
-	if (reference.name !== undefined && !matchesNamedTypeReference(type, reference)) {
+	// `from` on its own matches every type the module declares, so the symbol
+	// lookup runs whenever either constraint is present
+	if (
+		(reference.name !== undefined || reference.from !== undefined) &&
+		!matchesSymbolTypeReference(type, reference)
+	) {
 		return false;
 	}
 

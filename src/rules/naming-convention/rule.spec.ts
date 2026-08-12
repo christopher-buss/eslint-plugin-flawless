@@ -3551,6 +3551,22 @@ run({
 				},
 			],
 		},
+		{
+			// module-only matcher (`from` without `name`): every type declared by
+			// the package carries the format, so a camelCase const typed by
+			// `fake-pkg` Widget reports
+			code: 'import { widget } from "fake-pkg"; const myWidget = widget();',
+			errors: [{ messageId: "doesNotMatchFormat" }],
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["PascalCase"],
+					modifiers: ["const"],
+					selector: "variable",
+					types: [{ from: "fake-pkg" }],
+				},
+			],
+		},
 	],
 	parserOptions: {
 		ecmaVersion: "latest",
@@ -3599,6 +3615,67 @@ run({
 					modifiers: ["const"],
 					selector: "variable",
 					types: [{ name: "Entity", from: "some-other-pkg" }],
+				},
+				{ format: ["camelCase"], selector: "variable" },
+			],
+		},
+		{
+			// module-only matcher (`from` without `name`): matches any type the
+			// package declares, so both `Entity` and `Widget` values pass under
+			// PascalCase without naming either type
+			code: 'import { component, widget } from "fake-pkg"; const Health = component(); const Panel = widget();',
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["PascalCase"],
+					modifiers: ["const"],
+					selector: "variable",
+					types: [{ from: "fake-pkg" }],
+				},
+			],
+		},
+		{
+			// module-only matcher - a type declared elsewhere is not matched, so
+			// the camelCase fallback applies
+			code: 'import { makeLocal } from "./src/shared/local-thing"; const localValue = makeLocal();',
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["PascalCase"],
+					modifiers: ["const"],
+					selector: "variable",
+					types: [{ from: "fake-pkg" }],
+				},
+				{ format: ["camelCase"], selector: "variable" },
+			],
+		},
+		{
+			// module-only matcher - union arms are matched individually, so a
+			// `string | Widget` union does not match: the `string` arm has no
+			// symbol declared by the package
+			code: 'import { mixed } from "fake-pkg"; const mixedValue = mixed();',
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["PascalCase"],
+					modifiers: ["const"],
+					selector: "variable",
+					types: [{ from: "fake-pkg" }],
+				},
+				{ format: ["camelCase"], selector: "variable" },
+			],
+		},
+		{
+			// module-only matcher nested inside `returns`: an anonymous function
+			// type matches when its return type is declared by the package
+			code: 'import type { Widget } from "fake-pkg"; const Factory = () => ({}) as Widget;',
+			filename: fromMatchCase,
+			options: [
+				{
+					format: ["PascalCase"],
+					modifiers: ["const"],
+					selector: "variable",
+					types: [{ returns: { from: "fake-pkg" } }],
 				},
 				{ format: ["camelCase"], selector: "variable" },
 			],
