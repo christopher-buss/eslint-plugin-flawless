@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { ensureOxlintPluginBuilt, runOxlint } from "./oxlint-test";
+import { ensureOxlintPluginBuilt, runOxlint, runOxlintFix } from "./oxlint-test";
 
 // Integration tests: each of the 12 dual-runtime rules is run through the real
 // oxlint binary loading the built `dist/oxlint.mjs` plugin, proving the
@@ -12,9 +12,12 @@ beforeAll(() => {
 	ensureOxlintPluginBuilt();
 }, 120_000);
 
-describe("oxlint integration", () => {
+// Every case starts at least one oxlint process (`runOxlintFix` starts two),
+// and process start-up on the Windows CI runner is slow enough to blow the 5s
+// default timeout. Keep cases on `runOxlint` unless they assert on the fix.
+describe("oxlint integration", { timeout: 30_000 }, () => {
 	it("arrow-return-style reports and fixes a collapsible block", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "const foo = () => {\n\treturn 'foo';\n};\n",
 			filename: "file.ts",
 			rule: "arrow-return-style",
@@ -28,7 +31,7 @@ describe("oxlint integration", () => {
 	it("arrow-return-style consults the oxfmt worker under oxlint", () => {
 		// 81 chars > maxLen 80 forces the synckit + oxfmt boundary consult
 		// before the explicit conversion is reported.
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "const exactly81chars = () => 'this string makes the line exactly eighty-one char'\n",
 			filename: "file.ts",
 			rule: "arrow-return-style",
@@ -40,7 +43,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("jsx-shorthand-boolean reports and fixes", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "export const A = () => <Foo disabled />;\n",
 			filename: "file.tsx",
 			rule: "jsx-shorthand-boolean",
@@ -63,7 +66,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("jsx-shorthand-fragment reports and fixes a named fragment", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "export const F = () => <Fragment><Foo /></Fragment>;\n",
 			filename: "file.tsx",
 			rule: "jsx-shorthand-fragment",
@@ -75,7 +78,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("react-namespace reports and fixes a runtime namespace access", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: 'import React from "react";\nReact.useEffect();\n',
 			filename: "file.tsx",
 			rule: "react-namespace",
@@ -89,7 +92,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("react-namespace reports and fixes a bare named type import", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: 'import type { ReactNode } from "react";\nlet x: ReactNode;\n',
 			filename: "file.tsx",
 			rule: "react-namespace",
@@ -182,7 +185,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("no-export-default-arrow reports and fixes an anonymous default export", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "export default () => 1;\n",
 			filename: "file.ts",
 			rule: "no-export-default-arrow",
@@ -219,7 +222,7 @@ describe("oxlint integration", () => {
 	});
 
 	it("padding-after-expect-assertions reports and fixes a missing blank line", () => {
-		const { diagnostics, fixed } = runOxlint({
+		const { diagnostics, fixed } = runOxlintFix({
 			code: "it('x', () => {\n\texpect.assertions(1);\n\texpect(1).toBe(1);\n});\n",
 			filename: "file.ts",
 			rule: "padding-after-expect-assertions",
@@ -234,7 +237,7 @@ describe("oxlint integration", () => {
 		// proves `context.settings` reaches the rule under oxlint's runtime.
 		const code =
 			"import { expect, it } from \"@rbxts/jest-globals\";\nit('x', () => {\n\texpect.assertions(1);\n\texpect(1).toBe(1);\n});\n";
-		const withSetting = runOxlint({
+		const withSetting = runOxlintFix({
 			code,
 			filename: "file.ts",
 			rule: "padding-after-expect-assertions",
