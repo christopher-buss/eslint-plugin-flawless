@@ -114,5 +114,14 @@ export type ValidatorFunction = (
 	 * dictates the name a value is bound to.
 	 */
 	showForeignContractHint?: boolean,
+	/**
+	 * Node whose TypeScript type the selector's `types` matcher reads, when the
+	 * name being validated isn't itself the thing that carries that type. A
+	 * string-literal key in `Record<"EmitCount", T>` is such a case: the key's
+	 * own type is the string `"EmitCount"`, while `types` means the type of the
+	 * property it names, so the value type node is passed here. Defaults to
+	 * `node`.
+	 */
+	typeNode?: TSESTree.Node,
 ) => void;
 export type ParsedOptions = Record<SelectorString, ValidatorFunction>;
