@@ -9,6 +9,8 @@ import {
 	TypeModifier,
 	UnderscoreOption,
 } from "./enums";
+import type { AllowedWordIndex } from "./format";
+import { indexAllowedWords } from "./format";
 import { isMetaSelector } from "./shared";
 import type {
 	Context,
@@ -35,19 +37,19 @@ export function parseOptions(context: Context): ParsedOptions {
 
 /**
  * Drops empty entries, deduplicates, and sorts longest-first so that
- * overlapping words resolve to the longest match (`UDim2` before `UDim`).
+ * overlapping words resolve to the longest match (`UDim2` before `UDim`), then
+ * buckets the result by first character. The bucketing happens here, once per
+ * selector, rather than on every name that gets validated.
  *
  * @param allowedWords - The configured words.
- * @returns The normalized words, or undefined when nothing usable remains.
+ * @returns The indexed words, or undefined when nothing usable remains.
  */
-function normalizeAllowedWords(
-	allowedWords: ReadonlyArray<string>,
-): ReadonlyArray<string> | undefined {
+function normalizeAllowedWords(allowedWords: ReadonlyArray<string>): AllowedWordIndex | undefined {
 	const unique = [...new Set(allowedWords.filter((word) => word.length > 0))].sort(
 		(left, right) => right.length - left.length,
 	);
 
-	return unique.length > 0 ? unique : undefined;
+	return unique.length > 0 ? indexAllowedWords(unique) : undefined;
 }
 
 /**
@@ -61,7 +63,7 @@ function normalizeAllowedWords(
  * @param context - The rule context of the file being linted.
  * @returns The normalized shared word list, or undefined when unset.
  */
-function getSettingsAllowedWords(context: Context): ReadonlyArray<string> | undefined {
+function getSettingsAllowedWords(context: Context): AllowedWordIndex | undefined {
 	const { flawless } = context.settings;
 	if (typeof flawless !== "object" || flawless === null) {
 		return undefined;
@@ -97,7 +99,7 @@ function hasFromConstraint(reference: TypeReference): boolean {
 
 function normalizeOption(
 	option: NamingSelector,
-	settingsAllowedWords: ReadonlyArray<string> | undefined,
+	settingsAllowedWords: AllowedWordIndex | undefined,
 ): Array<NormalizedSelector> {
 	let weight = 0;
 

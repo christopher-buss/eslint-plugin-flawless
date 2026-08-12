@@ -302,11 +302,15 @@ export default [
 
 Details worth knowing:
 
-- Matching is literal and case-sensitive — `CFRAME` is not `CFrame`.
+- Matching is literal and case-sensitive — `CFRAME` is not `CFrame`. The one
+  exception is the **start of the name**, where the word also matches with its
+  first character lowercased, because that is the spelling `strictCamelCase`
+  asks for. With `Motor6D` allowed, `motor6DWeld` passes.
 - A word only matches at a **hump boundary**: at the start of the name, or after
   a character that is not uppercase. A word can therefore never split an
   existing hump — `Frame` does not match inside `fooCFrame`, which stays an
-  error.
+  error. The lowercased first character is accepted at the start of the name
+  only, so `targetmotor6DPart` is still an error.
 - Where two words overlap, the longest one wins (`UDim2` over `UDim`).
 - The word list applies to `strictCamelCase` and `StrictPascalCase` only. The
   other formats are unaffected, so it cannot loosen `snake_case` or
