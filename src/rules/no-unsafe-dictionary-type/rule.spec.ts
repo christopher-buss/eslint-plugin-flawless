@@ -1,9 +1,44 @@
+import { parse } from "@typescript-eslint/parser";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { expect, it } from "vitest";
 
 import { run } from "../test";
-import { noUnsafeDictionaryType, RULE_NAME } from "./rule";
+import { isTypeNode, noUnsafeDictionaryType, RULE_NAME } from "./rule";
 
 const messageId = "unsafeDictionary";
+
+it("recognizes only actual TypeScript type nodes", () => {
+	const program = parse(
+		"type Values = { [key: string]: unknown }; interface Owner { value: unknown }",
+	);
+	const [aliasDeclaration, interfaceDeclaration] = program.body;
+	if (
+		aliasDeclaration?.type !== AST_NODE_TYPES.TSTypeAliasDeclaration ||
+		aliasDeclaration.typeAnnotation.type !== AST_NODE_TYPES.TSTypeLiteral ||
+		interfaceDeclaration?.type !== AST_NODE_TYPES.TSInterfaceDeclaration
+	) {
+		throw new Error("The regression fixture did not produce the expected TypeScript AST");
+	}
+
+	const [indexSignature] = aliasDeclaration.typeAnnotation.members;
+	const [propertySignature] = interfaceDeclaration.body.body;
+	if (
+		indexSignature?.type !== AST_NODE_TYPES.TSIndexSignature ||
+		indexSignature.typeAnnotation === undefined ||
+		propertySignature?.type !== AST_NODE_TYPES.TSPropertySignature
+	) {
+		throw new Error("The regression fixture did not produce the expected type members");
+	}
+
+	expect(
+		[aliasDeclaration, indexSignature, interfaceDeclaration.body, propertySignature].map(
+			isTypeNode,
+		),
+	).toEqual([false, false, false, false]);
+	expect(isTypeNode(indexSignature.typeAnnotation.typeAnnotation)).toBe(true);
+});
 
 const valid: Array<ValidTestCase> = [
 	unindent`

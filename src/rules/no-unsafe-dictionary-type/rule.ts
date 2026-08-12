@@ -23,8 +23,56 @@ const messages = {
 		"This object dictionary's direct value type is an unsafe {{value}} escape hatch. Replace it with a concrete owner/schema-derived value type and parse external data at its boundary.",
 };
 
-function isTypeNode(node: TSESTree.Node): node is TSESTree.TypeNode {
-	return node.type.startsWith("TS") && node.type !== AST_NODE_TYPES.TSTypeAnnotation;
+const TYPE_NODE_TYPES = {
+	[AST_NODE_TYPES.TSAbstractKeyword]: true,
+	[AST_NODE_TYPES.TSAnyKeyword]: true,
+	[AST_NODE_TYPES.TSArrayType]: true,
+	[AST_NODE_TYPES.TSAsyncKeyword]: true,
+	[AST_NODE_TYPES.TSBigIntKeyword]: true,
+	[AST_NODE_TYPES.TSBooleanKeyword]: true,
+	[AST_NODE_TYPES.TSConditionalType]: true,
+	[AST_NODE_TYPES.TSConstructorType]: true,
+	[AST_NODE_TYPES.TSDeclareKeyword]: true,
+	[AST_NODE_TYPES.TSExportKeyword]: true,
+	[AST_NODE_TYPES.TSFunctionType]: true,
+	[AST_NODE_TYPES.TSImportType]: true,
+	[AST_NODE_TYPES.TSIndexedAccessType]: true,
+	[AST_NODE_TYPES.TSInferType]: true,
+	[AST_NODE_TYPES.TSIntersectionType]: true,
+	[AST_NODE_TYPES.TSIntrinsicKeyword]: true,
+	[AST_NODE_TYPES.TSLiteralType]: true,
+	[AST_NODE_TYPES.TSMappedType]: true,
+	[AST_NODE_TYPES.TSNamedTupleMember]: true,
+	[AST_NODE_TYPES.TSNeverKeyword]: true,
+	[AST_NODE_TYPES.TSNullKeyword]: true,
+	[AST_NODE_TYPES.TSNumberKeyword]: true,
+	[AST_NODE_TYPES.TSObjectKeyword]: true,
+	[AST_NODE_TYPES.TSOptionalType]: true,
+	[AST_NODE_TYPES.TSPrivateKeyword]: true,
+	[AST_NODE_TYPES.TSProtectedKeyword]: true,
+	[AST_NODE_TYPES.TSPublicKeyword]: true,
+	[AST_NODE_TYPES.TSQualifiedName]: true,
+	[AST_NODE_TYPES.TSReadonlyKeyword]: true,
+	[AST_NODE_TYPES.TSRestType]: true,
+	[AST_NODE_TYPES.TSStaticKeyword]: true,
+	[AST_NODE_TYPES.TSStringKeyword]: true,
+	[AST_NODE_TYPES.TSSymbolKeyword]: true,
+	[AST_NODE_TYPES.TSTemplateLiteralType]: true,
+	[AST_NODE_TYPES.TSThisType]: true,
+	[AST_NODE_TYPES.TSTupleType]: true,
+	[AST_NODE_TYPES.TSTypeLiteral]: true,
+	[AST_NODE_TYPES.TSTypeOperator]: true,
+	[AST_NODE_TYPES.TSTypePredicate]: true,
+	[AST_NODE_TYPES.TSTypeQuery]: true,
+	[AST_NODE_TYPES.TSTypeReference]: true,
+	[AST_NODE_TYPES.TSUndefinedKeyword]: true,
+	[AST_NODE_TYPES.TSUnionType]: true,
+	[AST_NODE_TYPES.TSUnknownKeyword]: true,
+	[AST_NODE_TYPES.TSVoidKeyword]: true,
+} satisfies Record<TSESTree.TypeNode["type"], true>;
+
+export function isTypeNode(node: TSESTree.Node): node is TSESTree.TypeNode {
+	return Object.hasOwn(TYPE_NODE_TYPES, node.type);
 }
 
 function isInsideTypeAliasDeclaration(node: TSESTree.Node): boolean {
