@@ -1,4 +1,5 @@
 // cspell:ignore isfoo, goodfun, VanFooBar, typeparam, myfoo, syncbar
+// cspell:ignore CFrame, Cframe, cframe, CFRAME, UDim, RGBA, Rgba
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 
@@ -1577,6 +1578,56 @@ const valid: Array<ValidTestCase> = [
 		// both the method and the property names are dictated
 		code: "interface Players { ApiEndpoint: string; GetPlayerByUserId(userId: number): undefined; } declare function fromPartial<T>(mock: Partial<Record<string, unknown>>): T; const players = fromPartial<Players>({ GetPlayerByUserId(userId: number) { return undefined; }, ApiEndpoint: 'x' } satisfies Partial<Players>);",
 		options: dictatedNameOptions,
+	},
+	{
+		// allowedWords - the word keeps its own casing inside the name so the
+		// identifier can mirror the API it holds
+		code: "const targetCFrame = 1;",
+		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - matches at every hump boundary, not just the first
+		code: "const fromCFrameToCFrame = 1;",
+		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - longest word wins when two overlap: matching `RGB` alone
+		// would strand the `A` next to `String`
+		code: "const toRGBAString = 1;",
+		options: [
+			{ allowedWords: ["RGB", "RGBA"], format: ["strictCamelCase"], selector: "variable" },
+		],
+	},
+	{
+		// allowedWords - applies to StrictPascalCase too
+		code: "interface CFrameUtility { value: number }",
+		options: [{ allowedWords: ["CFrame"], format: ["StrictPascalCase"], selector: "typeLike" }],
+	},
+	{
+		// allowedWords - runs on the affix-trimmed name
+		code: "const getCFrame = 1;",
+		options: [
+			{
+				allowedWords: ["CFrame"],
+				format: ["StrictPascalCase"],
+				prefix: ["get"],
+				selector: "variable",
+			},
+		],
+	},
+	{
+		// allowedWords - inherited from the shared settings list when the
+		// selector does not declare its own
+		code: "const targetCFrame = 1;",
+		options: [{ format: ["strictCamelCase"], selector: "variable" }],
+		settings: { flawless: { namingConvention: { allowedWords: ["CFrame"] } } },
+	},
+	{
+		// allowedWords - shared settings are not schema-checked, so a mis-typed
+		// value is ignored rather than fatal
+		code: "const targetCframe = 1;",
+		options: [{ format: ["strictCamelCase"], selector: "variable" }],
+		settings: { flawless: { namingConvention: { allowedWords: "CFrame" } } },
 	},
 ];
 
@@ -3402,6 +3453,66 @@ const invalid: Array<InvalidTestCase> = [
 		code: "interface Config { [key: string]: number } const x = { Known: 1 } as const satisfies Config;",
 		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: dictatedNameOptions,
+	},
+	{
+		// allowedWords - unset, so the API spelling still reports
+		code: "const targetCFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - a word that is not in the name does not help
+		code: "const targetCFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["UDim2"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - matching is case-sensitive
+		code: "const targetCFRAME = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - a word cannot split an existing hump: `Frame` sits
+		// behind the `C` of `CFrame`
+		code: "const fooCFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["Frame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - strictCamelCase still requires a lowercase first
+		// character, so a name cannot open with the word
+		code: "const CFrameGoal = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+	},
+	{
+		// allowedWords - strict formats only, so snake_case stays strict
+		code: "const target_CFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: ["CFrame"], format: ["snake_case"], selector: "variable" }],
+	},
+	{
+		// allowedWords - a failing trimmed name still reports against the trimmed
+		// form
+		code: "const getCFRAME = 1;",
+		errors: [{ messageId: "doesNotMatchFormatTrimmed" }],
+		options: [
+			{
+				allowedWords: ["CFrame"],
+				format: ["StrictPascalCase"],
+				prefix: ["get"],
+				selector: "variable",
+			},
+		],
+	},
+	{
+		// allowedWords - an empty list opts the selector out of the shared
+		// settings list
+		code: "const targetCFrame = 1;",
+		errors: [{ messageId: "doesNotMatchFormat" }],
+		options: [{ allowedWords: [], format: ["strictCamelCase"], selector: "variable" }],
+		settings: { flawless: { namingConvention: { allowedWords: ["CFrame"] } } },
 	},
 ];
 

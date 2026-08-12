@@ -42,6 +42,13 @@ export interface TypeReference {
 export type TypeMatcher = TypeModifierString | TypeReference;
 
 export interface NamingSelector {
+	/**
+	 * Words that may keep their own casing inside a name when checking the
+	 * strict formats. Replaces the shared
+	 * `settings.flawless.namingConvention.allowedWords` list when present, so an
+	 * empty array opts this selector out of it.
+	 */
+	allowedWords?: Array<string>;
 	custom?: MatchRegex;
 	filter?: MatchRegex | string;
 	/**
@@ -66,6 +73,11 @@ export interface NormalizedMatchRegex {
 }
 
 export interface NormalizedSelector {
+	/**
+	 * Deduplicated and sorted longest-first so the longest word wins when two
+	 * overlap (`UDim2` over `UDim`).
+	 */
+	allowedWords: ReadonlyArray<string> | undefined;
 	custom: NormalizedMatchRegex | undefined;
 	filter: NormalizedMatchRegex | undefined;
 	/**

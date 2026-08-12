@@ -20,7 +20,10 @@ import type {
 import { createValidator } from "./validator";
 
 export function parseOptions(context: Context): ParsedOptions {
-	const normalizedOptions = context.options.flatMap(normalizeOption);
+	const settingsAllowedWords = getSettingsAllowedWords(context);
+	const normalizedOptions = context.options.flatMap((option) => {
+		return normalizeOption(option, settingsAllowedWords);
+	});
 
 	return Object.fromEntries(
 		Object.keys(Selector).map((key) => [
@@ -28,6 +31,53 @@ export function parseOptions(context: Context): ParsedOptions {
 			createValidator(key as SelectorString, context, normalizedOptions),
 		]),
 	) as ParsedOptions;
+}
+
+/**
+ * Drops empty entries, deduplicates, and sorts longest-first so that
+ * overlapping words resolve to the longest match (`UDim2` before `UDim`).
+ *
+ * @param allowedWords - The configured words.
+ * @returns The normalized words, or undefined when nothing usable remains.
+ */
+function normalizeAllowedWords(
+	allowedWords: ReadonlyArray<string>,
+): ReadonlyArray<string> | undefined {
+	const unique = [...new Set(allowedWords.filter((word) => word.length > 0))].sort(
+		(left, right) => right.length - left.length,
+	);
+
+	return unique.length > 0 ? unique : undefined;
+}
+
+/**
+ * Reads the shared `settings.flawless.namingConvention.allowedWords` list,
+ * which every selector inherits unless it declares its own `allowedWords`.
+ *
+ * Shared settings are not validated by the rule schema, so anything
+ * unrecognized is ignored rather than thrown - a mis-typed setting must not
+ * take the whole rule down.
+ *
+ * @param context - The rule context of the file being linted.
+ * @returns The normalized shared word list, or undefined when unset.
+ */
+function getSettingsAllowedWords(context: Context): ReadonlyArray<string> | undefined {
+	const { flawless } = context.settings;
+	if (typeof flawless !== "object" || flawless === null) {
+		return undefined;
+	}
+
+	const { namingConvention } = flawless as { namingConvention?: unknown };
+	if (typeof namingConvention !== "object" || namingConvention === null) {
+		return undefined;
+	}
+
+	const { allowedWords } = namingConvention as { allowedWords?: unknown };
+	if (!Array.isArray(allowedWords)) {
+		return undefined;
+	}
+
+	return normalizeAllowedWords(allowedWords.filter((word) => typeof word === "string"));
 }
 
 /**
@@ -45,7 +95,10 @@ function hasFromConstraint(reference: TypeReference): boolean {
 	return reference.returns !== undefined && hasFromConstraint(reference.returns);
 }
 
-function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
+function normalizeOption(
+	option: NamingSelector,
+	settingsAllowedWords: ReadonlyArray<string> | undefined,
+): Array<NormalizedSelector> {
 	let weight = 0;
 
 	if (option.modifiers) {
@@ -73,6 +126,12 @@ function normalizeOption(option: NamingSelector): Array<NormalizedSelector> {
 
 	const normalizedOption = {
 		// format options
+		// the presence of the key - not its length - decides the fallback, so
+		// `allowedWords: []` opts a selector out of the shared list
+		allowedWords:
+			option.allowedWords !== undefined
+				? normalizeAllowedWords(option.allowedWords)
+				: settingsAllowedWords,
 		custom: option.custom
 			? {
 					match: option.custom.match,

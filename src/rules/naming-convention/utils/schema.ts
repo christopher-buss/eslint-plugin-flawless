@@ -11,6 +11,16 @@ import {
 } from "./enums";
 
 const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
+	allowedWordsConfig: {
+		additionalItems: false,
+		description:
+			"Words that may keep their own casing inside a name when checking `strictCamelCase` / `StrictPascalCase`, so an identifier can mirror an API spelling such as `CFrame`. A word only matches at a hump boundary, and the rest of the name is still checked normally. Replaces `settings.flawless.namingConvention.allowedWords` for this selector.",
+		items: {
+			minLength: 1,
+			type: "string",
+		},
+		type: "array",
+	},
 	// repeated types
 	formatOptionsConfig: {
 		oneOf: [
@@ -108,6 +118,9 @@ const MATCH_REGEX_SCHEMA: JSONSchema.JSONSchema4 = {
 };
 type JSONSchemaProperties = Record<string, JSONSchema.JSONSchema4>;
 const FORMAT_OPTIONS_PROPERTIES: JSONSchemaProperties = {
+	allowedWords: {
+		$ref: "#/$defs/allowedWordsConfig",
+	},
 	custom: MATCH_REGEX_SCHEMA,
 	failureMessage: {
 		type: "string",

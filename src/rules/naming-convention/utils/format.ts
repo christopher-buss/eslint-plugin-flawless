@@ -97,6 +97,56 @@ function isUpperCase(name: string): boolean {
 	return name.length === 0 || (name === name.toUpperCase() && validateUnderscores(name));
 }
 
+/**
+ * The formats that honour a selector's `allowedWords`. Only the strict formats
+ * reject consecutive capitals, so they are the only ones a word list can
+ * meaningfully relax - relaxing `snake_case` or `UPPER_CASE` would let a name
+ * through that the author never asked for.
+ */
+export const AllowedWordsFormats: ReadonlySet<PredefinedFormatType> = new Set([
+	PredefinedFormat.strictCamelCase,
+	PredefinedFormat.StrictPascalCase,
+]);
+
+/**
+ * Rewrites every allowed word that occurs at a hump boundary so its tail reads
+ * as one lowercase run, which makes the strict checkers treat the word as a
+ * single hump. `targetCFrame` with `CFrame` allowed becomes `targetCframe`.
+ *
+ * A word only matches at index 0 or after a non-uppercase character, so a word
+ * can never split an existing hump - `Frame` does not match inside
+ * `targetCFrame`. The rewrite is length-preserving and only ever lowercases,
+ * so it cannot make a name that already passed start failing.
+ *
+ * @param name - The name being validated.
+ * @param allowedWords - The words to fold into single humps, longest first.
+ * @returns The name with each matched word's tail lowercased.
+ */
+export function applyAllowedWords(name: string, allowedWords: ReadonlyArray<string>): string {
+	let result = "";
+	let index = 0;
+
+	while (index < name.length) {
+		// eslint-disable-next-line ts/no-non-null-assertion -- Controlled loop
+		const previous = index === 0 ? undefined : name[index - 1]!;
+		const atHumpBoundary = previous === undefined || !isUppercaseChar(previous);
+		const word = atHumpBoundary
+			? allowedWords.find((candidate) => name.startsWith(candidate, index))
+			: undefined;
+
+		if (word === undefined) {
+			result += name[index];
+			index += 1;
+			continue;
+		}
+
+		result += word[0] + word.slice(1).toLowerCase();
+		index += word.length;
+	}
+
+	return result;
+}
+
 export const FormatCheckersMap: Readonly<Record<PredefinedFormatType, (name: string) => boolean>> =
 	{
 		[PredefinedFormat.camelCase]: isCamelCase,
