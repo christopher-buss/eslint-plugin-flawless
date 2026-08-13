@@ -16,6 +16,7 @@ import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-option
 import { noSharedMocks } from "./rules/no-shared-mocks/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
+import { noUnsafeDictionaryType } from "./rules/no-unsafe-dictionary-type/rule";
 import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule";
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/rule";
@@ -64,6 +65,7 @@ export const plugin = {
 		"no-shared-mocks": noSharedMocks,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
+		"no-unsafe-dictionary-type": noUnsafeDictionaryType,
 		"padding-after-expect-assertions": paddingAfterExpectAssertions,
 		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"prefer-ending-with-an-expect": preferEndingWithAnExpect,

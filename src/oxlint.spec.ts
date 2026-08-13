@@ -310,4 +310,16 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.code).toBe("flawless(no-conditional-empty-object-spread)");
 		expect(diagnostics[0]?.message).toContain("conditional empty-object spread");
 	});
+
+	it("no-unsafe-dictionary-type reports an unsafe aliased dictionary value", () => {
+		const { diagnostics } = runOxlint({
+			code: "type Marker = { optional? };\ntype Safe = Record<string, Marker>;\ntype Dictionary<Value> = Record<string, Value>;\ntype Values = Dictionary<unknown>;\n",
+			filename: "file.ts",
+			rule: "no-unsafe-dictionary-type",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-unsafe-dictionary-type)");
+		expect(diagnostics[0]?.message).toContain("unsafe unknown escape hatch");
+	});
 });

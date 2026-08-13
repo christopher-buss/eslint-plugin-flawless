@@ -155,6 +155,10 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 	},
 	{ ruleId: "no-unnecessary-use-memo", testPath: "./cases/all/no-unnecessary-use-memo.tsx" },
 	{
+		ruleId: "no-unsafe-dictionary-type",
+		testPath: "./cases/all/no-unsafe-dictionary-type.tsx",
+	},
+	{
 		ruleId: "padding-after-expect-assertions",
 		testPath: "./cases/all/padding-after-expect-assertions.tsx",
 	},
