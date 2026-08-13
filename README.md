@@ -115,9 +115,11 @@ runtime dependencies, then reference it from your oxlint config:
 }
 ```
 
-The plugin key stays the same as under ESLint (`awesome`). Rules that require
-TypeScript type information or a custom parser are ESLint-only, since oxlint's
-JS plugin API supports neither.
+The plugin key stays the same as under ESLint (`awesome`). oxlint `>=1.78.0` is
+an optional peer dependency: only oxlint users need it installed, and the rules
+are verified against that version. Rules that require TypeScript type
+information or a custom parser are ESLint-only, since oxlint's JS plugin API
+supports neither.
 
 ## Development
 
@@ -209,6 +211,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [no-conditional-in-test](src/rules/no-conditional-in-test/documentation.md)                         | Disallow conditional logic in tests                                                              | 🔧  |     |
 | [no-export-default-arrow](src/rules/no-export-default-arrow/documentation.md)                       | Disallow anonymous arrow functions as export default declarations                                | 🔧  |     |
 | [no-floating-point-equality](src/rules/no-floating-point-equality/documentation.md)                 | Disallow exact equality checks involving floating-point-sensitive values                         |     |     |
+| [no-object-parameters](src/rules/no-object-parameters/documentation.md)                             | Disallow function parameters that accept any object shape                                        |     |     |
 | [no-redundant-tsconfig-options](src/rules/no-redundant-tsconfig-options/documentation.md)           | Disallow tsconfig options that redundantly re-set a value already provided by an extended config | 🔧  |     |
 | [no-shared-mocks](src/rules/no-shared-mocks/documentation.md)                                       | Disallow mocks created once and shared between tests                                             |     |     |
 | [no-unnecessary-use-callback](src/rules/no-unnecessary-use-callback/documentation.md)               | Disallow unnecessary usage of 'useCallback'                                                      |     |     |

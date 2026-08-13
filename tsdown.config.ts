@@ -21,6 +21,10 @@ export default defineConfig({
 	publint: true,
 	shims: true,
 	unused: {
+		// oxlint is a peer because it loads `dist/oxlint.mjs` as a jsPlugin and
+		// the plugin API it provides is version-sensitive. It is a CLI, so
+		// nothing here ever imports it.
+		ignore: { peerDependencies: ["oxlint"] },
 		level: "error",
 	},
 });
