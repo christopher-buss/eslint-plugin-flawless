@@ -96,6 +96,7 @@
 		"eslint": ">=9.15.0",
 		"oxc-parser": "*",
 		"oxfmt": "*",
+		"oxlint": ">=1.78.0",
 		"typescript": ">=4.8.4 <6.1.0"
 	},
 	"peerDependenciesMeta": {
@@ -103,6 +104,9 @@
 			"optional": true
 		},
 		"oxfmt": {
+			"optional": true
+		},
+		"oxlint": {
 			"optional": true
 		}
 	},

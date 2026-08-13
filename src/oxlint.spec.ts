@@ -322,4 +322,18 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.code).toBe("flawless(no-unsafe-dictionary-type)");
 		expect(diagnostics[0]?.message).toContain("unsafe unknown escape hatch");
 	});
+
+	// Alias lookup walks `node.parent` out to the program root, so this covers
+	// the parent links and node ranges oxlint exposes to a JS plugin.
+	it("no-object-parameters resolves an alias through its enclosing scope", () => {
+		const { diagnostics } = runOxlint({
+			code: "type Payload = { id: string };\nexport function outer(): void {\n\ttype Payload = object;\n\tconst inner = ({ id }: Payload): void => {};\n}\n",
+			filename: "file.ts",
+			rule: "no-object-parameters",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-object-parameters)");
+		expect(diagnostics[0]?.message).toContain("Parameter `{ id }` accepts any object shape");
+	});
 });

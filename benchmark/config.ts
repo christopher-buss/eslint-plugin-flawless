@@ -148,6 +148,7 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/no-conditional-in-test.tsx",
 	},
 	{ ruleId: "no-export-default-arrow", testPath: "./cases/all/no-export-default-arrow.tsx" },
+	{ ruleId: "no-object-parameters", testPath: "./cases/all/no-object-parameters.tsx" },
 	{ ruleId: "no-shared-mocks", testPath: "./cases/all/no-shared-mocks.tsx" },
 	{
 		ruleId: "no-unnecessary-use-callback",
