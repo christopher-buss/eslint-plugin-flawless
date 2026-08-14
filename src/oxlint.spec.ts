@@ -354,4 +354,18 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		);
 		expect(diagnostics[0]?.message).toContain("explicit unknown target type discards it");
 	});
+
+	// The declared-name test compares specifier ranges to tell an aliased import
+	// from a plain one, so this covers the node ranges oxlint reports.
+	it("no-shape-in-symbol-names reports the alias of an import, not the imported name", () => {
+		const { diagnostics } = runOxlint({
+			code: 'import { Circle as Shape, Shape as Outline } from "three";\n\nexport const path = new Shape() ?? Outline;\n',
+			filename: "file.ts",
+			rule: "no-shape-in-symbol-names",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-shape-in-symbol-names)");
+		expect(diagnostics[0]?.message).toContain("Rename `Shape`");
+	});
 });

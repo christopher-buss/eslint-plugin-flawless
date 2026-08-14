@@ -15,6 +15,7 @@ import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule
 import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
 import { noObjectParameters } from "./rules/no-object-parameters/rule";
 import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
+import { noShapeInSymbolNames } from "./rules/no-shape-in-symbol-names/rule";
 import { noSharedMocks } from "./rules/no-shared-mocks/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
@@ -66,6 +67,7 @@ export const plugin = {
 		"no-known-value-widening": noKnownValueWidening,
 		"no-object-parameters": noObjectParameters,
 		"no-redundant-tsconfig-options": noRedundantTsconfigOptions,
+		"no-shape-in-symbol-names": noShapeInSymbolNames,
 		"no-shared-mocks": noSharedMocks,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,

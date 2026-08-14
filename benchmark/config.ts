@@ -153,6 +153,7 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/no-known-value-widening.tsx",
 	},
 	{ ruleId: "no-object-parameters", testPath: "./cases/all/no-object-parameters.tsx" },
+	{ ruleId: "no-shape-in-symbol-names", testPath: "./cases/all/no-shape-in-symbol-names.tsx" },
 	{ ruleId: "no-shared-mocks", testPath: "./cases/all/no-shared-mocks.tsx" },
 	{
 		ruleId: "no-unnecessary-use-callback",
