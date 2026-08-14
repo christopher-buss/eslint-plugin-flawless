@@ -8,7 +8,7 @@ import {
 	createTypeEnvironment,
 	type TypeEnvironment,
 	typeReferenceName,
-} from "./dictionary-types";
+} from "../shared/dictionary-types";
 
 export const RULE_NAME = "no-unsafe-dictionary-type";
 

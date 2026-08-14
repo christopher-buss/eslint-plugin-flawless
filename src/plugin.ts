@@ -12,6 +12,7 @@ import { noConditionalEmptyObjectSpread } from "./rules/no-conditional-empty-obj
 import { noConditionalInTest } from "./rules/no-conditional-in-test/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
+import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
 import { noObjectParameters } from "./rules/no-object-parameters/rule";
 import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
 import { noSharedMocks } from "./rules/no-shared-mocks/rule";
@@ -62,6 +63,7 @@ export const plugin = {
 		"no-conditional-in-test": noConditionalInTest,
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-floating-point-equality": noFloatingPointEquality,
+		"no-known-value-widening": noKnownValueWidening,
 		"no-object-parameters": noObjectParameters,
 		"no-redundant-tsconfig-options": noRedundantTsconfigOptions,
 		"no-shared-mocks": noSharedMocks,
