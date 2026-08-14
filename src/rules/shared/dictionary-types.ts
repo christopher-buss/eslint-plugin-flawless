@@ -5,6 +5,7 @@ const BUILT_INS = new Set([
 	"Omit",
 	"Partial",
 	"Pick",
+	"PropertyKey",
 	"Readonly",
 	"Record",
 	"Required",
@@ -527,8 +528,58 @@ function dictionaryValueTypes(
 }
 
 /**
- * Follows a non-generic alias chain looking only for the bare escape hatches.
- * A chain ending at anything else is a named contract, not a widening target.
+ * Whether a mapped type's key constrains nothing: `string`, `number`, `symbol`,
+ * `PropertyKey`, or a union made only of those. A key drawn from a named union
+ * of literals states exactly which properties exist, so it is not broad.
+ *
+ * @param type - The mapped type's constraint.
+ * @param environment - The file's type declarations.
+ * @param substitutions - Type arguments bound so far.
+ * @returns True when the key admits any property name.
+ */
+function isBroadMappedKey(
+	type: TSESTree.TypeNode,
+	environment: TypeEnvironment,
+	substitutions: TypeAliasEnvironment,
+): boolean {
+	const unwrapped = unwrapTransparentType(type);
+	if (
+		unwrapped.type === AST_NODE_TYPES.TSNumberKeyword ||
+		unwrapped.type === AST_NODE_TYPES.TSStringKeyword ||
+		unwrapped.type === AST_NODE_TYPES.TSSymbolKeyword
+	) {
+		return true;
+	}
+
+	if (unwrapped.type === AST_NODE_TYPES.TSUnionType) {
+		return unwrapped.types.every((member) =>
+			isBroadMappedKey(member, environment, substitutions),
+		);
+	}
+
+	if (unwrapped.type !== AST_NODE_TYPES.TSTypeReference) {
+		return false;
+	}
+
+	const name = typeReferenceName(unwrapped);
+	if (name === null) {
+		return false;
+	}
+
+	const substitution = substitutions.get(name);
+	if (substitution !== undefined && !isUnappliedReferenceTo(substitution, name)) {
+		return isBroadMappedKey(substitution, environment, substitutions);
+	}
+
+	return name === "PropertyKey" && isBuiltIn(name, environment);
+}
+
+/**
+ * Follows a non-generic alias chain looking for the shapes that constrain
+ * nothing: the bare escape hatches, and dictionaries whose key set is open. A
+ * chain ending at anything else is a named contract, not a widening target —
+ * which is why a type literal or mapped type is treated more leniently here
+ * than when it is written inline at the annotation.
  *
  * @param type - The aliased type to resolve.
  * @param environment - The file's type declarations.
@@ -551,6 +602,18 @@ function classifyAliasBroadTarget(
 		return { kind: "object" };
 	}
 
+	if (unwrapped.type === AST_NODE_TYPES.TSTypeLiteral) {
+		return unwrapped.members.some((member) => member.type === AST_NODE_TYPES.TSIndexSignature)
+			? { kind: "open dictionary" }
+			: null;
+	}
+
+	if (unwrapped.type === AST_NODE_TYPES.TSMappedType) {
+		return isBroadMappedKey(unwrapped.constraint, environment, substitutions)
+			? { kind: "open dictionary" }
+			: null;
+	}
+
 	if (unwrapped.type !== AST_NODE_TYPES.TSTypeReference) {
 		return null;
 	}
@@ -565,6 +628,17 @@ function classifyAliasBroadTarget(
 		return isUnappliedReferenceTo(substitution, name)
 			? null
 			: classifyAliasBroadTarget(substitution, environment, substitutions, resolvingAliases);
+	}
+
+	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, environment)) {
+		const wrapped = unwrapped.typeArguments?.params[0];
+		return wrapped === undefined
+			? null
+			: classifyAliasBroadTarget(wrapped, environment, substitutions, resolvingAliases);
+	}
+
+	if (name === "Record" && isBuiltIn(name, environment)) {
+		return { kind: "open dictionary" };
 	}
 
 	const alias = environment.aliases.get(name);

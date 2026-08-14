@@ -25,12 +25,40 @@ const valid: Array<ValidTestCase> = [
 		type Owner = { id: string };
 		const owner: Owner = { id: "1" };
 	`,
-	// An empty literal seeding a dictionary needs its annotation.
+	// An empty literal seeding a dictionary needs its annotation, wherever the
+	// seed appears.
 	unindent`
 		const counts: Record<string, number> = {};
 	`,
 	unindent`
 		const counts: { [key: string]: number } = {};
+	`,
+	unindent`
+		class Counters {
+			counts: Record<string, number> = {};
+		}
+	`,
+	unindent`
+		function makeCounts(): Record<string, number> {
+			return {};
+		}
+	`,
+	unindent`
+		const makeCounts = (): Record<string, number> => ({});
+	`,
+	unindent`
+		const counts = {} as Record<string, number>;
+	`,
+	unindent`
+		let counts: Record<string, number>;
+		counts = {};
+	`,
+	// A mapped type keyed by a named union states which properties exist, so an
+	// alias to it is a contract even though a direct mapped type is not.
+	unindent`
+		type Level = "admin" | "guest";
+		type Levels = { readonly [Key in Level]: number };
+		const levels: Levels = { admin: 1, guest: 0 };
 	`,
 	// The value is external, so there is no syntactic evidence to discard.
 	unindent`
@@ -137,6 +165,74 @@ const invalid: Array<InvalidTestCase> = [
 			interface Owner { id: string }
 			type Registry<Value> = Record<string, Value>;
 			const registry: Registry<Owner> = { root: { id: "1" } };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },
+		],
+	},
+	{
+		// An alias naming a dictionary is still a dictionary: the key set stays
+		// open, so the name adds no constraint.
+		code: unindent`
+			type Registry = Record<string, number>;
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		code: unindent`
+			type Registry = { [key: string]: number };
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		code: unindent`
+			type Registry = { [Key in string]: number };
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		code: unindent`
+			type Registry = { [Key in PropertyKey]: number };
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		code: unindent`
+			type Registry = Readonly<Record<string, number>>;
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		// An alias to an applied generic alias resolves through both hops.
+		code: unindent`
+			type Index<Value> = Record<string, Value>;
+			type Registry = Index<number>;
+			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		// A generic alias applied through its default is still a container.
+		code: unindent`
+			type Index<Value = number> = Record<string, Value>;
+			const registry: Index = { root: 1 };
 		`,
 		errors: [
 			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },

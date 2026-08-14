@@ -41,10 +41,25 @@ written more than once — is treated as external, and is left alone.
 | a generic alias resolving to a dictionary          | `generic container` |
 | an inline type literal with named properties       | `anonymous object`  |
 
-A named contract is **not** a widening target. An interface, or a non-generic
-alias that does not resolve to a bare `unknown`/`object`, is the owner type the
-value is meant to satisfy, so it is left alone. `Readonly`, `Partial`,
-`Required`, and `NonNullable` are transparent: the wrapped type decides.
+A named contract is **not** a widening target. An interface, or an alias that
+resolves to a real shape, is the owner type the value is meant to satisfy, so it
+is left alone. `Readonly`, `Partial`, `Required`, and `NonNullable` are
+transparent: the wrapped type decides.
+
+Naming a dictionary does not make it a contract, though. An alias resolving to
+`unknown`, `object`, or an open dictionary is reported at the site that uses it:
+
+```ts
+type Registry = Record<string, Command>;
+
+const commands: Registry = { start: startCommand }; // still an open dictionary
+```
+
+Through an alias, a mapped type is judged by its key. `[Key in string]` and
+`[Key in PropertyKey]` constrain nothing and are reported; `[Key in Level]`,
+where `Level` is a named union of literals, states exactly which properties
+exist and is a contract. Written inline at the annotation, any mapped type
+widens — an inline one restates a shape the initializer already establishes.
 
 The rule checks variable declarators, assignments back to an annotated binding,
 class properties, `return` statements and concise arrow bodies, and `as` / angle
@@ -53,12 +68,20 @@ reported, since it is the one that decides the final type.
 
 ## The dictionary accumulator
 
-`{}` seeding a dictionary is exempt, and only there:
+`{}` seeding a dictionary is exempt, wherever the seed appears:
 
 ```ts
 // ✓ without the annotation the empty literal infers `{}`, and no key could
 // ever be written to it
 const counts: Record<string, number> = {};
+
+class Counters {
+	public counts: Record<string, number> = {};
+}
+
+function makeCounts(): Record<string, number> {
+	return {};
+}
 ```
 
 A populated literal gets no such exemption — `{ root: 1 }` establishes its own

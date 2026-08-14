@@ -29,16 +29,6 @@ type FunctionNode =
 	| TSESTree.FunctionDeclaration
 	| TSESTree.FunctionExpression;
 
-/** Per-visitor exemptions applied before a flow is reported. */
-interface FlowOptions {
-	/**
-	 * Whether `{}` seeding a dictionary is acceptable. An accumulator declared as
-	 * `const counts: Record<string, number> = {}` needs the annotation: without
-	 * it the empty literal infers `{}` and no key may ever be written.
-	 */
-	readonly allowEmptyDictionaryAccumulator?: boolean;
-}
-
 /**
  * Resolves an identifier to the variable it references, walking outwards from
  * the identifier's own scope so the nearest binding wins.
@@ -231,17 +221,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		expression: TSESTree.Expression,
 		destination: null | WideningTarget,
 		subject: string,
-		options: FlowOptions = {},
 	): void {
 		if (destination === null) {
 			return;
 		}
 
-		if (
-			options.allowEmptyDictionaryAccumulator === true &&
-			isDictionaryAccumulatorTarget(destination) &&
-			isEmptyObjectExpression(expression)
-		) {
+		// `{}` seeding a dictionary is the one case where the annotation earns
+		// its keep: without it the empty literal infers `{}`, and no key could
+		// ever be written. This holds wherever the seed appears, not only at a
+		// declarator.
+		if (isDictionaryAccumulatorTarget(destination) && isEmptyObjectExpression(expression)) {
 			return;
 		}
 
@@ -357,7 +346,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				node.init,
 				targetFromAnnotation(node.id.typeAnnotation),
 				`binding \`${node.id.name}\``,
-				{ allowEmptyDictionaryAccumulator: true },
 			);
 		},
 	};
