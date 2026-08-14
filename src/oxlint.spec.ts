@@ -336,4 +336,22 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.code).toBe("flawless(no-object-parameters)");
 		expect(diagnostics[0]?.message).toContain("Parameter `{ id }` accepts any object shape");
 	});
+
+	// Evidence tracking reads `context.sourceCode.getScope` and walks the
+	// resolved variable's defs/references, so this covers the scope analysis
+	// oxlint exposes to a JS plugin.
+	it("no-known-value-widening follows a const binding into a widened annotation", () => {
+		const { diagnostics } = runOxlint({
+			code: 'const seed = { id: "1" };\nexport const widened: unknown = seed;\nexport const kept = seed;\n',
+			filename: "file.ts",
+			rule: "no-known-value-widening",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-known-value-widening)");
+		expect(diagnostics[0]?.message).toContain(
+			"The known initializer supplying binding `widened`",
+		);
+		expect(diagnostics[0]?.message).toContain("explicit unknown target type discards it");
+	});
 });
