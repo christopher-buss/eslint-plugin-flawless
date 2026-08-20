@@ -355,6 +355,32 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.message).toContain("explicit unknown target type discards it");
 	});
 
+	// Both reflect rules resolve `Reflect` through the scope chain, so these
+	// cover the scope analysis oxlint exposes and the shadowing exemption.
+	it("no-reflect-get reports a two-argument read but not a shadowed Reflect", () => {
+		const { diagnostics } = runOxlint({
+			code: 'export const tag = Reflect.get(value, "tag");\nfunction local(Reflect) {\n\treturn Reflect.get(a, b);\n}\n',
+			filename: "file.ts",
+			rule: "no-reflect-get",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-reflect-get)");
+		expect(diagnostics[0]?.message).toContain("typed property access");
+	});
+
+	it("no-reflect-set reports a literal key but not a computed one", () => {
+		const { diagnostics } = runOxlint({
+			code: 'Reflect.set(target, "_timing", true);\nReflect.set(target, key, value);\n',
+			filename: "file.ts",
+			rule: "no-reflect-set",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-reflect-set)");
+		expect(diagnostics[0]?.message).toContain("plain assignment");
+	});
+
 	// The declared-name test compares specifier ranges to tell an aliased import
 	// from a plain one, so this covers the node ranges oxlint reports.
 	it("no-shape-in-symbol-names reports the alias of an import, not the imported name", () => {

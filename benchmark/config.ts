@@ -153,6 +153,8 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		testPath: "./cases/all/no-known-value-widening.tsx",
 	},
 	{ ruleId: "no-object-parameters", testPath: "./cases/all/no-object-parameters.tsx" },
+	{ ruleId: "no-reflect-get", testPath: "./cases/all/no-reflect-get.tsx" },
+	{ ruleId: "no-reflect-set", testPath: "./cases/all/no-reflect-set.tsx" },
 	{ ruleId: "no-shape-in-symbol-names", testPath: "./cases/all/no-shape-in-symbol-names.tsx" },
 	{ ruleId: "no-shared-mocks", testPath: "./cases/all/no-shared-mocks.tsx" },
 	{
