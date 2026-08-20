@@ -137,7 +137,7 @@ function hasKnownEvidence(
  * @returns The enclosing function, or null at the program root.
  */
 function enclosingFunction(node: TSESTree.Node): FunctionNode | null {
-	let current: TSESTree.Node = node;
+	let current = node;
 	while (current.type !== AST_NODE_TYPES.Program) {
 		if (
 			current.type === AST_NODE_TYPES.ArrowFunctionExpression ||

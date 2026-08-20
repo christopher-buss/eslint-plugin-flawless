@@ -1,4 +1,3 @@
-import type { ImportBindingDefinition } from "@typescript-eslint/scope-manager";
 import { DefinitionType } from "@typescript-eslint/scope-manager";
 import {
 	AST_NODE_TYPES,
@@ -171,7 +170,7 @@ function resolveVitestName(
 		return null;
 	}
 
-	const importDefinition: ImportBindingDefinition = definition;
+	const importDefinition = definition;
 	const declaration = importDefinition.parent;
 	if (
 		declaration.type !== AST_NODE_TYPES.ImportDeclaration ||
@@ -363,7 +362,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return false;
 		}
 
-		let current: TSESTree.Node = node;
+		let current = node;
 		while (current.type !== AST_NODE_TYPES.Program) {
 			const { parent } = current;
 			if (parent === block) {

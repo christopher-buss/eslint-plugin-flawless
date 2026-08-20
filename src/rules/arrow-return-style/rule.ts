@@ -242,7 +242,7 @@ function isLiteralBody(node: TSESTree.Expression): boolean {
  * @returns The top-level statement containing `node`.
  */
 function statementOf(node: TSESTree.Node): TSESTree.Node {
-	let current: TSESTree.Node = node;
+	let current = node;
 	while (current.parent !== undefined && current.parent.type !== AST_NODE_TYPES.Program) {
 		current = current.parent;
 	}

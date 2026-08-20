@@ -186,7 +186,7 @@ function create(
 	const { unusedVariables } = collectVariables(context);
 	function isUnused(name: string, initialScope: null | TSESLint.Scope.Scope): boolean {
 		let variable: null | TSESLint.Scope.Variable = null;
-		let scope: null | TSESLint.Scope.Scope = initialScope;
+		let scope = initialScope;
 		while (scope) {
 			variable = scope.set.get(name) ?? null;
 			if (variable) {
@@ -1245,7 +1245,7 @@ function canSuggestSatisfies(node: TSESTree.PropertyNonComputedName): boolean {
 
 	// `{...} as const satisfies T` puts the assertion between the literal and
 	// its `satisfies` clause.
-	let current: TSESTree.Node = objectExpression.parent;
+	let current = objectExpression.parent;
 	while (
 		current.type === AST_NODE_TYPES.TSAsExpression ||
 		current.type === AST_NODE_TYPES.TSTypeAssertion
@@ -1415,7 +1415,7 @@ const READONLY_TYPE_NAME = "Readonly";
  * @returns True if a `Readonly<...>` wrapper encloses `node`.
  */
 function isWrappedInReadonly(node: TSESTree.Node): boolean {
-	let current: TSESTree.Node = node;
+	let current = node;
 
 	while (current.parent?.type === AST_NODE_TYPES.TSTypeParameterInstantiation) {
 		const wrapper = current.parent.parent;
