@@ -29,6 +29,10 @@ The rule reports only when removing the annotation leaves the variable with
 general: an annotation that widens, narrows, names, or protects anything is left
 alone.
 
+Two positions are checked: a variable declaration with an initializer, and a
+parameter of a function expression that has a contextual type. Return types are
+not checked.
+
 ### When an annotation is doing work
 
 | The annotation                         | Example                                   |
@@ -127,17 +131,66 @@ const maybe: string | undefined = getString();
 const pinned: string = pick();
 ```
 
+## Function parameters
+
+A parameter of a function expression can get its type from the signature the
+function is passed to. Writing it out again is the same restatement:
+
+```ts
+interface Item {
+	id: string;
+}
+
+declare function report(message: string): void;
+
+declare function each(callback: (item: Item) => void): void;
+
+each((item: Item) => {
+	report(item.id);
+});
+```
+
+The check runs on function and arrow expressions only. A function declaration
+has no contextual type, so its parameters must be annotated.
+
+When the variable's own annotation is what supplies the context, only the
+parameter is reported. Both look redundant, but removing both would leave the
+parameter implicitly `any`:
+
+```ts
+type Handler = (payload: string) => void;
+
+declare function report(message: string): void;
+
+const handle: Handler = (payload: string) => report(payload); // only `: string` is reported
+```
+
+An annotation is left alone when it is the reason the context says what it says:
+
+```ts
+declare function wrap<T>(callback: (value: T) => T): void;
+
+wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
+```
+
+The same applies to an overloaded callee, where the parameter types can be what
+picks the overload.
+
 ## Known limitations
 
-- Only `const` and `let` declarations with a plain identifier are checked.
-  Destructuring patterns, class properties, function parameters, and return
-  types are out of scope.
+- Variable declarations are checked for `const` and `let` with a plain
+  identifier only. Destructuring patterns and class properties are out of scope,
+  as are return types.
 - Object and array literal initializers are skipped. There the annotation also
   governs excess property checking and literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
   subject.
 - A `let` whose initializer is a union of literals is skipped, because widening
   a union is a real change rather than the widening TypeScript would apply.
+- An optional parameter is skipped. The contextual type carries `| undefined`
+  that the written annotation does not, so the two never compare as identical.
+- The fix can leave a type import with no remaining use. Pair the rule with an
+  unused-import rule, or `noUnusedLocals` will fail the build.
 
 This rule has no options.
 

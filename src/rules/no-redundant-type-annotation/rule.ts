@@ -2,11 +2,20 @@ import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type { Node as TSNode, Type, TypeReference, UnionOrIntersectionType } from "typescript";
+import type {
+	Expression,
+	Signature,
+	Node as TSNode,
+	Type,
+	TypeReference,
+	UnionOrIntersectionType,
+} from "typescript";
 import {
 	isIdentifier,
+	isParameter,
 	isTypeReferenceNode,
 	ObjectFlags,
+	SignatureKind,
 	SymbolFlags,
 	TypeFlags,
 	TypeFormatFlags,
@@ -17,14 +26,17 @@ import { createEslintRule } from "../../util";
 export const RULE_NAME = "no-redundant-type-annotation";
 
 const MESSAGE_ID = "redundant";
+const PARAMETER_MESSAGE_ID = "redundantParameter";
 
-export type MessageIds = typeof MESSAGE_ID;
+export type MessageIds = typeof MESSAGE_ID | typeof PARAMETER_MESSAGE_ID;
 
 type Options = [];
 
 const messages = {
 	[MESSAGE_ID]:
 		"The `{{typeName}}` annotation restates the type the initializer already has. Remove it and let inference carry the type.",
+	[PARAMETER_MESSAGE_ID]:
+		"The `{{typeName}}` annotation restates the type this parameter already gets from its context. Remove it and let inference carry the type.",
 };
 
 /**
@@ -69,6 +81,82 @@ function referencesName(node: TSNode, names: ReadonlySet<string>): boolean {
 	}
 
 	return node.forEachChild((child) => referencesName(child, names) || undefined) === true;
+}
+
+/**
+ * Finds the annotation written on a parameter, looking through the binding a
+ * default value introduces.
+ *
+ * @param parameter - The parameter to read.
+ * @returns The annotation, or undefined when the parameter has none.
+ */
+function getParameterAnnotation(
+	parameter: TSESTree.Parameter,
+): TSESTree.TSTypeAnnotation | undefined {
+	if (parameter.type === AST_NODE_TYPES.TSParameterProperty) {
+		return getParameterAnnotation(parameter.parameter);
+	}
+
+	if (parameter.type === AST_NODE_TYPES.AssignmentPattern) {
+		return parameter.typeAnnotation ?? getParameterAnnotation(parameter.left);
+	}
+
+	return parameter.typeAnnotation;
+}
+
+/**
+ * Reports whether a signature's parameter at an index collects rest
+ * arguments.
+ *
+ * A rest parameter breaks the positional pairing this check relies on: the
+ * signature's `...args: Array<string>` lines up against a plain `string`, not
+ * against a written `Array<string>`, so comparing them directly would delete
+ * an annotation that is holding a different type.
+ *
+ * @param signature - The contextual call signature.
+ * @param index - The parameter position.
+ * @returns True when that position is a rest parameter.
+ */
+function isRestParameter(signature: Signature, index: number): boolean {
+	const declaration = signature.parameters[index]?.valueDeclaration;
+	return (
+		declaration !== undefined &&
+		isParameter(declaration) &&
+		declaration.dotDotDotToken !== undefined
+	);
+}
+
+/**
+ * Reports whether the initializer is a function whose parameters take their
+ * types from the variable's own annotation.
+ *
+ * Both annotations say the same thing, so both look redundant, but only one
+ * of them can go: deleting the variable annotation and the parameter
+ * annotations in the same pass would leave the parameters implicitly `any`.
+ * The parameter check owns this case, so the variable check steps back.
+ *
+ * @param node - The initializer to inspect.
+ * @returns True when the annotation is a function's parameter context.
+ */
+function suppliesParameterContext(node: TSESTree.Node): boolean {
+	if (
+		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+		node.type === AST_NODE_TYPES.FunctionExpression
+	) {
+		return node.params.some((parameter) => getParameterAnnotation(parameter) !== undefined);
+	}
+
+	if (node.type === AST_NODE_TYPES.ConditionalExpression) {
+		return (
+			suppliesParameterContext(node.consequent) || suppliesParameterContext(node.alternate)
+		);
+	}
+
+	if (node.type === AST_NODE_TYPES.LogicalExpression) {
+		return suppliesParameterContext(node.left) || suppliesParameterContext(node.right);
+	}
+
+	return false;
 }
 
 function create(
@@ -264,7 +352,144 @@ function create(
 		);
 	}
 
+	/**
+	 * Reports whether a function expression sits in an argument position of a
+	 * call that is still inferring its type arguments.
+	 *
+	 * There the parameter annotations are inference sources, not restatements:
+	 * `wrap((value: number) => value)` against `wrap<T>(fn: (a: T) => T)` types
+	 * the parameter as `number` only because the annotation says so. Removing it
+	 * leaves `T` as `unknown`. An overloaded callee is treated the same way,
+	 * since the parameter types can be what picks the overload.
+	 *
+	 * @param node - The function expression to locate.
+	 * @returns True when an enclosing call still depends on the annotations.
+	 */
+	function isArgumentOfInferringCall(node: TSESTree.Node): boolean {
+		let current = node;
+		let parent: TSESTree.Node | undefined = node.parent;
+		// Walk out through the expression forms that keep an argument's
+		// contextual typing intact.
+		while (
+			parent !== undefined &&
+			(parent.type === AST_NODE_TYPES.ArrayExpression ||
+				parent.type === AST_NODE_TYPES.ConditionalExpression ||
+				parent.type === AST_NODE_TYPES.LogicalExpression ||
+				parent.type === AST_NODE_TYPES.Property ||
+				parent.type === AST_NODE_TYPES.ObjectExpression)
+		) {
+			current = parent;
+			({ parent } = parent);
+		}
+
+		if (
+			parent === undefined ||
+			(parent.type !== AST_NODE_TYPES.CallExpression &&
+				parent.type !== AST_NODE_TYPES.NewExpression)
+		) {
+			return false;
+		}
+
+		if (!parent.arguments.includes(current as TSESTree.CallExpressionArgument)) {
+			return false;
+		}
+
+		if (parent.typeArguments !== undefined) {
+			return false;
+		}
+
+		const calleeType = services.getTypeAtLocation(parent.callee);
+		if (checker.getSignaturesOfType(calleeType, SignatureKind.Call).length > 1) {
+			return true;
+		}
+
+		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(parent));
+		const declaration = signature?.getDeclaration();
+		const typeParameters = declaration?.typeParameters;
+		return typeParameters !== undefined && typeParameters.length > 0;
+	}
+
+	function checkFunctionParameters(
+		node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
+	): void {
+		if (node.params.every((parameter) => isUntypedParameter(parameter))) {
+			return;
+		}
+
+		if (isArgumentOfInferringCall(node)) {
+			return;
+		}
+
+		const contextualType = checker.getContextualType(
+			services.esTreeNodeToTSNodeMap.get(node) as Expression,
+		);
+		if (contextualType === undefined) {
+			return;
+		}
+
+		// More than one signature means the parameter list has no single
+		// contextual counterpart to compare against.
+		const signatures = checker.getSignaturesOfType(contextualType, SignatureKind.Call);
+		const signature = signatures.length === 1 ? signatures.at(0) : undefined;
+		if (signature === undefined) {
+			return;
+		}
+
+		for (const [index, parameter] of node.params.entries()) {
+			const annotation = getParameterAnnotation(parameter);
+			if (annotation === undefined) {
+				continue;
+			}
+
+			// A `this` parameter has no counterpart in the contextual signature's
+			// positional list.
+			if (parameter.type === AST_NODE_TYPES.Identifier && parameter.name === "this") {
+				continue;
+			}
+
+			const isRest = parameter.type === AST_NODE_TYPES.RestElement;
+			if (isRest !== isRestParameter(signature, index)) {
+				continue;
+			}
+
+			const target = signature.parameters[index];
+			if (target === undefined) {
+				continue;
+			}
+
+			const annotationType = services.getTypeFromTypeNode(annotation.typeAnnotation);
+			if ((annotationType.flags & TypeFlags.Any) !== 0) {
+				continue;
+			}
+
+			if (namesAnErasedAlias(annotation.typeAnnotation, annotationType)) {
+				continue;
+			}
+
+			const contextualParameterType = checker.getTypeOfSymbolAtLocation(
+				target,
+				services.esTreeNodeToTSNodeMap.get(node),
+			);
+			if (containsAny(contextualParameterType)) {
+				continue;
+			}
+
+			if (!typesAreIdentical(annotationType, contextualParameterType)) {
+				continue;
+			}
+
+			context.report({
+				data: { typeName: display(annotationType) },
+				fix: (fixer) => fixer.remove(annotation),
+				messageId: PARAMETER_MESSAGE_ID,
+				node: annotation,
+			});
+		}
+	}
+
 	return {
+		ArrowFunctionExpression: checkFunctionParameters,
+		FunctionExpression: checkFunctionParameters,
 		VariableDeclarator(node: TSESTree.VariableDeclarator): void {
 			const { kind } = node.parent;
 			if (kind !== "const" && kind !== "let") {
@@ -290,7 +515,7 @@ function create(
 				return;
 			}
 
-			if (isContextDependent(node.init)) {
+			if (isContextDependent(node.init) || suppliesParameterContext(node.init)) {
 				return;
 			}
 

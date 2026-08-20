@@ -4,6 +4,7 @@ import { run } from "../test";
 import { noRedundantTypeAnnotation, RULE_NAME } from "./rule";
 
 const messageId = "redundant";
+const parameterMessageId = "redundantParameter";
 
 const valid: Array<ValidTestCase> = [
 	// Nothing to restate.
@@ -162,6 +163,49 @@ const valid: Array<ValidTestCase> = [
 		}
 		const value: Colour = Colour.Red;
 	`,
+
+	// --- parameters ---
+
+	// A declaration has no contextual type, so its parameters must say so.
+	unindent`
+		function handle(value: string): void {}
+	`,
+	// Nothing supplies a context here either.
+	unindent`
+		const handle = (value: string): void => {};
+	`,
+	// The annotation is narrower than the context gives.
+	unindent`
+		declare function each(callback: (value: number | string) => void): void;
+		each((value: string) => {});
+	`,
+	// The annotation is an inference source for the generic, not a restatement.
+	unindent`
+		declare function wrap<T>(callback: (value: T) => T): void;
+		wrap((value: number) => value);
+	`,
+	// An overloaded callee can be picked by the parameter type.
+	unindent`
+		declare function on(event: "click", handler: (payload: number) => void): void;
+		declare function on(event: "key", handler: (payload: string) => void): void;
+		on("click", (payload: number) => {});
+	`,
+	// A rest parameter holds the array, not the element the signature pairs it
+	// with.
+	unindent`
+		declare function each(callback: (value: string) => void): void;
+		each((...values: Array<string>) => {});
+	`,
+	// An optional parameter carries `| undefined` that the annotation does not.
+	unindent`
+		declare function each(callback: (value?: number) => void): void;
+		each((value: number) => {});
+	`,
+	// An `any` contextual type is not something to inherit silently.
+	unindent`
+		declare function each(callback: (value: any) => void): void;
+		each((value: string) => {});
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -260,16 +304,17 @@ const invalid: Array<InvalidTestCase> = [
 			const value = pick<string>();
 		`,
 	},
-	// Every parameter is annotated, so nothing depends on the context.
+	// Both annotations go: the parameter's context comes from `wrap`, not from
+	// the variable, so neither removal depends on the other.
 	{
 		code: unindent`
 			declare function wrap(value: (input: number) => number): (input: number) => number;
 			const fn: (input: number) => number = wrap((input: number) => input);
 		`,
-		errors: [{ messageId }],
+		errors: [{ messageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare function wrap(value: (input: number) => number): (input: number) => number;
-			const fn = wrap((input: number) => input);
+			const fn = wrap((input) => input);
 		`,
 	},
 	// `await` is transparent to the comparison.
@@ -302,6 +347,125 @@ const invalid: Array<InvalidTestCase> = [
 				Red,
 			}
 			let value = Colour.Red;
+		`,
+	},
+
+	// --- parameters ---
+
+	// The callback's parameter type comes from the signature it is passed to.
+	{
+		code: unindent`
+			interface Item {
+				id: string;
+			}
+			declare const items: Array<Item>;
+			items.forEach((item: Item) => {
+				console.log(item.id);
+			});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Item {
+				id: string;
+			}
+			declare const items: Array<Item>;
+			items.forEach((item) => {
+				console.log(item.id);
+			});
+		`,
+	},
+	// A destructured parameter is annotated the same way.
+	{
+		code: unindent`
+			interface Props {
+				a: string;
+			}
+			declare function render(callback: (props: Props) => void): void;
+			render(({ a }: Props) => {
+				console.log(a);
+			});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Props {
+				a: string;
+			}
+			declare function render(callback: (props: Props) => void): void;
+			render(({ a }) => {
+				console.log(a);
+			});
+		`,
+	},
+	// Only the parameter is reported: the variable annotation is what supplies
+	// its context, so both cannot go.
+	{
+		code: unindent`
+			type Handler = (payload: string) => void;
+			const handle: Handler = (payload: string) => {};
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			type Handler = (payload: string) => void;
+			const handle: Handler = (payload) => {};
+		`,
+	},
+	// Each parameter is judged on its own.
+	{
+		code: unindent`
+			declare function each(callback: (value: string, index: number) => void): void;
+			each((value: string, index: number | string) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function each(callback: (value: string, index: number) => void): void;
+			each((value, index: number | string) => {});
+		`,
+	},
+	// A rest parameter matched against a rest parameter is comparable.
+	{
+		code: unindent`
+			declare function each(callback: (...values: Array<string>) => void): void;
+			each((...values: Array<string>) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function each(callback: (...values: Array<string>) => void): void;
+			each((...values) => {});
+		`,
+	},
+	// An explicit type argument pins the generic, so the annotation restates it.
+	{
+		code: unindent`
+			declare function wrap<T>(callback: (value: T) => T): void;
+			wrap<number>((value: number) => value);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function wrap<T>(callback: (value: T) => T): void;
+			wrap<number>((value) => value);
+		`,
+	},
+	// A function expression in an object literal gets its context from the
+	// object's contextual type.
+	{
+		code: unindent`
+			interface Handlers {
+				click: (payload: number) => void;
+			}
+			declare function register(handlers: Handlers): void;
+			register({
+				click: function (payload: number) {},
+			});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Handlers {
+				click: (payload: number) => void;
+			}
+			declare function register(handlers: Handlers): void;
+			register({
+				click: function (payload) {},
+			});
 		`,
 	},
 ];
