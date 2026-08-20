@@ -70,6 +70,23 @@ const valid: Array<ValidTestCase> = [
 			return "";
 		}
 	`,
+	// A named type that happens to be thenable is still what the caller
+	// receives, so the promise unwrapping must not reach through it.
+	unindent`
+		interface Task {
+			run(): void;
+			then(onDone: (value: unknown) => void): void;
+		}
+
+		export declare function schedule(): Task;
+	`,
+	// The return type is `Generator`, not `unknown`: only the return type itself
+	// is in scope, so a generator's yield type is not read.
+	unindent`
+		export function* walk(): Generator<unknown> {
+			yield 1;
+		}
+	`,
 	// Cross-file resolution is not over-eager: an imported alias that names a
 	// real type passes.
 	unindent`
@@ -142,12 +159,20 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [{ messageId }],
 	},
-	// TSConstructorType
+	// TSConstructorType — a type expression like TSFunctionType, so it takes the
+	// same wording: this code holds the type and calls it, and does not own the
+	// body the other message would tell it to fix.
 	{
 		code: unindent`
 			export type LoaderClass = new () => unknown;
 		`,
-		errors: [{ messageId }],
+		errors: [{ messageId: callbackMessageId }],
+	},
+	{
+		code: unindent`
+			export declare function build(make: new () => unknown): void;
+		`,
+		errors: [{ messageId: callbackMessageId }],
 	},
 	// TSMethodSignature
 	{
@@ -165,6 +190,36 @@ const invalid: Array<InvalidTestCase> = [
 			export type Load = () => unknown;
 		`,
 		errors: [{ messageId: callbackMessageId }],
+	},
+
+	// A getter and an object literal method both reach the rule through
+	// FunctionExpression, and each overload signature reports separately.
+	{
+		code: unindent`
+			export class Store {
+				get value(): unknown {
+					return 1;
+				}
+			}
+		`,
+		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			export const store = {
+				read(): unknown {
+					return 1;
+				},
+			};
+		`,
+		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			export declare function read(key: string): unknown;
+			export declare function read(key: number): unknown;
+		`,
+		errors: [{ messageId }, { messageId }],
 	},
 
 	// --- Promise unwrapping ---

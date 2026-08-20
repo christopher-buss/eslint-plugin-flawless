@@ -45,11 +45,19 @@ a truthful narrower type available — `() => void` where the result was
 discarded, a named union where it was thrown, and a domain type where it was
 serialised. Exempting those positions would suppress real improvements.
 
-Only the function type form (`(item: string) => unknown`) is treated as the
-receiving direction, because it is the only form that types a function _value_
-supplied from elsewhere. An interface method, a call signature, or a construct
-signature declares a contract an implementation fulfils, so it is worded like a
-declaration.
+A function type — `(item: string) => unknown` or `new () => unknown` — takes the
+receiving wording wherever it appears, because a type expression names a
+function value supplied from elsewhere. Telling the holder of that type to parse
+the value at its boundary would name a function body it does not own. An
+interface method, a call signature, or a construct signature declares a contract
+an implementation fulfils, so it is worded like a declaration.
+
+One gap is worth knowing about: a method written in shorthand inside an inline
+object type in a parameter —
+`function make(o: { encode(item: string): unknown })` — is a member of a
+declared contract, so it takes the declaration wording even though the caller is
+on the receiving end. Write the member as a property
+(`encode: (item: string) => unknown`) and the wording follows the value.
 
 ## Explicit annotations only
 
@@ -78,7 +86,9 @@ syntax, which is what makes the rule hold up:
   and a type parameter that shadows a file-level alias of the same name needs no
   special casing.
 - **Promises are unwrapped**, so `Promise<unknown>`, `PromiseLike<unknown>`, and
-  `Promise<Promise<unknown>>` all report.
+  `Promise<Promise<unknown>>` all report. Only `Promise` and `PromiseLike` are
+  unwrapped, not every thenable: a named domain type that happens to carry a
+  `then` method is what the caller receives, so it is left alone.
 
 Two boundaries are worth stating explicitly:
 
@@ -164,9 +174,9 @@ Narrowing a return often trips a neighbouring rule. The ones seen in practice:
 An ambient `.d.ts` mirroring an upstream API is the one case with no code fix,
 and wants an `eslint-disable` comment carrying the reason. Two notes before
 reaching for one: such a file must be inside the tsconfig program for a
-type-aware rule to see it at all, and a mirror is not automatically typeless. In
-one codebase, 14 of 34 violations were a stub whose methods all returned
-`unknown`, and naming the checker type
+type-aware rule to see it at all, and a mirror is not automatically typeless.
+Most of the reports in one codebase came from a single stub whose methods all
+returned `unknown`; naming the checker type
 (`type TCheck = (value: unknown) => boolean`) fixed every one of them with no
 behaviour change.
 

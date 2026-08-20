@@ -19,6 +19,9 @@ const messages = {
 		"This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.",
 };
 
+/** Wrappers whose value type is what the caller ultimately receives. */
+const PROMISE_TYPE_NAMES = new Set(["Promise", "PromiseLike"]);
+
 /** Every construct that can carry an explicit return type annotation. */
 type FunctionWithReturnType =
 	| TSESTree.ArrowFunctionExpression
@@ -35,17 +38,22 @@ type FunctionWithReturnType =
 /**
  * Which way the `unknown` travels, which decides the wording of the report.
  *
- * A `TSFunctionType` is the only form that types a function *value* supplied by
- * someone else — as a parameter, a property, an alias, or a type argument. Its
- * return flows back into the code holding the type, so that code is told to
- * narrow what it asks for. Every other form declares a contract this code (or
- * its implementer) fulfils, handing the value out to a caller instead.
+ * A function *type* — `TSFunctionType` or `TSConstructorType` — is a type
+ * expression naming a function value supplied from elsewhere, wherever it
+ * appears: a parameter, a property, an alias, or a type argument. Its return
+ * flows back into the code holding the type, so that code is told to narrow
+ * what it asks for; telling it to parse the value at the boundary would name a
+ * function body it does not own. Every other form declares a contract this file
+ * (or its implementer) fulfils, handing the value out to a caller instead.
  *
  * @param node - The function whose return annotation reported.
  * @returns The message id matching the direction of the value.
  */
 function messageIdFor(node: FunctionWithReturnType): MessageIds {
-	return node.type === AST_NODE_TYPES.TSFunctionType ? "unknownCallbackReturn" : "unknownReturn";
+	return node.type === AST_NODE_TYPES.TSConstructorType ||
+		node.type === AST_NODE_TYPES.TSFunctionType
+		? "unknownCallbackReturn"
+		: "unknownReturn";
 }
 
 function create(
@@ -63,12 +71,14 @@ function create(
 	 * (including generic ones and ones imported from another file) collapsed by
 	 * the checker, then the promise wrapper stripped.
 	 *
-	 * `getAwaitedType` unwraps nested promises and is a no-op on everything
-	 * else, so it needs no guard of its own. It returns `undefined` for a type
-	 * with no awaited form, in which case the declared type stands.
+	 * `getAwaitedType` resolves nested promises in one call, but it unwraps
+	 * every thenable, not only promises — so a named domain type that happens to
+	 * carry a `then` method would resolve to whatever `then` hands its callback.
+	 * The promise check keeps it off those: a caller receives that named type,
+	 * not the value inside it.
 	 *
 	 * @param annotation - The explicit return type annotation.
-	 * @returns The awaited type behind the annotation.
+	 * @returns The type behind the annotation, awaited when it is a promise.
 	 */
 	function resolveReturnType(annotation: TSESTree.TSTypeAnnotation): Type {
 		// The map's declared result for a `TypeNode` widens to plain `Identifier`
@@ -76,6 +86,10 @@ function create(
 		// runtime: the TypeScript node behind this type annotation.
 		const typeNode = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation) as TypeNode;
 		const declared = checker.getTypeFromTypeNode(typeNode);
+		if (!PROMISE_TYPE_NAMES.has(declared.getSymbol()?.getName() ?? "")) {
+			return declared;
+		}
+
 		return checker.getAwaitedType(declared) ?? declared;
 	}
 
