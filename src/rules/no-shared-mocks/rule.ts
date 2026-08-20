@@ -131,7 +131,7 @@ function containsMockCreation(
  * @returns The nearest enclosing function, or `null` at module scope.
  */
 function getEnclosingFunction(node: TSESTree.Node): null | TSESTree.Node {
-	let current: TSESTree.Node = node;
+	let current = node;
 	while (current.type !== AST_NODE_TYPES.Program) {
 		const { parent } = current;
 		if (ASTUtils.isFunction(parent)) {
@@ -253,7 +253,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @returns `true` when the reference sits in a module mock factory.
 	 */
 	function isInsideModuleMockFactory(identifier: TSESTree.Node): boolean {
-		let current: TSESTree.Node = identifier;
+		let current = identifier;
 		while (current.type !== AST_NODE_TYPES.Program) {
 			const { parent } = current;
 			// A function that is a direct child of a call is either its callee or

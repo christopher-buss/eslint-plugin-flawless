@@ -88,7 +88,7 @@ function nameOf(entry: Entry): string {
  * @returns A function giving a name's rank, or `Infinity` when unlisted.
  */
 function makeRank(order: ReadonlyArray<string>): (name: string) => number {
-	return (name: string): number => {
+	return (name): number => {
 		for (const [index, item] of order.entries()) {
 			if (name === item || name.startsWith(`${item}.`)) {
 				return index;
@@ -105,7 +105,7 @@ function makeFallback({
 	type = "asc",
 }: SortOrderObject): (a: string, b: string) => number {
 	const sensitivity = caseSensitive ? "variant" : "accent";
-	return (a: string, b: string): number => {
+	return (a, b): number => {
 		const result = a.localeCompare(b, "en", { numeric: natural, sensitivity });
 		return type === "desc" ? -result : result;
 	};
@@ -132,7 +132,7 @@ function makeComparator(
 ): (a: Entry, b: Entry) => number {
 	const rank = Array.isArray(order) ? makeRank(order) : undefined;
 	const fallback = makeFallback(Array.isArray(order) ? { natural: true, type: "asc" } : order);
-	return (a: Entry, b: Entry): number => {
+	return (a, b): number => {
 		if (isTopLevel) {
 			const aRank = isTable(a) ? 1 : 0;
 			const bRank = isTable(b) ? 1 : 0;

@@ -1,4 +1,3 @@
-import type { ImportBindingDefinition } from "@typescript-eslint/scope-manager";
 import { DefinitionType } from "@typescript-eslint/scope-manager";
 import {
 	AST_NODE_TYPES,
@@ -188,7 +187,7 @@ function resolveVitestName(
 		return null;
 	}
 
-	const importDefinition: ImportBindingDefinition = definition;
+	const importDefinition = definition;
 	const declaration = importDefinition.parent;
 	if (
 		declaration.type !== AST_NODE_TYPES.ImportDeclaration ||

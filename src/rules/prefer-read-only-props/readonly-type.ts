@@ -68,7 +68,7 @@ export function isTypeFullyReadonly(
 		});
 	}
 
-	const indexInfos: ReadonlyArray<IndexInfo> = checker.getIndexInfosOfType(type);
+	const indexInfos = checker.getIndexInfosOfType(type);
 	for (const indexInfo of indexInfos) {
 		if (!indexInfo.isReadonly) {
 			return false;

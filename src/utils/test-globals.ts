@@ -1,4 +1,3 @@
-import type { ImportBindingDefinition } from "@typescript-eslint/scope-manager";
 import { DefinitionType } from "@typescript-eslint/scope-manager";
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
@@ -74,7 +73,7 @@ export function resolveTestGlobalName(
 		return null;
 	}
 
-	const importDefinition: ImportBindingDefinition = definition;
+	const importDefinition = definition;
 	const declaration = importDefinition.parent;
 	const source =
 		declaration.type === AST_NODE_TYPES.ImportDeclaration && declaration.source.value;

@@ -79,6 +79,15 @@ export default isentinel(
 		},
 	},
 	{
+		// The samples show a function expression held in an annotated `const`,
+		// which is the whole point of the parameter-context example — func-style
+		// would rewrite it into a declaration and lose the annotation.
+		files: ["src/rules/no-redundant-type-annotation/documentation.md/**"],
+		rules: {
+			"func-style": "off",
+		},
+	},
+	{
 		// Documentation code fences intentionally show incorrect YAML samples.
 		files: ["src/rules/yaml-block-key-blank-lines/documentation.md/**"],
 		rules: {
