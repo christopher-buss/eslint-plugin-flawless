@@ -623,7 +623,7 @@ function create(
 		// #region autoAccessor
 
 		"TSEnumMember": {
-			handler: ({ id }: TSESTree.TSEnumMember, validator): void => {
+			handler: ({ id }, validator): void => {
 				const modifiers = new Set<ModifierType>();
 
 				if (requiresQuoting(id, compilerOptions.target)) {
@@ -661,7 +661,7 @@ function create(
 		// its literal keys are validated as `typeProperty` too - otherwise
 		// `{ [K in "EmitCount"]: T }` is the next bypass after `Record`.
 		"TSMappedType": {
-			handler: (node: TSESTree.TSMappedType, validator): void => {
+			handler: (node, validator): void => {
 				// An `as` clause renames the key, so it - not the constraint -
 				// is what names the resulting properties.
 				const keySource = node.nameType ?? node.constraint;
@@ -852,7 +852,7 @@ function create(
 		Object.entries(selectors).map(([selector, { handler, validator }]) => {
 			return [
 				selector,
-				(node: Parameters<typeof handler>[0]): void => {
+				(node): void => {
 					// eslint-disable-next-line ts/no-unnecessary-type-assertion -- Breaks otherwise
 					handler(node as never, validator);
 				},

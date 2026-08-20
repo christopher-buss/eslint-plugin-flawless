@@ -84,7 +84,7 @@ export function createValidator(
 		});
 
 	return (
-		node: ValidatorNode,
+		node,
 		modifiers: Set<ModifierType> = new Set<ModifierType>(),
 		showForeignContractHint = false,
 		typeNode: TSESTree.Node = node,
