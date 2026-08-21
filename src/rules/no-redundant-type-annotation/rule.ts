@@ -25,14 +25,17 @@ import { createEslintRule } from "../../util";
 
 export const RULE_NAME = "no-redundant-type-annotation";
 
+const CATCH_MESSAGE_ID = "redundantCatch";
 const MESSAGE_ID = "redundant";
 const PARAMETER_MESSAGE_ID = "redundantParameter";
 
-export type MessageIds = typeof MESSAGE_ID | typeof PARAMETER_MESSAGE_ID;
+export type MessageIds = typeof CATCH_MESSAGE_ID | typeof MESSAGE_ID | typeof PARAMETER_MESSAGE_ID;
 
 type Options = [];
 
 const messages = {
+	[CATCH_MESSAGE_ID]:
+		"The `{{typeName}}` annotation restates the type a catch variable already has under `useUnknownInCatchVariables`. Remove it and let the compiler option carry the type.",
 	[MESSAGE_ID]:
 		"The `{{typeName}}` annotation restates the type the initializer already has. Remove it and let inference carry the type.",
 	[PARAMETER_MESSAGE_ID]:
@@ -164,6 +167,13 @@ function create(
 ): TSESLint.RuleListener {
 	const services = getParserServices(context);
 	const checker = services.program.getTypeChecker();
+
+	// A catch variable takes its type from this option rather than from
+	// anything written at the site. With the option off the variable is `any`,
+	// so an `unknown` annotation there is narrowing rather than restating.
+	const compilerOptions = services.program.getCompilerOptions();
+	const catchVariablesAreUnknown =
+		compilerOptions.useUnknownInCatchVariables ?? compilerOptions.strict ?? false;
 
 	/**
 	 * Renders a type the way TypeScript would print it, without truncation.
@@ -489,6 +499,38 @@ function create(
 
 	return {
 		ArrowFunctionExpression: checkFunctionParameters,
+		CatchClause({ param }: TSESTree.CatchClause): void {
+			if (!catchVariablesAreUnknown) {
+				return;
+			}
+
+			if (param?.type !== AST_NODE_TYPES.Identifier) {
+				return;
+			}
+
+			const annotation = param.typeAnnotation;
+			if (annotation === undefined) {
+				return;
+			}
+
+			const annotationType = services.getTypeFromTypeNode(annotation.typeAnnotation);
+			// `any` is the only other annotation a catch variable may carry, and
+			// it does real work: it opts the variable back out of `unknown`.
+			if ((annotationType.flags & TypeFlags.Unknown) === 0) {
+				return;
+			}
+
+			if (namesAnErasedAlias(annotation.typeAnnotation, annotationType)) {
+				return;
+			}
+
+			context.report({
+				data: { typeName: display(annotationType) },
+				fix: (fixer) => fixer.remove(annotation),
+				messageId: CATCH_MESSAGE_ID,
+				node: annotation,
+			});
+		},
 		FunctionExpression: checkFunctionParameters,
 		VariableDeclarator(node: TSESTree.VariableDeclarator): void {
 			const { kind } = node.parent;

@@ -29,9 +29,9 @@ The rule reports only when removing the annotation leaves the variable with
 general: an annotation that widens, narrows, names, or protects anything is left
 alone.
 
-Two positions are checked: a variable declaration with an initializer, and a
-parameter of a function expression that has a contextual type. Return types are
-not checked.
+Three positions are checked: a variable declaration with an initializer, a
+parameter of a function expression that has a contextual type, and a catch
+clause variable. Return types are not checked.
 
 ### When an annotation is doing work
 
@@ -175,6 +175,30 @@ wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 
 The same applies to an overloaded callee, where the parameter types can be what
 picks the overload.
+
+## Catch clause variables
+
+Under the `useUnknownInCatchVariables` compiler option, which `strict` turns on,
+a catch variable is already `unknown`. Writing `: unknown` on it restates what
+the option gives:
+
+```ts
+declare function report(value: unknown): void;
+
+try {
+	report("start");
+} catch (err: unknown) {
+	//     ^^^^^^^^^^^ already `unknown`
+	report(err);
+}
+```
+
+The other annotation TypeScript accepts here is `any`, and that one is doing
+work: it opts the variable back out of `unknown`. It is left alone.
+
+The check reads the option from the project the file belongs to. With the option
+off a bare catch variable is `any`, so `: unknown` narrows it and nothing is
+reported.
 
 ## Known limitations
 

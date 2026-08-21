@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"lib": ["es2023"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"noEmit": true,
+		"strict": true,
+		"target": "es2022",
+		"useUnknownInCatchVariables": false
+	},
+	"include": ["./**/*.ts"]
+}

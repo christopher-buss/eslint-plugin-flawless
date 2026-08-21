@@ -1,8 +1,10 @@
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import path from "node:path";
 
 import { run } from "../test";
 import { noRedundantTypeAnnotation, RULE_NAME } from "./rule";
 
+const catchMessageId = "redundantCatch";
 const messageId = "redundant";
 const parameterMessageId = "redundantParameter";
 
@@ -205,6 +207,25 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		declare function each(callback: (value: any) => void): void;
 		each((value: string) => {});
+	`,
+
+	// --- catch clauses ---
+
+	// Nothing is written, so there is nothing to restate.
+	unindent`
+		try {
+		} catch (error) {}
+	`,
+	// `any` opts the variable back out of `unknown`, which is real work.
+	unindent`
+		try {
+		} catch (error: any) {}
+	`,
+	// The alias is the only mention of the name, as for a variable.
+	unindent`
+		type Thrown = unknown;
+		try {
+		} catch (error: Thrown) {}
 	`,
 ];
 
@@ -468,6 +489,37 @@ const invalid: Array<InvalidTestCase> = [
 			});
 		`,
 	},
+	// A catch variable is already `unknown` under the compiler option, and
+	// `unknown` is the only thing the annotation can be saying.
+	{
+		code: unindent`
+			try {
+			} catch (error: unknown) {}
+		`,
+		errors: [{ messageId: catchMessageId }],
+		output: unindent`
+			try {
+			} catch (error) {}
+		`,
+	},
+	// The catch body is irrelevant; only the annotation is read.
+	{
+		code: unindent`
+			declare function report(value: unknown): void;
+			try {
+			} catch (error: unknown) {
+				report(error);
+			}
+		`,
+		errors: [{ messageId: catchMessageId }],
+		output: unindent`
+			declare function report(value: unknown): void;
+			try {
+			} catch (error) {
+				report(error);
+			}
+		`,
+	},
 ];
 
 run({
@@ -475,4 +527,36 @@ run({
 	invalid,
 	rule: noRedundantTypeAnnotation,
 	valid,
+});
+
+// `useUnknownInCatchVariables` is what makes a bare catch variable `unknown`.
+// Proving the rule stands down when it is off needs a project that turns it
+// off, so these cases run against `fixtures/no-redundant-type-annotation/
+// loose-catch`.
+const looseCatchDirectory = path.resolve(
+	__dirname,
+	"../../../fixtures/no-redundant-type-annotation/loose-catch",
+);
+
+run({
+	name: `${RULE_NAME}/loose-catch`,
+	invalid: [],
+	parserOptions: {
+		ecmaVersion: "latest",
+		project: path.join(looseCatchDirectory, "tsconfig.json"),
+		sourceType: "module",
+		tsconfigRootDir: looseCatchDirectory,
+	},
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			// Without the option the variable is `any`, so the annotation is
+			// narrowing it rather than restating it.
+			code: unindent`
+				try {
+				} catch (error: unknown) {}
+			`,
+			filename: path.join(looseCatchDirectory, "case.ts"),
+		},
+	],
 });
