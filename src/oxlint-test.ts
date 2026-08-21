@@ -162,9 +162,18 @@ function invokeOxlint(args: Array<string>, cwd: string): string {
 function lint(configPath: string, filePath: string, cwd: string): Array<OxlintDiagnostic> {
 	const stdout = invokeOxlint(["--config", configPath, "-f", "json", filePath], cwd);
 	const parsed = JSON.parse(stdout) as {
-		diagnostics: Array<{ code: string; message: string }>;
+		diagnostics: Array<{ code?: string; message: string }>;
 	};
+	// A thrown plugin drops every remaining diagnostic for the file, so the
+	// rule under test would look silent instead of broken. Fail loudly.
+	const crash = parsed.diagnostics.find(({ message }) =>
+		message.includes("Error running JS plugin"),
+	);
+	if (crash !== undefined) {
+		throw new Error(crash.message);
+	}
+
 	return parsed.diagnostics
-		.filter((diagnostic) => diagnostic.code.startsWith("flawless("))
-		.map(({ code, message }) => ({ code, message }));
+		.filter((diagnostic) => diagnostic.code?.startsWith("flawless(") === true)
+		.map(({ code, message }) => ({ code: code ?? "", message }));
 }

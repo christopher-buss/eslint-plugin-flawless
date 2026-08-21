@@ -337,6 +337,21 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.message).toContain("Parameter `{ id }` accepts any object shape");
 	});
 
+	// An un-annotated parameter is `null` under oxlint, not `undefined`. A
+	// crash here aborts the whole file, so the annotated parameter below it
+	// must still report.
+	it("no-object-parameters survives un-annotated parameters", () => {
+		const { diagnostics } = runOxlint({
+			code: "export function untyped(value, { id }, ...rest) {\n\treturn value;\n}\nexport function handle(payload: object): void {}\n",
+			filename: "file.ts",
+			rule: "no-object-parameters",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-object-parameters)");
+		expect(diagnostics[0]?.message).toContain("Parameter `payload` accepts any object shape");
+	});
+
 	// Evidence tracking reads `context.sourceCode.getScope` and walks the
 	// resolved variable's defs/references, so this covers the scope analysis
 	// oxlint exposes to a JS plugin.

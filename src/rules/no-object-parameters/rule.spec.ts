@@ -32,6 +32,19 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		function untyped(value): void {}
 	`,
+	// Every un-annotated parameter shape: an absent annotation is spelled
+	// `null` by oxlint and `undefined` by typescript-eslint.
+	unindent`
+		function untyped({ id }, [first], ...rest): void {}
+	`,
+	unindent`
+		function untyped(value = {}): void {}
+	`,
+	unindent`
+		class Handler {
+			constructor(private readonly payload) {}
+		}
+	`,
 	unindent`
 		function collect(...values: Array<object>): void {}
 	`,

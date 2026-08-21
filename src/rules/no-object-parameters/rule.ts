@@ -55,7 +55,9 @@ function parameterAnnotation(node: AnnotatedNode): TSESTree.TSTypeAnnotation | u
 		return undefined;
 	}
 
-	return node.typeAnnotation;
+	// Oxlint spells an absent annotation `null` where typescript-eslint uses
+	// `undefined`; normalize so callers need one absence check.
+	return node.typeAnnotation ?? undefined;
 }
 
 function parameterBinding(node: AnnotatedNode): ParameterBinding {
@@ -94,7 +96,9 @@ function parameterName(
 
 	const text = sourceCode.getText(binding);
 	const annotation =
-		binding.type === AST_NODE_TYPES.MemberExpression ? undefined : binding.typeAnnotation;
+		binding.type === AST_NODE_TYPES.MemberExpression
+			? undefined
+			: (binding.typeAnnotation ?? undefined);
 	if (annotation === undefined) {
 		return text;
 	}
@@ -226,11 +230,12 @@ function isOpenDictionaryLiteral(type: TSESTree.TSTypeLiteral): boolean {
 	return (
 		type.members.length > 0 &&
 		type.members.every((member) => {
-			return (
-				member.type === AST_NODE_TYPES.TSIndexSignature &&
-				member.typeAnnotation !== undefined &&
-				isOpenValueType(member.typeAnnotation.typeAnnotation)
-			);
+			if (member.type !== AST_NODE_TYPES.TSIndexSignature) {
+				return false;
+			}
+
+			const value = member.typeAnnotation?.typeAnnotation;
+			return value !== undefined && isOpenValueType(value);
 		})
 	);
 }
