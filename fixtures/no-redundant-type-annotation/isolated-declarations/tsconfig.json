@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"isolatedDeclarations": true,
+		"lib": ["es2023"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"noEmit": true,
+		"strict": true,
+		"target": "es2022"
+	},
+	"include": ["./**/*.ts"]
+}
