@@ -321,6 +321,7 @@ function isEffectivelyEmptyInterface(
 function resolvedSubstitutionArgument(
 	type: TSESTree.TypeNode,
 	base: TypeAliasEnvironment,
+	seen: ReadonlySet<string> = new Set(),
 ): TSESTree.TypeNode {
 	const unwrapped = unwrapTransparentType(type);
 	if (unwrapped.type !== AST_NODE_TYPES.TSTypeReference) {
@@ -332,8 +333,18 @@ function resolvedSubstitutionArgument(
 		return type;
 	}
 
+	if (seen.has(name)) {
+		return type;
+	}
+
 	const substitution = base.get(name);
-	return substitution === undefined ? type : resolvedSubstitutionArgument(substitution, base);
+	if (substitution === undefined) {
+		return type;
+	}
+
+	const nextSeen = new Set(seen);
+	nextSeen.add(name);
+	return resolvedSubstitutionArgument(substitution, base, nextSeen);
 }
 
 function aliasSubstitution(

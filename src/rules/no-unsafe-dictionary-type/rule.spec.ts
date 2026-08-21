@@ -76,6 +76,16 @@ const valid: Array<ValidTestCase> = [
 		type Record<Key, Value> = Map<Key, Value>;
 		type Values = Record<string, unknown>;
 	`,
+	unindent`
+		type Inner<A, B> = Record<string, B>;
+		type Middle<B, A> = Inner<A, B>;
+		export type Outer<A, B> = Middle<A, B>;
+	`,
+	unindent`
+		type Inner<Chain, Value> = Record<string, Value>;
+		type Middle<Chain, Value> = Inner<Chain, Value>;
+		export type Outer<Chain, Value> = Middle<Chain, Value>;
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
