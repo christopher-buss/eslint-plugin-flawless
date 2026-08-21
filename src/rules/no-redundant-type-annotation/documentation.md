@@ -200,6 +200,40 @@ The check reads the option from the project the file belongs to. With the option
 off a bare catch variable is `any`, so `: unknown` narrows it and nothing is
 reported.
 
+## Exported variables under `isolatedDeclarations`
+
+The `isolatedDeclarations` compiler option makes the declaration emitter work
+from one file's syntax alone, with no type checker to fall back on. An exported
+variable must then write its type down, because the annotation is the only copy
+the emitter can read:
+
+```ts
+export const RbxPathParent: unique symbol = Symbol("Parent");
+//                        ^^^^^^^^^^^^^^^ NOT reported — the fix would give
+//                                        error TS9010
+```
+
+Inference gives the same `unique symbol` here, so the annotation does restate
+the initializer, but removing it stops the build. The check reads the option
+from the project the file belongs to and stands down on every exported variable
+while it is on, whether the export sits on the declaration or in a later
+`export { ... }` list. Variables that stay inside the module are out of the
+option's reach and are still reported.
+
+An annotation that supplies a function's parameter types is unaffected: the
+variable keeps its own annotation, so the emitter still has what it needs.
+
+```ts
+type Handler = (value: string) => void;
+
+declare function report(value: string): void;
+
+export const handler: Handler = (value: string) => {
+	//                                  ^^^^^^^^ still reported
+	report(value);
+};
+```
+
 ## Known limitations
 
 - Variable declarations are checked for `const` and `let` with a plain
@@ -213,6 +247,8 @@ reported.
   a union is a real change rather than the widening TypeScript would apply.
 - An optional parameter is skipped. The contextual type carries `| undefined`
   that the written annotation does not, so the two never compare as identical.
+- Under `isolatedDeclarations` no exported variable is reported, even when the
+  initializer is a literal the emitter could have read on its own.
 - The fix can leave a type import with no remaining use. Pair the rule with an
   unused-import rule, or `noUnusedLocals` will fail the build.
 

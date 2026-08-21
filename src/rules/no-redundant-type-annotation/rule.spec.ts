@@ -560,3 +560,85 @@ run({
 		},
 	],
 });
+
+// `isolatedDeclarations` makes an exported variable's annotation the only copy
+// of its type the declaration emitter can read, so removing it is a compile
+// error rather than a cleanup. These cases run against
+// `fixtures/no-redundant-type-annotation/isolated-declarations`.
+const isolatedDeclarationsDirectory = path.resolve(
+	__dirname,
+	"../../../fixtures/no-redundant-type-annotation/isolated-declarations",
+);
+
+run({
+	name: `${RULE_NAME}/isolated-declarations`,
+	invalid: [
+		{
+			// A variable that stays inside the module is out of the option's
+			// reach.
+			code: unindent`
+				declare function getDate(): Date;
+				const value: Date = getDate();
+				export function use(): void {
+					void value;
+				}
+			`,
+			errors: [{ messageId }],
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+			output: unindent`
+				declare function getDate(): Date;
+				const value = getDate();
+				export function use(): void {
+					void value;
+				}
+			`,
+		},
+		{
+			// The variable annotation is what the emitter reads, so it stays; the
+			// parameter annotation it supplies is still a restatement.
+			code: unindent`
+				type Handler = (value: string) => void;
+				export const handler: Handler = (value: string) => {};
+			`,
+			errors: [{ messageId: parameterMessageId }],
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+			output: unindent`
+				type Handler = (value: string) => void;
+				export const handler: Handler = (value) => {};
+			`,
+		},
+	],
+	parserOptions: {
+		ecmaVersion: "latest",
+		project: path.join(isolatedDeclarationsDirectory, "tsconfig.json"),
+		sourceType: "module",
+		tsconfigRootDir: isolatedDeclarationsDirectory,
+	},
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			// Dropping the annotation here reports error TS9010, so the rule
+			// leaves the exported declaration alone.
+			code: unindent`
+				export const RbxPathParent: unique symbol = Symbol("Parent");
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			code: unindent`
+				declare function getDate(): Date;
+				export const value: Date = getDate();
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			// An export list reaches the declaration just the same.
+			code: unindent`
+				declare function getDate(): Date;
+				const value: Date = getDate();
+				export { value };
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+	],
+});

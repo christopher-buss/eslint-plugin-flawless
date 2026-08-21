@@ -175,6 +175,13 @@ function create(
 	const catchVariablesAreUnknown =
 		compilerOptions.useUnknownInCatchVariables ?? compilerOptions.strict ?? false;
 
+	// With this option the declaration emitter works from syntax alone, so an
+	// exported variable must say its type in the source. There the annotation is
+	// not a restatement of the initializer; it is the only copy the emitter can
+	// read, and removing it turns the report into error TS9010.
+	const declarationsAreIsolated = compilerOptions.isolatedDeclarations ?? false;
+	let exportedNames: Set<string> | undefined;
+
 	/**
 	 * Renders a type the way TypeScript would print it, without truncation.
 	 *
@@ -419,6 +426,56 @@ function create(
 		return typeParameters !== undefined && typeParameters.length > 0;
 	}
 
+	/**
+	 * Collects the names an `export { ... }` list sends out of this module.
+	 *
+	 * A declaration can be exported away from its own statement, so the
+	 * `export const` form is not the whole picture.
+	 *
+	 * @returns The locally declared names named by an export list.
+	 */
+	function getExportedNames(): ReadonlySet<string> {
+		if (exportedNames === undefined) {
+			exportedNames = new Set();
+			for (const statement of context.sourceCode.ast.body) {
+				// A `source` means the names come from elsewhere, so no local
+				// declaration is involved.
+				if (
+					statement.type !== AST_NODE_TYPES.ExportNamedDeclaration ||
+					statement.source !== null
+				) {
+					continue;
+				}
+
+				for (const specifier of statement.specifiers) {
+					exportedNames.add(specifier.local.name);
+				}
+			}
+		}
+
+		return exportedNames;
+	}
+
+	/**
+	 * Reports whether a variable leaves the module.
+	 *
+	 * Only exported declarations are subject to `isolatedDeclarations`, so the
+	 * question decides whether the annotation is load-bearing.
+	 *
+	 * @param node - The declarator to inspect.
+	 * @param name - The name it binds.
+	 * @returns True when the module exports that variable.
+	 */
+	function isExported(node: TSESTree.VariableDeclarator, name: string): boolean {
+		const statement = node.parent.parent;
+		if (statement.type === AST_NODE_TYPES.ExportNamedDeclaration) {
+			return true;
+		}
+
+		// An export list can only reach a binding at the top of the module.
+		return statement.type === AST_NODE_TYPES.Program && getExportedNames().has(name);
+	}
+
 	function checkFunctionParameters(
 		node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
 	): void {
@@ -544,6 +601,10 @@ function create(
 
 			const annotation = node.id.typeAnnotation;
 			if (annotation === undefined || node.init === null) {
+				return;
+			}
+
+			if (declarationsAreIsolated && isExported(node, node.id.name)) {
 				return;
 			}
 
