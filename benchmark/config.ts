@@ -186,6 +186,10 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		ruleId: "prefer-parameter-destructuring",
 		testPath: "./cases/all/prefer-parameter-destructuring.tsx",
 	},
+	{
+		ruleId: "prefer-vitest-local-context",
+		testPath: "./cases/all/prefer-vitest-local-context.tsx",
+	},
 	{ ruleId: "purity", testPath: "./cases/all/purity.tsx" },
 	{ ruleId: "react-namespace", testPath: "./cases/all/react-namespace.tsx" },
 ];
