@@ -30,6 +30,7 @@ import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/r
 import { preferExpectAssertionsCount } from "./rules/prefer-expect-assertions-count/rule";
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
 import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
+import { preferVitestLocalContext } from "./rules/prefer-vitest-local-context/rule";
 import { purity } from "./rules/purity/rule";
 import { reactNamespace } from "./rules/react-namespace/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
@@ -86,6 +87,7 @@ export const plugin = {
 		"prefer-expect-assertions-count": preferExpectAssertionsCount,
 		"prefer-parameter-destructuring": preferParameterDestructuring,
 		"prefer-read-only-props": preferReadOnlyProps,
+		"prefer-vitest-local-context": preferVitestLocalContext,
 		"purity": purity,
 		"react-namespace": reactNamespace,
 		"toml-sort-keys": tomlSortKeys,
