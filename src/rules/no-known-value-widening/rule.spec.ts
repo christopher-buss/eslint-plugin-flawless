@@ -175,6 +175,22 @@ const valid: Array<ValidTestCase> = [
 		declare const target: object;
 		isKey(target, "root");
 	`,
+	// An annotated binding already fixed its type, so its initializer's
+	// evidence does not reach later flows.
+	unindent`
+		function randomModuleSources(): Record<string, string> {
+			const sources: Record<string, string> = {};
+			sources.root = "1";
+			return sources;
+		}
+	`,
+	unindent`
+		interface Owner { id: string }
+		const owner: Owner = { id: "1" };
+		function makeOwner(): { id: string } {
+			return owner;
+		}
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -496,6 +512,31 @@ const invalid: Array<InvalidTestCase> = [
 					subject: "argument for parameter \`value\` of \`isUser\`",
 					target: "unknown",
 				},
+				messageId,
+			},
+		],
+	},
+	{
+		// An annotated binding's evidence is its declared type, which \`unknown\`
+		// discards.
+		code: unindent`
+			interface Owner { id: string }
+			const owner: Owner = { id: "1" };
+			const widened: unknown = owner;
+		`,
+		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+	},
+	{
+		// An unannotated \`const\` still carries its literal's evidence.
+		code: unindent`
+			function makeCounts(): Record<string, number> {
+				const counts = { root: 1 };
+				return counts;
+			}
+		`,
+		errors: [
+			{
+				data: { subject: "return value of \`makeCounts\`", target: "open dictionary" },
 				messageId,
 			},
 		],

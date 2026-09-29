@@ -31,6 +31,12 @@ const messages = {
 		"The known initializer supplying {{subject}} carries established type evidence, but the explicit {{target}} target type discards it. Preserve inference, use `satisfies`, or introduce/use a named owner contract; parse genuinely external data once at its boundary.",
 };
 
+/** Where a value flows, and the declarations needed to judge the target. */
+interface FlowTarget {
+	readonly destination: WideningTarget;
+	readonly environment: TypeEnvironment;
+}
+
 type FunctionNode =
 	| TSESTree.ArrowFunctionExpression
 	| TSESTree.FunctionDeclaration
@@ -94,47 +100,6 @@ function isStableConstVariable(
 		declarator.parent.kind === "const" &&
 		variable.references.every((reference) => reference.init === true || !reference.isWrite())
 	);
-}
-
-/**
- * Whether an expression's type is established syntactically, following stable
- * `const` bindings back to the literal that seeded them.
- *
- * @param sourceCode - The source code of the linted file.
- * @param expression - The expression supplying the value.
- * @param visitedVariables - Bindings already followed, guarding against cycles.
- * @returns True when the value carries type evidence of its own.
- */
-function hasKnownEvidence(
-	sourceCode: Readonly<TSESLint.SourceCode>,
-	expression: TSESTree.Expression,
-	visitedVariables = new Set<TSESLint.Scope.Variable>(),
-): boolean {
-	if (isKnownEvidenceExpression(expression)) {
-		return true;
-	}
-
-	const unwrapped = unwrapAssertedExpression(expression);
-	if (unwrapped.type !== AST_NODE_TYPES.Identifier) {
-		return false;
-	}
-
-	const variable = resolveVariable(sourceCode, unwrapped);
-	if (variable === null || visitedVariables.has(variable)) {
-		return false;
-	}
-
-	const declarator = variableDeclarator(variable);
-	if (declarator === null || !isStableConstVariable(variable, declarator)) {
-		return false;
-	}
-
-	if (declarator.init === null) {
-		return false;
-	}
-
-	visitedVariables.add(variable);
-	return hasKnownEvidence(sourceCode, declarator.init, visitedVariables);
 }
 
 function isFunctionNode(node: TSESTree.Node): node is FunctionNode {
@@ -289,6 +254,72 @@ function hasKnownCallArgumentEvidence(
 }
 
 /**
+ * Whether a target discards every declared type outright. A declared type
+ * flowing into a dictionary or anonymous object is a type-to-type conversion
+ * that cannot be judged syntactically, so only these targets discard it.
+ *
+ * @param destination - The explicit target type.
+ * @returns True for the `unknown` and `object` escape hatches.
+ */
+function discardsDeclaredType(destination: WideningTarget): boolean {
+	return destination.kind === "object" || destination.kind === "unknown";
+}
+
+/**
+ * Whether a value flowing into a target carries type evidence the target
+ * discards. Stable `const` bindings are followed back to the literal that
+ * seeded them, but an annotated binding stops the walk: its annotation already
+ * fixed the type, so its evidence is the annotation, not the initializer. The
+ * declarator is judged on its own.
+ *
+ * @param sourceCode - The source code of the linted file.
+ * @param expression - The expression supplying the value.
+ * @param flow - The explicit target type and the file's type declarations.
+ * @param visitedVariables - Bindings already followed, guarding against cycles.
+ * @returns True when the target discards evidence the value carries.
+ */
+function hasKnownEvidence(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	expression: TSESTree.Expression,
+	flow: FlowTarget,
+	visitedVariables = new Set<TSESLint.Scope.Variable>(),
+): boolean {
+	if (isKnownEvidenceExpression(expression)) {
+		return true;
+	}
+
+	const unwrapped = unwrapAssertedExpression(expression);
+	if (unwrapped.type !== AST_NODE_TYPES.Identifier) {
+		return false;
+	}
+
+	const variable = resolveVariable(sourceCode, unwrapped);
+	if (variable === null || visitedVariables.has(variable)) {
+		return false;
+	}
+
+	const declarator = variableDeclarator(variable);
+	if (declarator === null || !isStableConstVariable(variable, declarator)) {
+		return false;
+	}
+
+	const annotation = variableTypeAnnotation(variable);
+	if (annotation !== null) {
+		return (
+			discardsDeclaredType(flow.destination) &&
+			hasInformativeType(annotation.typeAnnotation, flow.environment)
+		);
+	}
+
+	if (declarator.init === null) {
+		return false;
+	}
+
+	visitedVariables.add(variable);
+	return hasKnownEvidence(sourceCode, declarator.init, flow, visitedVariables);
+}
+
+/**
  * The index of the parameter a type predicate narrows, as in `value is User`.
  *
  * @param owner - The candidate predicate function.
@@ -417,7 +448,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		if (!hasKnownEvidence(context.sourceCode, expression)) {
+		if (
+			environment === null ||
+			!hasKnownEvidence(context.sourceCode, expression, { destination, environment })
+		) {
 			return;
 		}
 
