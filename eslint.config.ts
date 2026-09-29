@@ -39,6 +39,14 @@ export default isentinel(
 		},
 	},
 	{
+		// no-property-in-node needs type information, which markdown code
+		// blocks never have; the Symbol keys section shows an `in` guard.
+		files: ["src/rules/no-reflect-set/documentation.md/**"],
+		rules: {
+			"eslint-plugin/no-property-in-node": "off",
+		},
+	},
+	{
 		// A rule's own documentation intentionally shows incorrect samples, and
 		// prefer-destructuring-assignment's documentation shows body
 		// destructuring as an accepted form.
