@@ -165,6 +165,125 @@ const valid: Array<ValidTestCase> = [
 		}
 		const value: Colour = Colour.Red;
 	`,
+	// The annotation reaches a literal in either branch of a conditional.
+	unindent`
+		declare const choose: boolean;
+		declare const tuple: [number];
+		const value: [number] = choose ? [1] : tuple;
+	`,
+	unindent`
+		declare const choose: boolean;
+		declare const owner: { kind: "a" };
+		const value: { kind: "a" } = choose ? { kind: "a" } : owner;
+	`,
+
+	// --- function return values ---
+
+	// The annotation keeps a returned literal from widening.
+	unindent`
+		const fn: () => 1 = () => 1;
+	`,
+	unindent`
+		const getTag: () => "div" = () => "div";
+	`,
+	unindent`
+		const getFlag: () => true = () => true;
+	`,
+	unindent`
+		enum Colour {
+			Red,
+			Blue,
+		}
+		const getColour: () => Colour.Red = () => Colour.Red;
+	`,
+	unindent`
+		declare const key: unique symbol;
+		const getKey: () => typeof key = () => key;
+	`,
+	unindent`
+		const tag = "a";
+		const getTag: () => "a" = () => tag;
+	`,
+	unindent`
+		const fn: () => 1 = () => 1 satisfies number;
+	`,
+	// ...through the promise of an async function.
+	unindent`
+		const load: () => Promise<1> = async () => 1;
+	`,
+	// A template expression is a template type only under a context.
+	unindent`
+		declare const suffix: string;
+		const getName: () => \`a\${string}\` = () => \`a\${suffix}\`;
+	`,
+	unindent`
+		declare const choose: boolean;
+		declare const suffix: string;
+		const getName: () => \`a\${string}\` | \`b\${string}\` = () =>
+			choose ? \`a\${suffix}\` : \`b\${suffix}\`;
+	`,
+	// A returned array or object literal is typed against the annotation.
+	unindent`
+		const usePair: () => [number, string] = () => [1, "a"];
+	`,
+	unindent`
+		declare const choose: boolean;
+		declare const tuple: [number];
+		const get: () => [number] = () => (choose ? [1] : tuple);
+	`,
+	unindent`
+		const get: () => { kind: "a" } = () => ({ kind: "a" });
+	`,
+	// A returned function takes its parameter types from the annotation.
+	unindent`
+		const outer: () => (x: number) => number = () => x => x;
+	`,
+	unindent`
+		const outer: () => () => 1 = () => () => 1;
+	`,
+	// A returned generic call infers from the annotation.
+	unindent`
+		const make: () => Set<string> = () => new Set();
+	`,
+	// Returns nested in blocks count too.
+	unindent`
+		declare const choose: boolean;
+		const fn: () => 1 = () => {
+			if (choose) {
+				return 1;
+			}
+			return 1;
+		};
+	`,
+	// The annotation types `this`.
+	unindent`
+		interface Owner {
+			x: number;
+		}
+		const read: (this: Owner) => number = function () {
+			return this.x;
+		};
+	`,
+	unindent`
+		interface Owner {
+			x: number;
+		}
+		const read: (this: Owner) => () => number = function () {
+			return () => this.x;
+		};
+	`,
+	// A generator's `yield` is contextually typed, which the rule does not
+	// follow.
+	unindent`
+		const gen: () => Generator<1, void, unknown> = function* () {
+			yield 1;
+		};
+	`,
+	// Both branches of a conditional are followed.
+	unindent`
+		declare const choose: boolean;
+		const fn: () => 1 = choose ? () => 1 : () => 1;
+	`,
 
 	// --- parameters ---
 
@@ -412,6 +531,128 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 	},
 
+	// --- function return values ---
+
+	// A context of `number` gives the literal nothing, so it widens anyway.
+	{
+		code: "const fn: () => number = () => 1;",
+		errors: [{ messageId }],
+		output: "const fn = () => 1;",
+	},
+	{
+		code: unindent`
+			declare function getNumber(): number;
+			const fn: () => number = () => getNumber();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getNumber(): number;
+			const fn = () => getNumber();
+		`,
+	},
+	{
+		code: "const load: () => Promise<number> = async () => 1;",
+		errors: [{ messageId }],
+		output: "const load = async () => 1;",
+	},
+	// A union of literals does not widen.
+	{
+		code: unindent`
+			declare const choose: boolean;
+			const fn: () => "a" | "b" = () => (choose ? "a" : "b");
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const choose: boolean;
+			const fn = () => (choose ? "a" : "b");
+		`,
+	},
+	{
+		code: unindent`
+			declare const choose: boolean;
+			const fn: () => "a" | "b" = () => {
+				if (choose) {
+					return "a";
+				}
+				return "b";
+			};
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const choose: boolean;
+			const fn = () => {
+				if (choose) {
+					return "a";
+				}
+				return "b";
+			};
+		`,
+	},
+	// Nothing is returned, so nothing takes the context.
+	{
+		code: "const fn: () => void = () => {};",
+		errors: [{ messageId }],
+		output: "const fn = () => {};",
+	},
+	{
+		code: unindent`
+			const fn: () => never = () => {
+				throw new Error("fail");
+			};
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			const fn = () => {
+				throw new Error("fail");
+			};
+		`,
+	},
+	// The function's own return type stops the context.
+	{
+		code: "const fn: () => 1 = (): 1 => 1;",
+		errors: [{ messageId }],
+		output: "const fn = (): 1 => 1;",
+	},
+	// A callback passed to a plain call takes its context from the callee, so
+	// what it returns says nothing about the variable's annotation.
+	{
+		code: unindent`
+			declare function run(fn: () => "a"): number;
+			const value: number = run(() => "a");
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function run(fn: () => "a"): number;
+			const value = run(() => "a");
+		`,
+	},
+	{
+		code: unindent`
+			declare function run(fn: () => object): number;
+			const value: number = run(() => ({}));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function run(fn: () => object): number;
+			const value = run(() => ({}));
+		`,
+	},
+	{
+		code: unindent`
+			declare function run(fn: (this: { x: number }) => number): number;
+			const value: number = run(function () {
+				return this.x;
+			});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function run(fn: (this: { x: number }) => number): number;
+			const value = run(function () {
+				return this.x;
+			});
+		`,
+	},
+
 	// --- parameters ---
 
 	// The callback's parameter type comes from the signature it is passed to.
@@ -598,6 +839,51 @@ run({
 				} catch (error: unknown) {}
 			`,
 			filename: path.join(looseCatchDirectory, "case.ts"),
+		},
+	],
+});
+
+// Without `strictNullChecks`, an inferred `null` or `undefined` return widens
+// to `any`. These cases run against
+// `fixtures/no-redundant-type-annotation/loose-null`.
+const looseNullDirectory = path.resolve(
+	__dirname,
+	"../../../fixtures/no-redundant-type-annotation/loose-null",
+);
+
+run({
+	name: `${RULE_NAME}/loose-null`,
+	invalid: [
+		{
+			// A returned value that is not `null` does not widen.
+			code: unindent`
+				declare function getNumber(): number;
+				const fn: () => number = () => getNumber();
+			`,
+			errors: [{ messageId }],
+			filename: path.join(looseNullDirectory, "case.ts"),
+			output: unindent`
+				declare function getNumber(): number;
+				const fn = () => getNumber();
+			`,
+		},
+	],
+	parserOptions: {
+		ecmaVersion: "latest",
+		project: path.join(looseNullDirectory, "tsconfig.json"),
+		sourceType: "module",
+		tsconfigRootDir: looseNullDirectory,
+	},
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			// Without the annotation the function returns `any`.
+			code: "const fn: () => null = () => null;",
+			filename: path.join(looseNullDirectory, "case.ts"),
+		},
+		{
+			code: "const fn: () => undefined = () => undefined;",
+			filename: path.join(looseNullDirectory, "case.ts"),
 		},
 	],
 });
