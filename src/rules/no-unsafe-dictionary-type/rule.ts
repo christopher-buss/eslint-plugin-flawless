@@ -105,7 +105,34 @@ function isPlainAliasConsumerUse(node: TSESTree.TypeNode): boolean {
 	);
 }
 
+/**
+ * Checks whether a type node sits inside a generic's `extends` constraint. A
+ * constraint only bounds what callers may pass; the type parameter keeps each
+ * caller's precise type, so the dictionary's value type never reaches reads.
+ *
+ * @param node - The type node to check.
+ * @returns Whether the node is part of a type parameter constraint.
+ */
+function isInTypeParameterConstraint(node: TSESTree.TypeNode): boolean {
+	let child: TSESTree.Node = node;
+	let { parent } = child;
+	while (parent.type !== AST_NODE_TYPES.Program) {
+		if (parent.type === AST_NODE_TYPES.TSTypeParameter && parent.constraint === child) {
+			return true;
+		}
+
+		child = parent;
+		({ parent } = child);
+	}
+
+	return false;
+}
+
 function shouldReportType(node: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
+	if (isInTypeParameterConstraint(node)) {
+		return false;
+	}
+
 	if (isPlainAliasConsumerUse(node)) {
 		return false;
 	}
