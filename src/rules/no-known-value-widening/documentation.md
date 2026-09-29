@@ -15,7 +15,7 @@ later read has to cast the evidence back in.
 
 The rule is syntactic: it reports only where a **known** value meets an
 **explicitly broad** target type. It never needs type information, and it never
-guesses about values that come from a call, a parameter, or an import.
+guesses about values that come from an unknown call, a parameter, or an import.
 
 ### What counts as a known value
 
@@ -25,8 +25,28 @@ An expression whose type is established by its own syntax:
 - a plain literal or a unary expression;
 - a function, arrow function, or class expression;
 - a `new` expression;
-- an identifier bound by a `const` that is never reassigned, whose initializer
-  is itself known. The chain is followed as far as it goes.
+- an identifier bound by an unannotated `const` that is never reassigned, whose
+  initializer is itself known. The chain is followed as far as it goes.
+
+### Annotated bindings
+
+A `const` with its own type annotation stops the chain. The annotation already
+fixed the binding's type, so no literal evidence from the initializer reaches a
+later flow; the declarator itself is judged on its own. The binding's evidence
+is its declared type, and only `unknown` and `object` discard a declared type:
+
+```ts
+function randomModuleSources(): Record<string, string> {
+	const sources: Record<string, string> = {};
+	return sources; // ✓ nothing is discarded here
+}
+
+const owner: Owner = { id: "1" };
+const widened: unknown = owner; // ✗ `unknown` discards `Owner`
+```
+
+A literal is therefore reported once, where it meets the broad type, and not
+again at every later use of its binding.
 
 Anything else — a call, a parameter, an imported binding, a `let` that is
 written more than once — is treated as external, and is left alone.
@@ -55,6 +75,15 @@ type Registry = Record<string, Command>;
 const commands: Registry = { start: startCommand }; // still an open dictionary
 ```
 
+A `Record` is judged by its key. `Record<string, V>`, `Record<PropertyKey, V>`,
+and a key union with any such member admit every key and are open;
+`Record<"a" | "b", V>` states exactly which keys exist and is a contract. A
+generic alias is a `generic container` only when its applied form is open.
+
+Aliases resolve lexically from the reference. A block-scoped alias counts like a
+module one, and a nearer interface, class, import, or type parameter of the same
+name shadows it — including a local `Record` that shadows the built-in.
+
 Through an alias, a mapped type is judged by its key. `[Key in string]` and
 `[Key in PropertyKey]` constrain nothing and are reported; `[Key in Level]`,
 where `Level` is a named union of literals, states exactly which properties
@@ -66,9 +95,31 @@ class properties, `return` statements and concise arrow bodies, and `as` / angle
 bracket assertions. In an assertion chain only the outermost assertion is
 reported, since it is the one that decides the final type.
 
+## Type predicates
+
+A call to a type predicate declared in the same file is checked too. When the
+predicate's subject parameter admits `unknown`, a known argument is widened back
+to `unknown` only to be narrowed again:
+
+```ts
+function isUser(value: unknown): value is User {
+	/* ... */
+}
+
+declare const user: User;
+isUser(user); // ✗ `user` is already a `User`
+```
+
+For an argument, the evidence also includes a declared type: an annotated
+binding or parameter, an assertion, or a call to a local function with a return
+type. A declared type that is itself `unknown`, `any`, `object`, `{}`, or a
+union with one of those carries no evidence, so `isUser(input)` with
+`input: unknown` is fine.
+
 ## The dictionary accumulator
 
-`{}` seeding a dictionary is exempt, wherever the seed appears:
+`{}` seeding a dictionary is exempt, wherever the seed appears, including at the
+end of an unannotated `const` chain:
 
 ```ts
 // ✓ without the annotation the empty literal infers `{}`, and no key could
@@ -80,6 +131,10 @@ class Counters {
 }
 
 function makeCounts(): Record<string, number> {
+	return {};
+}
+
+function makeSeed(): Record<string, number> {
 	return {};
 }
 ```
