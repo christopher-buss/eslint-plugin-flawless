@@ -227,9 +227,50 @@ const valid: Array<ValidTestCase> = [
 		try {
 		} catch (error: Thrown) {}
 	`,
+	// `as const` hands the outer call's inferred type back as context, so the
+	// annotation is the only inference source.
+	unindent`
+		declare function each<T>(cases: ReadonlyArray<T>): void;
+		each([["a", (n: number) => n]] as const);
+	`,
+	unindent`
+		declare function each<T>(cases: ReadonlyArray<T>): void;
+		each([{ run: (n: number) => n }] as const);
+	`,
+	unindent`
+		declare function each<T>(cases: ReadonlyArray<T>): void;
+		each(<const>[["a", (n: number) => n]]);
+	`,
+	// A non-null assertion passes the same circular context through.
+	unindent`
+		declare function each<T>(cases: ReadonlyArray<T>): void;
+		each([((n: number) => n)!]);
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// A non-const assertion supplies a real contextual type.
+	{
+		code: unindent`
+			const f = ((n: number) => n) as (n: number) => number;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			const f = ((n) => n) as (n: number) => number;
+		`,
+	},
+	// An explicit type argument fixes `T`, so the annotation restates it.
+	{
+		code: unindent`
+			declare function each<T>(cases: ReadonlyArray<T>): void;
+			each<[string, (n: number) => number]>([["a", (n: number) => n]] as const);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function each<T>(cases: ReadonlyArray<T>): void;
+			each<[string, (n: number) => number]>([["a", (n) => n]] as const);
+		`,
+	},
 	{
 		code: unindent`
 			declare function getString(): string;
