@@ -86,6 +86,32 @@ const valid: Array<ValidTestCase> = [
 		type Middle<Chain, Value> = Inner<Chain, Value>;
 		export type Outer<Chain, Value> = Middle<Chain, Value>;
 	`,
+	unindent`
+		function keysOf<T extends Record<string, unknown>>(value: T): Array<keyof T> {
+			return Object.keys(value);
+		}
+	`,
+	unindent`
+		declare class Store<T extends { [key: string]: unknown }> {
+			read(): T;
+		}
+	`,
+	unindent`
+		interface Schema<T extends { [key: string]: unknown }> {
+			parse(input: string): T;
+		}
+	`,
+	unindent`
+		type WithSchema<T extends { [key: string]: unknown }> = (schema: T) => void;
+	`,
+	unindent`
+		declare class Parser {
+			parse<T extends { [key: string]: unknown }>(input: string): T;
+		}
+	`,
+	unindent`
+		declare function all<T extends Array<Record<string, unknown>>>(items: T): T;
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -148,6 +174,25 @@ const invalid: Array<InvalidTestCase> = [
 			type Values = Record<string, Empty>;
 		`,
 		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			declare function f<T = Record<string, unknown>>(): T;
+		`,
+		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			declare function f<T extends object>(value: Record<string, unknown>): T;
+		`,
+		errors: [{ messageId }],
+	},
+	{
+		code: unindent`
+			type Index<T = unknown> = Record<string, T>;
+			type Values = Index;
+		`,
+		errors: [{ line: 2, messageId }],
 	},
 ];
 

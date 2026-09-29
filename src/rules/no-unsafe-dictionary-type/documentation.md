@@ -22,6 +22,13 @@ interfaces, mapped types, and the built-in `Record`, `Readonly`, `Partial`,
 `Required`, `NonNullable`, `Pick`, and `Omit` utility types. It does not require
 TypeScript type information.
 
+The rule does not report types inside a generic's `extends` constraint, such as
+`<T extends Record<string, unknown>>`. A constraint only sets a lower limit on
+what callers can pass: `T` keeps the precise type of each caller's argument, so
+the escape hatch never reaches the values that the code reads. A type parameter
+default, such as `<T = Record<string, unknown>>`, is still reported, because it
+becomes the real type when a caller does not give one.
+
 ## Examples
 
 Examples of **incorrect** code for this rule:
@@ -47,6 +54,10 @@ type JSONValue = boolean | JSONArray | JSONObject | null | number | string;
 interface JSONArray extends Array<JSONValue> {}
 interface JSONObject {
 	[key: string]: JSONValue;
+}
+
+function keysOf<T extends Record<string, unknown>>(value: T): Array<keyof T> {
+	return Object.keys(value) as Array<keyof T>;
 }
 ```
 
