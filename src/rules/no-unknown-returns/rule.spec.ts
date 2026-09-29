@@ -4,6 +4,7 @@ import { run } from "../test";
 import { noUnknownReturns, RULE_NAME } from "./rule";
 
 const callbackMessageId = "unknownCallbackReturn";
+const matcherMessageId = "unknownMatcherReturn";
 const messageId = "unknownReturn";
 
 const valid: Array<ValidTestCase> = [
@@ -361,7 +362,7 @@ const invalid: Array<InvalidTestCase> = [
 	},
 	// The any-function wildcard is NOT exempt. `(...args: never) => void`
 	// classifies identically and is more honest, since these sites discard the
-	// return — so the report has a truthful fix.
+	// return — so the report has a truthful fix, and the message names it.
 	{
 		code: unindent`
 			interface Registry {
@@ -371,11 +372,56 @@ const invalid: Array<InvalidTestCase> = [
 
 			export type Loaders = Extract<Registry[keyof Registry], (...args: never) => unknown>;
 		`,
-		errors: [{ messageId: callbackMessageId }],
+		errors: [{ messageId: matcherMessageId }],
+	},
+	{
+		code: unindent`
+			export type Callables<T> = Exclude<T, new () => unknown>;
+		`,
+		errors: [{ messageId: matcherMessageId }],
 	},
 	{
 		code: unindent`
 			export type ReturnOf<T> = T extends (...args: never) => unknown ? T : never;
+		`,
+		errors: [{ messageId: matcherMessageId }],
+	},
+	{
+		code: unindent`
+			export type DeepWritable<T> = T extends (...parameters: ReadonlyArray<never>) => unknown
+				? T
+				: T extends object
+					? { -readonly [K in keyof T]: DeepWritable<T[K]> }
+					: T;
+		`,
+		errors: [{ messageId: matcherMessageId }],
+	},
+	// Nested inside the matcher is still only matched against.
+	{
+		code: unindent`
+			export type IsPair<T> = T extends [() => unknown, () => unknown] ? true : false;
+		`,
+		errors: [{ messageId: matcherMessageId }, { messageId: matcherMessageId }],
+	},
+	// A result branch is a real type: whoever holds it calls it.
+	{
+		code: unindent`
+			export type Wrap<T> = T extends string ? () => unknown : never;
+		`,
+		errors: [{ messageId: callbackMessageId }],
+	},
+	// The nearest conditional decides, so a result branch nested inside an outer
+	// matcher keeps the callback wording.
+	{
+		code: unindent`
+			export type Odd<T, U> = T extends (U extends string ? () => unknown : never) ? true : false;
+		`,
+		errors: [{ messageId: callbackMessageId }],
+	},
+	// Only the filter argument of `Extract` is a matcher.
+	{
+		code: unindent`
+			export type Kept = Extract<() => unknown, Function>;
 		`,
 		errors: [{ messageId: callbackMessageId }],
 	},

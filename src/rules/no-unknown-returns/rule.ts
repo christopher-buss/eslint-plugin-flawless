@@ -9,18 +9,23 @@ import { createEslintRule } from "../../util";
 
 export const RULE_NAME = "no-unknown-returns";
 
-type MessageIds = "unknownCallbackReturn" | "unknownReturn";
+type MessageIds = "unknownCallbackReturn" | "unknownMatcherReturn" | "unknownReturn";
 type Options = [];
 
 const messages = {
 	unknownCallbackReturn:
 		"This callback returns `unknown` to the code that calls it. Narrow the return to the domain type this code needs, or `void` if the result is unused.",
+	unknownMatcherReturn:
+		"This function type only matches callables by shape; nothing calls it. Return `void` instead: a `void` return accepts every return type, so the match is unchanged.",
 	unknownReturn:
 		"This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.",
 };
 
 /** Wrappers whose value type is what the caller ultimately receives. */
 const PROMISE_TYPE_NAMES = new Set(["Promise", "PromiseLike"]);
+
+/** Utility types whose second argument filters by assignability. */
+const FILTER_TYPE_NAMES = new Set(["Exclude", "Extract"]);
 
 /** Every construct that can carry an explicit return type annotation. */
 type FunctionWithReturnType =
@@ -34,6 +39,42 @@ type FunctionWithReturnType =
 	| TSESTree.TSEmptyBodyFunctionExpression
 	| TSESTree.TSFunctionType
 	| TSESTree.TSMethodSignature;
+
+/**
+ * Whether a function type sits where it is only tested against, never called:
+ * the `extends` clause of a conditional type, or the filter argument of
+ * `Extract`/`Exclude`. There `void` accepts every return type, so it matches
+ * exactly what `unknown` does and is the fix to name.
+ *
+ * The nearest conditional type decides: a function type in its check or result
+ * branch is a real type, even when that conditional is itself nested inside an
+ * outer matcher.
+ *
+ * @param node - The function type whose return annotation reported.
+ * @returns True when the function type is a structural matcher.
+ */
+function isShapeMatcher(node: TSESTree.TSConstructorType | TSESTree.TSFunctionType): boolean {
+	for (let child: TSESTree.Node = node; child.type !== AST_NODE_TYPES.Program; ) {
+		const parent: TSESTree.Node = child.parent;
+		if (parent.type === AST_NODE_TYPES.TSConditionalType) {
+			return parent.extendsType === child;
+		}
+
+		if (
+			parent.type === AST_NODE_TYPES.TSTypeParameterInstantiation &&
+			parent.params[1] === child &&
+			parent.parent.type === AST_NODE_TYPES.TSTypeReference &&
+			parent.parent.typeName.type === AST_NODE_TYPES.Identifier &&
+			FILTER_TYPE_NAMES.has(parent.parent.typeName.name)
+		) {
+			return true;
+		}
+
+		child = parent;
+	}
+
+	return false;
+}
 
 /**
  * Which way the `unknown` travels, which decides the wording of the report.
@@ -50,10 +91,14 @@ type FunctionWithReturnType =
  * @returns The message id matching the direction of the value.
  */
 function messageIdFor(node: FunctionWithReturnType): MessageIds {
-	return node.type === AST_NODE_TYPES.TSConstructorType ||
-		node.type === AST_NODE_TYPES.TSFunctionType
-		? "unknownCallbackReturn"
-		: "unknownReturn";
+	if (
+		node.type !== AST_NODE_TYPES.TSConstructorType &&
+		node.type !== AST_NODE_TYPES.TSFunctionType
+	) {
+		return "unknownReturn";
+	}
+
+	return isShapeMatcher(node) ? "unknownMatcherReturn" : "unknownCallbackReturn";
 }
 
 function create(

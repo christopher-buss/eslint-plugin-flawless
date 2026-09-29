@@ -150,6 +150,20 @@ across functions returning values, functions returning `void`, interfaces,
 records, and arrays — and `void` is the more honest type, since those sites
 discard the return. The report has a truthful fix.
 
+The report names that fix. A function type in the `extends` clause of a
+conditional type, or in the filter argument of `Extract` or `Exclude`, gets a
+third message pointing at `void`. The nearest conditional type decides, so a
+function type in a result branch is a real type and keeps the callback wording.
+
+```ts
+// Reports: write `=> void`, which matches every function the same way.
+type DeepWritable<T> = T extends (
+	...parameters: ReadonlyArray<never>
+) => unknown
+	? T
+	: { -readonly [K in keyof T]: DeepWritable<T[K]> };
+```
+
 ## Rules a fix can collide with
 
 Narrowing a return often trips a neighbouring rule. The ones seen in practice:
