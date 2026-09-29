@@ -253,6 +253,15 @@ function hasKnownCallArgumentEvidence(
 	return hasKnownCallArgumentEvidence(sourceCode, declarator.init, environment, visitedVariables);
 }
 
+function isEmptyObjectExpression(expression: TSESTree.Expression): boolean {
+	const unwrapped = unwrapAssertedExpression(expression);
+	return unwrapped.type === AST_NODE_TYPES.ObjectExpression && unwrapped.properties.length === 0;
+}
+
+function isDictionaryAccumulatorTarget(destination: WideningTarget): boolean {
+	return destination.kind === "generic container" || destination.kind === "open dictionary";
+}
+
 /**
  * Whether a target discards every declared type outright. A declared type
  * flowing into a dictionary or anonymous object is a type-to-type conversion
@@ -285,7 +294,13 @@ function hasKnownEvidence(
 	visitedVariables = new Set<TSESLint.Scope.Variable>(),
 ): boolean {
 	if (isKnownEvidenceExpression(expression)) {
-		return true;
+		// `{}` seeding a dictionary is the one case where the annotation earns
+		// its keep: without it the empty literal infers `{}`, and no key could
+		// ever be written. This holds wherever the seed appears, including at
+		// the end of an unannotated `const` chain.
+		return (
+			!isDictionaryAccumulatorTarget(flow.destination) || !isEmptyObjectExpression(expression)
+		);
 	}
 
 	const unwrapped = unwrapAssertedExpression(expression);
@@ -405,15 +420,6 @@ function functionName(
 		: "anonymous function";
 }
 
-function isEmptyObjectExpression(expression: TSESTree.Expression): boolean {
-	const unwrapped = unwrapAssertedExpression(expression);
-	return unwrapped.type === AST_NODE_TYPES.ObjectExpression && unwrapped.properties.length === 0;
-}
-
-function isDictionaryAccumulatorTarget(destination: WideningTarget): boolean {
-	return destination.kind === "generic container" || destination.kind === "open dictionary";
-}
-
 /**
  * Whether an assertion is itself asserted again. Only the outermost assertion
  * of a chain decides the final type, so the inner ones are not reported.
@@ -437,14 +443,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		subject: string,
 	): void {
 		if (destination === null) {
-			return;
-		}
-
-		// `{}` seeding a dictionary is the one case where the annotation earns
-		// its keep: without it the empty literal infers `{}`, and no key could
-		// ever be written. This holds wherever the seed appears, not only at a
-		// declarator.
-		if (isDictionaryAccumulatorTarget(destination) && isEmptyObjectExpression(expression)) {
 			return;
 		}
 

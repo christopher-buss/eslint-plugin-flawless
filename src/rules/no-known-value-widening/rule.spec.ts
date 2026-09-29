@@ -191,6 +191,14 @@ const valid: Array<ValidTestCase> = [
 			return owner;
 		}
 	`,
+	// An empty seed reached through an unannotated \`const\` is still an
+	// accumulator.
+	unindent`
+		function makeCounts(): Record<string, number> {
+			const seed = {};
+			return seed;
+		}
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
