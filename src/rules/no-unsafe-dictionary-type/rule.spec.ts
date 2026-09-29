@@ -187,6 +187,13 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [{ messageId }],
 	},
+	{
+		code: unindent`
+			type Index<T = unknown> = Record<string, T>;
+			type Values = Index;
+		`,
+		errors: [{ line: 2, messageId }],
+	},
 ];
 
 run({

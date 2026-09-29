@@ -53,7 +53,13 @@ export function lookupAlias(
 	from: TSESTree.Node,
 ): TSESTree.TSTypeAliasDeclaration | undefined {
 	const declaration = lookupTypeDeclaration(name, from);
-	return declaration?.type === AST_NODE_TYPES.TSTypeAliasDeclaration ? declaration : undefined;
+	if (declaration?.type !== AST_NODE_TYPES.TSTypeAliasDeclaration) {
+		return undefined;
+	}
+
+	// The alias may be the owner of a type parameter that binds the name, not
+	// the name's declaration itself.
+	return isBoundByOwnTypeParameter(declaration, name, from) ? undefined : declaration;
 }
 
 /**
@@ -105,6 +111,27 @@ function declaredTypeNames(declaration: TSESTree.Node): ReadonlyArray<string> {
 	}
 
 	return [];
+}
+
+function isBoundByOwnTypeParameter(
+	alias: TSESTree.TSTypeAliasDeclaration,
+	name: string,
+	from: TSESTree.Node,
+): boolean {
+	if (alias.typeParameters?.params.some((parameter) => parameter.name.name === name) !== true) {
+		return false;
+	}
+
+	let current: TSESTree.Node | undefined = from;
+	while (current !== undefined) {
+		if (current === alias) {
+			return true;
+		}
+
+		current = current.parent;
+	}
+
+	return false;
 }
 
 function isChildNode(value: unknown, parent: TSESTree.Node): value is TSESTree.Node {
