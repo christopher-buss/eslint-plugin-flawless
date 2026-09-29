@@ -1,5 +1,12 @@
-import type { TSESTree } from "@typescript-eslint/utils";
+import type {
+	ParserServices,
+	ParserServicesWithTypeInformation,
+	TSESTree,
+} from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+
+import type { Type } from "typescript";
+import { TypeFlags } from "typescript";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
@@ -44,6 +51,54 @@ function isLiteralKey(argument: TSESTree.CallExpressionArgument | undefined): bo
 	return typeof argument.value === "number" || typeof argument.value === "string";
 }
 
+const FIXED_KEY_FLAGS =
+	TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.UniqueESSymbol;
+
+/**
+ * Whether a key type pins the key down at compile time.
+ *
+ * A union qualifies only when every member does: `"a" | "b"` names two
+ * declarable fields, while `string` or `PropertyKey` names none. A template
+ * literal type with holes carries `TemplateLiteral`, not `StringLiteral`, so it
+ * stays clean; one with no holes is already a string literal type.
+ *
+ * @param type - The checker type of the key argument.
+ * @returns True when the key is a literal or `unique symbol` type.
+ */
+function isFixedKeyType(type: Type): boolean {
+	if (type.isUnion()) {
+		return type.types.every(isFixedKeyType);
+	}
+
+	return (type.flags & FIXED_KEY_FLAGS) !== 0;
+}
+
+function hasTypeInformation(
+	services: Partial<ParserServices> | undefined,
+): services is ParserServicesWithTypeInformation {
+	return services?.program !== undefined && services.program !== null;
+}
+
+/**
+ * Whether the key's type is fixed at compile time. Without type information
+ * (oxlint, or a file outside the program) nothing is known, so it is false.
+ *
+ * @param context - The rule context.
+ * @param key - The key argument.
+ * @returns True when the checker proves the key fixed.
+ */
+function hasFixedKeyType(
+	context: FlawlessRuleContext<MessageIds, Options>,
+	key: TSESTree.CallExpressionArgument,
+): boolean {
+	const { parserServices } = context.sourceCode;
+	if (!hasTypeInformation(parserServices)) {
+		return false;
+	}
+
+	return isFixedKeyType(parserServices.getTypeAtLocation(key));
+}
+
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
 		CallExpression(node: TSESTree.CallExpression): void {
@@ -54,11 +109,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			}
 
 			const [, key] = node.arguments;
-			if (!isLiteralKey(key)) {
+			if (key === undefined) {
 				return;
 			}
 
 			if (!isGlobalReflectMethodCall(context.sourceCode, node.callee, "set")) {
+				return;
+			}
+
+			// The type lookup runs last: it is the only costly check.
+			if (!isLiteralKey(key) && !hasFixedKeyType(context, key)) {
 				return;
 			}
 
@@ -74,9 +134,9 @@ export const noReflectSet = createFlawlessRule<Options, MessageIds>({
 	meta: {
 		docs: {
 			description:
-				"Disallow `Reflect.set` with a literal key in favour of a plain assignment",
+				"Disallow `Reflect.set` with a compile-time-fixed key in favour of a plain assignment",
 			recommended: false,
-			requiresTypeChecking: false,
+			requiresTypeChecking: true,
 		},
 		fixable: undefined,
 		hasSuggestions: false,
