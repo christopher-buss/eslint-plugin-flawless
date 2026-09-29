@@ -188,7 +188,9 @@ export function classifyWideningTarget(
 	}
 
 	if (name === "Record" && isBuiltIn(name, environment)) {
-		return { kind: "open dictionary" };
+		return hasBroadRecordKey(unwrapped, environment, new Map())
+			? { kind: "open dictionary" }
+			: null;
 	}
 
 	const alias = environment.aliases.get(name);
@@ -203,9 +205,13 @@ export function classifyWideningTarget(
 
 	const resolving = new Set([name]);
 	if ((alias.typeParameters?.params.length ?? 0) > 0) {
-		return resolvesToDictionary(alias.typeAnnotation, environment, substitutions, resolving)
-			? { kind: "generic container" }
-			: null;
+		const resolved = classifyAliasBroadTarget(
+			alias.typeAnnotation,
+			environment,
+			substitutions,
+			resolving,
+		);
+		return resolved?.kind === "open dictionary" ? { kind: "generic container" } : null;
 	}
 
 	return classifyAliasBroadTarget(alias.typeAnnotation, environment, substitutions, resolving);
@@ -540,18 +546,21 @@ function dictionaryValueTypes(
 
 /**
  * Whether a mapped type's key constrains nothing: `string`, `number`, `symbol`,
- * `PropertyKey`, or a union made only of those. A key drawn from a named union
- * of literals states exactly which properties exist, so it is not broad.
+ * `PropertyKey`, a non-generic alias to one of those, or a union with any such
+ * member. A key drawn from a union of literals states exactly which properties
+ * exist, so it is not broad.
  *
  * @param type - The mapped type's constraint.
  * @param environment - The file's type declarations.
  * @param substitutions - Type arguments bound so far.
+ * @param visitedAliases - Key aliases already followed, guarding cycles.
  * @returns True when the key admits any property name.
  */
 function isBroadMappedKey(
 	type: TSESTree.TypeNode,
 	environment: TypeEnvironment,
 	substitutions: TypeAliasEnvironment,
+	visitedAliases: ReadonlySet<string> = new Set(),
 ): boolean {
 	const unwrapped = unwrapTransparentType(type);
 	if (
@@ -563,9 +572,9 @@ function isBroadMappedKey(
 	}
 
 	if (unwrapped.type === AST_NODE_TYPES.TSUnionType) {
-		return unwrapped.types.every((member) =>
-			isBroadMappedKey(member, environment, substitutions),
-		);
+		return unwrapped.types.some((member) => {
+			return isBroadMappedKey(member, environment, substitutions, visitedAliases);
+		});
 	}
 
 	if (unwrapped.type !== AST_NODE_TYPES.TSTypeReference) {
@@ -579,10 +588,43 @@ function isBroadMappedKey(
 
 	const substitution = substitutions.get(name);
 	if (substitution !== undefined && !isUnappliedReferenceTo(substitution, name)) {
-		return isBroadMappedKey(substitution, environment, substitutions);
+		return isBroadMappedKey(substitution, environment, substitutions, visitedAliases);
 	}
 
-	return name === "PropertyKey" && isBuiltIn(name, environment);
+	if (name === "PropertyKey" && isBuiltIn(name, environment)) {
+		return true;
+	}
+
+	const alias = environment.aliases.get(name);
+	if (
+		alias === undefined ||
+		(alias.typeParameters?.params.length ?? 0) > 0 ||
+		visitedAliases.has(name)
+	) {
+		return false;
+	}
+
+	const nextVisited = new Set(visitedAliases);
+	nextVisited.add(name);
+	return isBroadMappedKey(alias.typeAnnotation, environment, substitutions, nextVisited);
+}
+
+/**
+ * Whether a `Record`'s key admits any property name. An omitted key is treated
+ * as broad, since nothing narrows it.
+ *
+ * @param type - The `Record` reference.
+ * @param environment - The file's type declarations.
+ * @param substitutions - Type arguments bound so far.
+ * @returns True when the key admits any property name.
+ */
+function hasBroadRecordKey(
+	type: TSESTree.TSTypeReference,
+	environment: TypeEnvironment,
+	substitutions: TypeAliasEnvironment,
+): boolean {
+	const key = type.typeArguments?.params[0];
+	return key === undefined || isBroadMappedKey(key, environment, substitutions);
 }
 
 /**
@@ -649,7 +691,9 @@ function classifyAliasBroadTarget(
 	}
 
 	if (name === "Record" && isBuiltIn(name, environment)) {
-		return { kind: "open dictionary" };
+		return hasBroadRecordKey(unwrapped, environment, substitutions)
+			? { kind: "open dictionary" }
+			: null;
 	}
 
 	const alias = environment.aliases.get(name);
@@ -670,13 +714,4 @@ function classifyAliasBroadTarget(
 		nextSubstitutions,
 		nextResolving,
 	);
-}
-
-function resolvesToDictionary(
-	type: TSESTree.TypeNode,
-	environment: TypeEnvironment,
-	substitutions: TypeAliasEnvironment,
-	resolvingAliases: ReadonlySet<string>,
-): boolean {
-	return dictionaryValueTypes(type, environment, substitutions, resolvingAliases).length > 0;
 }

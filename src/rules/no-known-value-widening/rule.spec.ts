@@ -60,6 +60,24 @@ const valid: Array<ValidTestCase> = [
 		type Levels = { readonly [Key in Level]: number };
 		const levels: Levels = { admin: 1, guest: 0 };
 	`,
+	// A `Record` keyed by a finite union states exactly which keys exist.
+	unindent`
+		type Diet = "omnivore" | "vegan";
+		const labels: Record<Diet, string> = { omnivore: "O", vegan: "V" };
+	`,
+	unindent`
+		const labels: Record<"a" | "b", number> = { a: 1, b: 2 };
+	`,
+	unindent`
+		type Diet = "omnivore" | "vegan";
+		type Labels = Readonly<Record<Diet, string>>;
+		const labels: Labels = { omnivore: "O", vegan: "V" };
+	`,
+	// A generic alias applied to a finite key is not a container.
+	unindent`
+		type Index<Key extends PropertyKey, Value> = Record<Key, Value>;
+		const labels: Index<"root", number> = { root: 1 };
+	`,
 	// The value is external, so there is no syntactic evidence to discard.
 	unindent`
 		declare function load(): unknown;
@@ -237,6 +255,21 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },
 		],
+	},
+	{
+		// One broad member opens the whole key set.
+		code: unindent`
+			const counts: Record<"root" | string, number> = { root: 1 };
+		`,
+		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
+	},
+	{
+		// A key alias resolving to \`string\` is still broad.
+		code: unindent`
+			type Key = string;
+			const counts: Record<Key, number> = { root: 1 };
+		`,
+		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// The evidence survives a stable `const` hop.
