@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { lookupAlias } from "../shared/type-bindings";
 
 export const RULE_NAME = "no-object-parameters";
 
@@ -104,100 +105,6 @@ function parameterName(
 	}
 
 	return text.slice(0, annotation.range[0] - binding.range[0]).replace(/\s*:?\s*$/u, "");
-}
-
-/**
- * The statements a node introduces as a type-alias scope, if it is one. Type
- * aliases are block scoped and hoisted, so every statement of the enclosing
- * block is a candidate regardless of where the reference sits.
- *
- * @param node - The node to inspect.
- * @returns The scope's statements, or undefined when the node is not a scope.
- */
-function scopeStatements(node: TSESTree.Node): ReadonlyArray<TSESTree.Node> | undefined {
-	if (
-		node.type === AST_NODE_TYPES.BlockStatement ||
-		node.type === AST_NODE_TYPES.Program ||
-		node.type === AST_NODE_TYPES.StaticBlock ||
-		node.type === AST_NODE_TYPES.TSModuleBlock
-	) {
-		return node.body;
-	}
-
-	return node.type === AST_NODE_TYPES.SwitchCase ? node.consequent : undefined;
-}
-
-function declaredStatement(statement: TSESTree.Node): TSESTree.Node | undefined {
-	return statement.type === AST_NODE_TYPES.ExportNamedDeclaration
-		? (statement.declaration ?? undefined)
-		: statement;
-}
-
-/**
- * The names a statement adds to the type namespace of its scope.
- *
- * @param declaration - The statement to inspect.
- * @returns The declared type names, empty when the statement declares no type.
- */
-function declaredTypeNames(declaration: TSESTree.Node): ReadonlyArray<string> {
-	if (declaration.type === AST_NODE_TYPES.ImportDeclaration) {
-		return declaration.specifiers.map((specifier) => specifier.local.name);
-	}
-
-	if (
-		declaration.type === AST_NODE_TYPES.ClassDeclaration ||
-		declaration.type === AST_NODE_TYPES.TSEnumDeclaration ||
-		declaration.type === AST_NODE_TYPES.TSInterfaceDeclaration ||
-		declaration.type === AST_NODE_TYPES.TSTypeAliasDeclaration
-	) {
-		return declaration.id === null ? [] : [declaration.id.name];
-	}
-
-	return [];
-}
-
-/**
- * The node enclosing another, stopping at the program root. `parent` is typed as
- * always present, so the walk needs an explicit end.
- *
- * @param node - The node to step out of.
- * @returns The enclosing node, or undefined at the program root.
- */
-function enclosingNode(node: TSESTree.Node): TSESTree.Node | undefined {
-	return node.type === AST_NODE_TYPES.Program ? undefined : node.parent;
-}
-
-/**
- * Resolves a type name to its alias declaration by walking outwards from the
- * reference, so the nearest declaration of that name wins. A nearer declaration
- * that is not an alias (an interface, class, enum, or import) shadows the alias
- * and ends the search.
- *
- * @param name - The referenced type name.
- * @param from - The node the reference appears in.
- * @returns The nearest matching alias declaration, if any.
- */
-function lookupAlias(
-	name: string,
-	from: TSESTree.Node,
-): TSESTree.TSTypeAliasDeclaration | undefined {
-	let current: TSESTree.Node | undefined = from;
-	while (current !== undefined) {
-		for (const statement of scopeStatements(current) ?? []) {
-			const declaration = declaredStatement(statement);
-			if (declaration === undefined || !declaredTypeNames(declaration).includes(name)) {
-				continue;
-			}
-
-			return declaration.type === AST_NODE_TYPES.TSTypeAliasDeclaration
-				? declaration
-				: undefined;
-		}
-
-		current = enclosingNode(current);
-	}
-
-	return undefined;
 }
 
 function isEmptyTypeLiteral(type: TSESTree.TypeNode): boolean {

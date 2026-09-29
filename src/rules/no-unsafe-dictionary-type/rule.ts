@@ -9,6 +9,7 @@ import {
 	type TypeEnvironment,
 	typeReferenceName,
 } from "../shared/dictionary-types";
+import { lookupAlias } from "../shared/type-bindings";
 
 export const RULE_NAME = "no-unsafe-dictionary-type";
 
@@ -88,7 +89,7 @@ function isInsideTypeAliasDeclaration(node: TSESTree.Node): boolean {
 	return false;
 }
 
-function isPlainAliasConsumerUse(node: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
+function isPlainAliasConsumerUse(node: TSESTree.TypeNode): boolean {
 	if (
 		node.type !== AST_NODE_TYPES.TSTypeReference ||
 		(node.typeArguments?.params.length ?? 0) > 0
@@ -97,11 +98,15 @@ function isPlainAliasConsumerUse(node: TSESTree.TypeNode, environment: TypeEnvir
 	}
 
 	const name = typeReferenceName(node);
-	return name !== null && environment.aliases.has(name) && !isInsideTypeAliasDeclaration(node);
+	return (
+		name !== null &&
+		lookupAlias(name, node) !== undefined &&
+		!isInsideTypeAliasDeclaration(node)
+	);
 }
 
 function shouldReportType(node: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
-	if (isPlainAliasConsumerUse(node, environment)) {
+	if (isPlainAliasConsumerUse(node)) {
 		return false;
 	}
 

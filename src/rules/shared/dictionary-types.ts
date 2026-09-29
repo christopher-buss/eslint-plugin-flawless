@@ -1,5 +1,7 @@
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
+import { lookupAlias, lookupTypeDeclaration } from "./type-bindings";
+
 const BUILT_INS = new Set([
 	"NonNullable",
 	"Omit",
@@ -39,9 +41,7 @@ export interface WideningTarget {
 }
 
 export interface TypeEnvironment {
-	readonly aliases: ReadonlyMap<string, TSESTree.TSTypeAliasDeclaration>;
 	readonly interfaces: ReadonlyMap<string, ReadonlyArray<TSESTree.TSInterfaceDeclaration>>;
-	readonly shadowedBuiltIns: ReadonlySet<string>;
 }
 
 type TypeAliasEnvironment = ReadonlyMap<string, TSESTree.TypeNode>;
@@ -51,60 +51,27 @@ interface ResolvedType {
 	readonly type: TSESTree.TypeNode;
 }
 
+/**
+ * Collects the file's module-level interfaces. Type aliases and built-in
+ * shadowing are resolved lexically at each reference instead.
+ *
+ * @param program - The linted file.
+ * @returns The file's type environment.
+ */
 export function createTypeEnvironment(program: TSESTree.Program): TypeEnvironment {
-	const aliases = new Map<string, TSESTree.TSTypeAliasDeclaration>();
 	const interfaces = new Map<string, Array<TSESTree.TSInterfaceDeclaration>>();
-	const shadowedBuiltIns = new Set<string>();
-
 	for (const statement of program.body) {
 		const declaration = declaredStatement(statement);
-		if (declaration?.type === AST_NODE_TYPES.ImportDeclaration) {
-			for (const specifier of declaration.specifiers) {
-				if (BUILT_INS.has(specifier.local.name)) {
-					shadowedBuiltIns.add(specifier.local.name);
-				}
-			}
-
+		if (declaration?.type !== AST_NODE_TYPES.TSInterfaceDeclaration) {
 			continue;
 		}
 
-		if (declaration?.type === AST_NODE_TYPES.TSTypeAliasDeclaration) {
-			if (aliases.has(declaration.id.name)) {
-				shadowedBuiltIns.add(declaration.id.name);
-			} else {
-				aliases.set(declaration.id.name, declaration);
-			}
-
-			if (BUILT_INS.has(declaration.id.name)) {
-				shadowedBuiltIns.add(declaration.id.name);
-			}
-
-			continue;
-		}
-
-		if (declaration?.type === AST_NODE_TYPES.TSInterfaceDeclaration) {
-			const declarations = interfaces.get(declaration.id.name) ?? [];
-			declarations.push(declaration);
-			interfaces.set(declaration.id.name, declarations);
-			if (BUILT_INS.has(declaration.id.name)) {
-				shadowedBuiltIns.add(declaration.id.name);
-			}
-
-			continue;
-		}
-
-		if (
-			(declaration?.type === AST_NODE_TYPES.TSEnumDeclaration ||
-				declaration?.type === AST_NODE_TYPES.ClassDeclaration ||
-				declaration?.type === AST_NODE_TYPES.FunctionDeclaration) &&
-			declaration.id !== null &&
-			BUILT_INS.has(declaration.id.name)
-		) {
-			shadowedBuiltIns.add(declaration.id.name);
-		}
+		const declarations = interfaces.get(declaration.id.name) ?? [];
+		declarations.push(declaration);
+		interfaces.set(declaration.id.name, declarations);
 	}
 
-	return { aliases, interfaces, shadowedBuiltIns };
+	return { interfaces };
 }
 
 export function typeReferenceName(type: TSESTree.TSTypeReference): null | string {
@@ -182,18 +149,18 @@ export function classifyWideningTarget(
 		return null;
 	}
 
-	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, environment)) {
+	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped)) {
 		const wrapped = unwrapped.typeArguments?.params[0];
 		return wrapped === undefined ? null : classifyWideningTarget(wrapped, environment);
 	}
 
-	if (name === "Record" && isBuiltIn(name, environment)) {
+	if (name === "Record" && isBuiltIn(name, unwrapped)) {
 		return hasBroadRecordKey(unwrapped, environment, new Map())
 			? { kind: "open dictionary" }
 			: null;
 	}
 
-	const alias = environment.aliases.get(name);
+	const alias = lookupAlias(name, unwrapped);
 	if (alias === undefined) {
 		return null;
 	}
@@ -267,8 +234,8 @@ function declaredStatement(statement: TSESTree.ProgramStatement): null | TSESTre
 		: statement;
 }
 
-function isBuiltIn(name: string, environment: TypeEnvironment): boolean {
-	return BUILT_INS.has(name) && !environment.shadowedBuiltIns.has(name);
+function isBuiltIn(name: string, use: TSESTree.Node): boolean {
+	return BUILT_INS.has(name) && lookupTypeDeclaration(name, use) === undefined;
 }
 
 function unwrapTransparentType(type: TSESTree.TypeNode): TSESTree.TypeNode {
@@ -430,7 +397,7 @@ function unsafeDirectValue(
 		return null;
 	}
 
-	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, environment)) {
+	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped)) {
 		const wrapped = unwrapped.typeArguments?.params[0];
 		return wrapped === undefined
 			? null
@@ -449,7 +416,7 @@ function unsafeDirectValue(
 		return isEffectivelyEmptyInterface(interfaceDeclarations) ? "empty-object" : null;
 	}
 
-	const alias = environment.aliases.get(name);
+	const alias = lookupAlias(name, unwrapped);
 	if (alias === undefined || resolvingAliases.has(name)) {
 		return null;
 	}
@@ -505,26 +472,26 @@ function dictionaryValueTypes(
 			: dictionaryValueTypes(substitution, environment, substitutions, resolvingAliases);
 	}
 
-	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, environment)) {
+	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped)) {
 		const wrapped = unwrapped.typeArguments?.params[0];
 		return wrapped === undefined
 			? []
 			: dictionaryValueTypes(wrapped, environment, substitutions, resolvingAliases);
 	}
 
-	if (name === "Record" && isBuiltIn(name, environment)) {
+	if (name === "Record" && isBuiltIn(name, unwrapped)) {
 		const value = unwrapped.typeArguments?.params[1];
 		return value === undefined ? [] : [{ substitutions, type: value }];
 	}
 
-	if ((name === "Pick" || name === "Omit") && isBuiltIn(name, environment)) {
+	if ((name === "Pick" || name === "Omit") && isBuiltIn(name, unwrapped)) {
 		const source = unwrapped.typeArguments?.params[0];
 		return source === undefined
 			? []
 			: dictionaryValueTypes(source, environment, substitutions, resolvingAliases);
 	}
 
-	const alias = environment.aliases.get(name);
+	const alias = lookupAlias(name, unwrapped);
 	if (alias === undefined || resolvingAliases.has(name)) {
 		return [];
 	}
@@ -591,11 +558,11 @@ function isBroadMappedKey(
 		return isBroadMappedKey(substitution, environment, substitutions, visitedAliases);
 	}
 
-	if (name === "PropertyKey" && isBuiltIn(name, environment)) {
+	if (name === "PropertyKey" && isBuiltIn(name, unwrapped)) {
 		return true;
 	}
 
-	const alias = environment.aliases.get(name);
+	const alias = lookupAlias(name, unwrapped);
 	if (
 		alias === undefined ||
 		(alias.typeParameters?.params.length ?? 0) > 0 ||
@@ -683,20 +650,20 @@ function classifyAliasBroadTarget(
 			: classifyAliasBroadTarget(substitution, environment, substitutions, resolvingAliases);
 	}
 
-	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, environment)) {
+	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped)) {
 		const wrapped = unwrapped.typeArguments?.params[0];
 		return wrapped === undefined
 			? null
 			: classifyAliasBroadTarget(wrapped, environment, substitutions, resolvingAliases);
 	}
 
-	if (name === "Record" && isBuiltIn(name, environment)) {
+	if (name === "Record" && isBuiltIn(name, unwrapped)) {
 		return hasBroadRecordKey(unwrapped, environment, substitutions)
 			? { kind: "open dictionary" }
 			: null;
 	}
 
-	const alias = environment.aliases.get(name);
+	const alias = lookupAlias(name, unwrapped);
 	if (alias === undefined || resolvingAliases.has(name)) {
 		return null;
 	}

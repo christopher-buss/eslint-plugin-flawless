@@ -120,6 +120,31 @@ const valid: Array<ValidTestCase> = [
 		type Record<Key, Value> = Map<Key, Value>;
 		const owner: Record<string, unknown> = new Map();
 	`,
+	// A nearer declaration shadows a module alias.
+	unindent`
+		type Owner = unknown;
+		function make() {
+			interface Owner { id: string }
+			const owner: Owner = { id: "1" };
+			return owner;
+		}
+	`,
+	// A type parameter shadows a module alias of the same name.
+	unindent`
+		type Payload = unknown;
+		function wrap<Payload>(make: () => Payload): Payload {
+			const value = { id: "1" } as Payload;
+			return value;
+		}
+	`,
+	// A block-scoped \`Record\` is not the built-in dictionary.
+	unindent`
+		function make() {
+			type Record<Key, Value> = Map<Key, Value>;
+			const owner: Record<string, unknown> = new Map();
+			return owner;
+		}
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -241,6 +266,19 @@ const invalid: Array<InvalidTestCase> = [
 			type Index<Value> = Record<string, Value>;
 			type Registry = Index<number>;
 			const registry: Registry = { root: 1 };
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
+		// A block-scoped alias resolves like a module one.
+		code: unindent`
+			function make() {
+				type Registry = Record<string, number>;
+				const registry: Registry = { root: 1 };
+				return registry;
+			}
 		`,
 		errors: [
 			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
