@@ -60,6 +60,24 @@ const valid: Array<ValidTestCase> = [
 		type Levels = { readonly [Key in Level]: number };
 		const levels: Levels = { admin: 1, guest: 0 };
 	`,
+	// A `Record` keyed by a finite union states exactly which keys exist.
+	unindent`
+		type Diet = "omnivore" | "vegan";
+		const labels: Record<Diet, string> = { omnivore: "O", vegan: "V" };
+	`,
+	unindent`
+		const labels: Record<"a" | "b", number> = { a: 1, b: 2 };
+	`,
+	unindent`
+		type Diet = "omnivore" | "vegan";
+		type Labels = Readonly<Record<Diet, string>>;
+		const labels: Labels = { omnivore: "O", vegan: "V" };
+	`,
+	// A generic alias applied to a finite key is not a container.
+	unindent`
+		type Index<Key extends PropertyKey, Value> = Record<Key, Value>;
+		const labels: Index<"root", number> = { root: 1 };
+	`,
 	// The value is external, so there is no syntactic evidence to discard.
 	unindent`
 		declare function load(): unknown;
@@ -101,6 +119,85 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		type Record<Key, Value> = Map<Key, Value>;
 		const owner: Record<string, unknown> = new Map();
+	`,
+	// A nearer declaration shadows a module alias.
+	unindent`
+		type Owner = unknown;
+		function make() {
+			interface Owner { id: string }
+			const owner: Owner = { id: "1" };
+			return owner;
+		}
+	`,
+	// A type parameter shadows a module alias of the same name.
+	unindent`
+		type Payload = unknown;
+		function wrap<Payload>(make: () => Payload): Payload {
+			const value = { id: "1" } as Payload;
+			return value;
+		}
+	`,
+	// A block-scoped \`Record\` is not the built-in dictionary.
+	unindent`
+		function make() {
+			type Record<Key, Value> = Map<Key, Value>;
+			const owner: Record<string, unknown> = new Map();
+			return owner;
+		}
+	`,
+	// An unknown value entering a type predicate is exactly what it is for.
+	unindent`
+		function isString(value: unknown): value is string {
+			return typeof value === "string";
+		}
+		declare const input: unknown;
+		isString(input);
+	`,
+	unindent`
+		function isString(value: unknown): value is string {
+			return typeof value === "string";
+		}
+		declare function readInput(): unknown;
+		isString(readInput());
+	`,
+	// A predicate over a known parameter type widens nothing.
+	unindent`
+		function isAdmin(value: string): value is "admin" {
+			return value === "admin";
+		}
+		isAdmin("guest");
+	`,
+	// Only the predicate's subject parameter is checked.
+	unindent`
+		function isKey(target: object, key: unknown): target is Record<string, number> {
+			return key !== undefined;
+		}
+		declare const target: object;
+		isKey(target, "root");
+	`,
+	// An annotated binding already fixed its type, so its initializer's
+	// evidence does not reach later flows.
+	unindent`
+		function randomModuleSources(): Record<string, string> {
+			const sources: Record<string, string> = {};
+			sources.root = "1";
+			return sources;
+		}
+	`,
+	unindent`
+		interface Owner { id: string }
+		const owner: Owner = { id: "1" };
+		function makeOwner(): { id: string } {
+			return owner;
+		}
+	`,
+	// An empty seed reached through an unannotated \`const\` is still an
+	// accumulator.
+	unindent`
+		function makeCounts(): Record<string, number> {
+			const seed = {};
+			return seed;
+		}
 	`,
 ];
 
@@ -229,6 +326,19 @@ const invalid: Array<InvalidTestCase> = [
 		],
 	},
 	{
+		// A block-scoped alias resolves like a module one.
+		code: unindent`
+			function make() {
+				type Registry = Record<string, number>;
+				const registry: Registry = { root: 1 };
+				return registry;
+			}
+		`,
+		errors: [
+			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
+		],
+	},
+	{
 		// A generic alias applied through its default is still a container.
 		code: unindent`
 			type Index<Value = number> = Record<string, Value>;
@@ -237,6 +347,21 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },
 		],
+	},
+	{
+		// One broad member opens the whole key set.
+		code: unindent`
+			const counts: Record<"root" | string, number> = { root: 1 };
+		`,
+		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
+	},
+	{
+		// A key alias resolving to \`string\` is still broad.
+		code: unindent`
+			type Key = string;
+			const counts: Record<Key, number> = { root: 1 };
+		`,
+		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// The evidence survives a stable `const` hop.
@@ -321,6 +446,108 @@ const invalid: Array<InvalidTestCase> = [
 			const widened: unknown = values;
 		`,
 		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+	},
+	{
+		// A known value is widened back to \`unknown\` by a local type predicate.
+		code: unindent`
+			interface User { id: string }
+			function isUser(value: unknown): value is User {
+				return value !== null;
+			}
+			declare const user: User;
+			isUser(user);
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isUser\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		code: unindent`
+			function isString(value: string | unknown): value is string {
+				return typeof value === "string";
+			}
+			const known = "known";
+			isString(known);
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isString\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		code: unindent`
+			const isString = (value: unknown): value is string => typeof value === "string";
+			function check(known: string): boolean {
+				return isString(known);
+			}
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isString\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		// A local call with an informative return type is known evidence.
+		code: unindent`
+			interface User { id: string }
+			function isUser(value: unknown): value is User {
+				return value !== null;
+			}
+			function parse(): User {
+				return { id: "1" };
+			}
+			isUser(parse());
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isUser\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		// An annotated binding's evidence is its declared type, which \`unknown\`
+		// discards.
+		code: unindent`
+			interface Owner { id: string }
+			const owner: Owner = { id: "1" };
+			const widened: unknown = owner;
+		`,
+		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+	},
+	{
+		// An unannotated \`const\` still carries its literal's evidence.
+		code: unindent`
+			function makeCounts(): Record<string, number> {
+				const counts = { root: 1 };
+				return counts;
+			}
+		`,
+		errors: [
+			{
+				data: { subject: "return value of \`makeCounts\`", target: "open dictionary" },
+				messageId,
+			},
+		],
 	},
 ];
 
