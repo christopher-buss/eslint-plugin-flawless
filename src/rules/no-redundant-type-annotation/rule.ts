@@ -130,6 +130,22 @@ function isRestParameter(signature: Signature, index: number): boolean {
 }
 
 /**
+ * Reports whether the node is an `as const` or `<const>` assertion.
+ *
+ * @param node - The node to inspect.
+ * @returns True when the node asserts `const`.
+ */
+function isConstAssertion(node: TSESTree.Node): boolean {
+	return (
+		(node.type === AST_NODE_TYPES.TSAsExpression ||
+			node.type === AST_NODE_TYPES.TSTypeAssertion) &&
+		node.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+		node.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+		node.typeAnnotation.typeName.name === "const"
+	);
+}
+
+/**
  * Reports whether the initializer is a function whose parameters take their
  * types from the variable's own annotation.
  *
@@ -386,14 +402,17 @@ function create(
 		let current = node;
 		let parent: TSESTree.Node | undefined = node.parent;
 		// Walk out through the expression forms that keep an argument's
-		// contextual typing intact.
+		// contextual typing intact. A const assertion forwards the outer
+		// call's context, but any other assertion supplies its own type.
 		while (
 			parent !== undefined &&
 			(parent.type === AST_NODE_TYPES.ArrayExpression ||
 				parent.type === AST_NODE_TYPES.ConditionalExpression ||
 				parent.type === AST_NODE_TYPES.LogicalExpression ||
 				parent.type === AST_NODE_TYPES.Property ||
-				parent.type === AST_NODE_TYPES.ObjectExpression)
+				parent.type === AST_NODE_TYPES.ObjectExpression ||
+				parent.type === AST_NODE_TYPES.TSNonNullExpression ||
+				isConstAssertion(parent))
 		) {
 			current = parent;
 			({ parent } = parent);
