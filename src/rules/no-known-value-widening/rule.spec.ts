@@ -145,6 +145,36 @@ const valid: Array<ValidTestCase> = [
 			return owner;
 		}
 	`,
+	// An unknown value entering a type predicate is exactly what it is for.
+	unindent`
+		function isString(value: unknown): value is string {
+			return typeof value === "string";
+		}
+		declare const input: unknown;
+		isString(input);
+	`,
+	unindent`
+		function isString(value: unknown): value is string {
+			return typeof value === "string";
+		}
+		declare function readInput(): unknown;
+		isString(readInput());
+	`,
+	// A predicate over a known parameter type widens nothing.
+	unindent`
+		function isAdmin(value: string): value is "admin" {
+			return value === "admin";
+		}
+		isAdmin("guest");
+	`,
+	// Only the predicate's subject parameter is checked.
+	unindent`
+		function isKey(target: object, key: unknown): target is Record<string, number> {
+			return key !== undefined;
+		}
+		declare const target: object;
+		isKey(target, "root");
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -392,6 +422,83 @@ const invalid: Array<InvalidTestCase> = [
 			const widened: unknown = values;
 		`,
 		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+	},
+	{
+		// A known value is widened back to \`unknown\` by a local type predicate.
+		code: unindent`
+			interface User { id: string }
+			function isUser(value: unknown): value is User {
+				return value !== null;
+			}
+			declare const user: User;
+			isUser(user);
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isUser\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		code: unindent`
+			function isString(value: string | unknown): value is string {
+				return typeof value === "string";
+			}
+			const known = "known";
+			isString(known);
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isString\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		code: unindent`
+			const isString = (value: unknown): value is string => typeof value === "string";
+			function check(known: string): boolean {
+				return isString(known);
+			}
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isString\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
+	},
+	{
+		// A local call with an informative return type is known evidence.
+		code: unindent`
+			interface User { id: string }
+			function isUser(value: unknown): value is User {
+				return value !== null;
+			}
+			function parse(): User {
+				return { id: "1" };
+			}
+			isUser(parse());
+		`,
+		errors: [
+			{
+				data: {
+					subject: "argument for parameter \`value\` of \`isUser\`",
+					target: "unknown",
+				},
+				messageId,
+			},
+		],
 	},
 ];
 

@@ -5,11 +5,18 @@ import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
 import type { TypeEnvironment, WideningTarget } from "../shared/dictionary-types";
 import {
+	classifyUnsafeDictionaryValue,
 	classifyWideningTarget,
 	createTypeEnvironment,
 	isKnownEvidenceExpression,
 	unwrapAssertedExpression,
 } from "../shared/dictionary-types";
+import {
+	containsUnknownType,
+	parameterAnnotation,
+	parameterBinding,
+	parameterName,
+} from "../shared/function-parameters";
 
 export const RULE_NAME = "no-known-value-widening";
 
@@ -27,7 +34,8 @@ const messages = {
 type FunctionNode =
 	| TSESTree.ArrowFunctionExpression
 	| TSESTree.FunctionDeclaration
-	| TSESTree.FunctionExpression;
+	| TSESTree.FunctionExpression
+	| TSESTree.TSDeclareFunction;
 
 /**
  * Resolves an identifier to the variable it references, walking outwards from
@@ -127,6 +135,181 @@ function hasKnownEvidence(
 
 	visitedVariables.add(variable);
 	return hasKnownEvidence(sourceCode, declarator.init, visitedVariables);
+}
+
+function isFunctionNode(node: TSESTree.Node): node is FunctionNode {
+	return (
+		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+		node.type === AST_NODE_TYPES.FunctionDeclaration ||
+		node.type === AST_NODE_TYPES.FunctionExpression ||
+		node.type === AST_NODE_TYPES.TSDeclareFunction
+	);
+}
+
+/**
+ * The function a call invokes, when it is declared in this file under a single
+ * binding: an inline function, a function declaration, or a variable
+ * initialized with a function.
+ *
+ * @param sourceCode - The source code of the linted file.
+ * @param callee - The expression being invoked.
+ * @returns The called function, or null when it is not locally known.
+ */
+function localFunctionForCall(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	callee: TSESTree.Expression,
+): FunctionNode | null {
+	const unwrapped = unwrapAssertedExpression(callee);
+	if (isFunctionNode(unwrapped)) {
+		return unwrapped;
+	}
+
+	if (unwrapped.type !== AST_NODE_TYPES.Identifier) {
+		return null;
+	}
+
+	const variable = resolveVariable(sourceCode, unwrapped);
+	if (variable?.defs.length !== 1) {
+		return null;
+	}
+
+	const [definition] = variable.defs;
+	if (definition?.type === TSESLint.Scope.DefinitionType.FunctionName) {
+		return isFunctionNode(definition.node) ? definition.node : null;
+	}
+
+	if (
+		definition?.type !== TSESLint.Scope.DefinitionType.Variable ||
+		definition.node.init === null
+	) {
+		return null;
+	}
+
+	const initializer = unwrapAssertedExpression(definition.node.init);
+	return isFunctionNode(initializer) ? initializer : null;
+}
+
+/**
+ * The annotation a variable or parameter is declared with, which fixes its type
+ * independently of whatever value it is later given.
+ *
+ * @param variable - The variable to inspect.
+ * @returns The binding's annotation, or null when it has none.
+ */
+function variableTypeAnnotation(
+	variable: TSESLint.Scope.Variable,
+): null | TSESTree.TSTypeAnnotation {
+	if (variable.defs.length !== 1) {
+		return null;
+	}
+
+	const [definition] = variable.defs;
+	if (
+		definition?.type !== TSESLint.Scope.DefinitionType.Variable &&
+		definition?.type !== TSESLint.Scope.DefinitionType.Parameter
+	) {
+		return null;
+	}
+
+	return definition.name.typeAnnotation ?? null;
+}
+
+function hasInformativeType(type: TSESTree.TypeNode, environment: TypeEnvironment): boolean {
+	return classifyUnsafeDictionaryValue(type, environment) === null;
+}
+
+/**
+ * Whether a call argument carries type evidence of its own. Beyond literal
+ * evidence, an annotated binding, an assertion, or a local call contributes its
+ * declared type, provided that type is not itself an escape hatch.
+ *
+ * @param sourceCode - The source code of the linted file.
+ * @param expression - The value passed to the predicate.
+ * @param environment - The file's type declarations.
+ * @param visitedVariables - Bindings already followed, guarding against cycles.
+ * @returns True when the argument's type is already established.
+ */
+function hasKnownCallArgumentEvidence(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	expression: TSESTree.Expression,
+	environment: TypeEnvironment,
+	visitedVariables = new Set<TSESLint.Scope.Variable>(),
+): boolean {
+	if (
+		expression.type === AST_NODE_TYPES.TSNonNullExpression ||
+		expression.type === AST_NODE_TYPES.TSSatisfiesExpression
+	) {
+		return hasKnownCallArgumentEvidence(
+			sourceCode,
+			expression.expression,
+			environment,
+			visitedVariables,
+		);
+	}
+
+	if (
+		expression.type === AST_NODE_TYPES.TSAsExpression ||
+		expression.type === AST_NODE_TYPES.TSTypeAssertion
+	) {
+		return hasInformativeType(expression.typeAnnotation, environment);
+	}
+
+	if (expression.type === AST_NODE_TYPES.CallExpression) {
+		const returnType = localFunctionForCall(sourceCode, expression.callee)?.returnType;
+		return (
+			returnType !== undefined && hasInformativeType(returnType.typeAnnotation, environment)
+		);
+	}
+
+	if (expression.type !== AST_NODE_TYPES.Identifier) {
+		return isKnownEvidenceExpression(expression);
+	}
+
+	const variable = resolveVariable(sourceCode, expression);
+	if (variable === null || visitedVariables.has(variable)) {
+		return false;
+	}
+
+	const annotation = variableTypeAnnotation(variable);
+	if (annotation !== null) {
+		return hasInformativeType(annotation.typeAnnotation, environment);
+	}
+
+	const declarator = variableDeclarator(variable);
+	if (declarator === null || !isStableConstVariable(variable, declarator)) {
+		return false;
+	}
+
+	if (declarator.init === null) {
+		return false;
+	}
+
+	visitedVariables.add(variable);
+	return hasKnownCallArgumentEvidence(sourceCode, declarator.init, environment, visitedVariables);
+}
+
+/**
+ * The index of the parameter a type predicate narrows, as in `value is User`.
+ *
+ * @param owner - The candidate predicate function.
+ * @returns The subject parameter's index, or null when the function is not a
+ *   parameter type predicate.
+ */
+function typePredicateSubjectIndex(owner: FunctionNode): null | number {
+	const predicate = owner.returnType?.typeAnnotation;
+	if (
+		predicate?.type !== AST_NODE_TYPES.TSTypePredicate ||
+		predicate.parameterName.type !== AST_NODE_TYPES.Identifier
+	) {
+		return null;
+	}
+
+	const subjectName = predicate.parameterName.name;
+	const index = owner.params.findIndex((parameter) => {
+		const binding = parameterBinding(parameter);
+		return binding.type === AST_NODE_TYPES.Identifier && binding.name === subjectName;
+	});
+	return index === -1 ? null : index;
 }
 
 /**
@@ -318,6 +501,47 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				targetFromAnnotation(declarator.id.typeAnnotation),
 				`binding \`${declarator.id.name}\``,
 			);
+		},
+		CallExpression(node: TSESTree.CallExpression): void {
+			if (environment === null) {
+				return;
+			}
+
+			const owner = localFunctionForCall(context.sourceCode, node.callee);
+			const subjectIndex = owner === null ? null : typePredicateSubjectIndex(owner);
+			if (owner === null || subjectIndex === null) {
+				return;
+			}
+
+			const parameter = owner.params[subjectIndex];
+			const argument = node.arguments[subjectIndex];
+			if (
+				parameter === undefined ||
+				argument === undefined ||
+				argument.type === AST_NODE_TYPES.SpreadElement
+			) {
+				return;
+			}
+
+			const annotation = parameterAnnotation(parameter);
+			if (
+				annotation === undefined ||
+				!containsUnknownType(annotation.typeAnnotation) ||
+				!hasKnownCallArgumentEvidence(context.sourceCode, argument, environment)
+			) {
+				return;
+			}
+
+			const parameterLabel = parameterName(parameter, context.sourceCode);
+			const ownerLabel = functionName(context.sourceCode, owner);
+			context.report({
+				data: {
+					subject: `argument for parameter \`${parameterLabel}\` of \`${ownerLabel}\``,
+					target: "unknown",
+				},
+				messageId: MESSAGE_ID,
+				node: argument,
+			});
 		},
 		Program(node: TSESTree.Program): void {
 			environment = createTypeEnvironment(node);
