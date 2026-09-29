@@ -1,6 +1,32 @@
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
 /**
+ * Pushes every child node of `node` onto the traversal stack, skipping the
+ * `parent` back-link.
+ *
+ * @param node - The node whose children to enqueue.
+ * @param stack - The traversal stack to push onto.
+ */
+export function pushChildNodes(node: TSESTree.Node, stack: Array<TSESTree.Node>): void {
+	for (const key of Object.keys(node)) {
+		if (key === "parent") {
+			continue;
+		}
+
+		const value = (node as unknown as Record<string, unknown>)[key];
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				if (isNode(item)) {
+					stack.push(item);
+				}
+			}
+		} else if (isNode(value)) {
+			stack.push(value);
+		}
+	}
+}
+
+/**
  * Determines whether the given AST subtree contains a call or `new`
  * expression.
  *
@@ -48,30 +74,4 @@ function isNode(value: unknown): value is TSESTree.Node {
 		value !== null &&
 		typeof (value as { type?: unknown }).type === "string"
 	);
-}
-
-/**
- * Pushes every child node of `node` onto the traversal stack, skipping the
- * `parent` back-link.
- *
- * @param node - The node whose children to enqueue.
- * @param stack - The traversal stack to push onto.
- */
-function pushChildNodes(node: TSESTree.Node, stack: Array<TSESTree.Node>): void {
-	for (const key of Object.keys(node)) {
-		if (key === "parent") {
-			continue;
-		}
-
-		const value = (node as unknown as Record<string, unknown>)[key];
-		if (Array.isArray(value)) {
-			for (const item of value) {
-				if (isNode(item)) {
-					stack.push(item);
-				}
-			}
-		} else if (isNode(value)) {
-			stack.push(value);
-		}
-	}
 }

@@ -22,6 +22,7 @@ import {
 } from "typescript";
 
 import { createEslintRule } from "../../util";
+import { pushChildNodes } from "../../utils/nested-expressions";
 
 export const RULE_NAME = "no-redundant-type-annotation";
 
@@ -142,6 +143,135 @@ function isConstAssertion(node: TSESTree.Node): boolean {
 		node.typeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
 		node.typeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
 		node.typeAnnotation.typeName.name === "const"
+	);
+}
+
+/**
+ * Reports whether a type is one literal that function return inference
+ * widens when nothing gives it a context.
+ *
+ * A union of literals is not widened, so it does not count.
+ *
+ * @param type - The return type to inspect.
+ * @returns True when the type is a single widening literal.
+ */
+function isWideningUnit(type: Type): boolean {
+	if ((type.flags & TypeFlags.Union) !== 0) {
+		return false;
+	}
+
+	return (
+		(type.flags &
+			(TypeFlags.StringLiteral |
+				TypeFlags.NumberLiteral |
+				TypeFlags.BigIntLiteral |
+				TypeFlags.BooleanLiteral |
+				TypeFlags.EnumLiteral |
+				TypeFlags.UniqueESSymbol)) !==
+		0
+	);
+}
+
+/**
+ * Reports whether a type, or a member of it, is a template literal or
+ * string mapping type.
+ *
+ * A template expression is typed as one of these only under a context that
+ * asks for it; without one it is `string`.
+ *
+ * @param type - The return type to inspect.
+ * @returns True when the type holds a template type.
+ */
+function hasTemplateType(type: Type): boolean {
+	const members =
+		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
+	return members.some(
+		(member) => (member.flags & (TypeFlags.TemplateLiteral | TypeFlags.StringMapping)) !== 0,
+	);
+}
+
+/**
+ * Reports whether any node below `node` passes `test`, without descending into
+ * nodes `isBoundary` accepts.
+ *
+ * A boundary node is still offered to `test`; only its own children are
+ * skipped.
+ *
+ * @param node - The node to walk below.
+ * @param isBoundary - Picks the nodes whose children the walk skips.
+ * @param test - The condition to look for.
+ * @returns True when some descendant passes `test`.
+ */
+function someDescendant(
+	node: TSESTree.Node,
+	isBoundary: (child: TSESTree.Node) => boolean,
+	test: (child: TSESTree.Node) => boolean,
+): boolean {
+	const stack: Array<TSESTree.Node> = [];
+	pushChildNodes(node, stack);
+	let current = stack.pop();
+	while (current !== undefined) {
+		if (test(current)) {
+			return true;
+		}
+
+		if (!isBoundary(current)) {
+			pushChildNodes(current, stack);
+		}
+
+		current = stack.pop();
+	}
+
+	return false;
+}
+
+/**
+ * Reports whether a node starts a function of its own.
+ *
+ * @param node - The node to inspect.
+ * @returns True for any function node.
+ */
+function isFunctionNode(node: TSESTree.Node): boolean {
+	return (
+		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+		node.type === AST_NODE_TYPES.FunctionExpression ||
+		node.type === AST_NODE_TYPES.FunctionDeclaration
+	);
+}
+
+/**
+ * Reports whether a function expression reads a `this` that only its
+ * contextual type gives a type.
+ *
+ * An arrow shares the enclosing `this`, so the walk goes through arrows and
+ * stops at the next function that binds its own.
+ *
+ * @param node - The function to inspect.
+ * @returns True when the body reads an untyped `this`.
+ */
+function usesContextualThis(
+	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
+): boolean {
+	if (node.type !== AST_NODE_TYPES.FunctionExpression) {
+		return false;
+	}
+
+	const [first] = node.params;
+	if (first?.type === AST_NODE_TYPES.Identifier && first.name === "this") {
+		return false;
+	}
+
+	return someDescendant(
+		node.body,
+		(child) => {
+			return (
+				child.type === AST_NODE_TYPES.FunctionExpression ||
+				child.type === AST_NODE_TYPES.FunctionDeclaration
+			);
+		},
+		(child) => {
+			return child.type === AST_NODE_TYPES.ThisExpression;
+		},
 	);
 }
 
@@ -284,6 +414,122 @@ function create(
 
 		const names = new Set(typeParameters.map((parameter) => parameter.name.text));
 		return referencesName(declaration.type, names);
+	}
+
+	/**
+	 * Reports whether a function's return value takes its type from the
+	 * function's contextual type.
+	 *
+	 * With a context, a returned literal keeps its literal type, and a returned
+	 * object, array, or function is typed against the context's return type.
+	 * Without one the literal widens and the rest lose their context. A
+	 * written return type stops the context, so it answers false.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when a return value depends on the context.
+	 */
+	function returnsContextTypedValue(
+		node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
+	): boolean {
+		if (node.returnType !== undefined) {
+			return false;
+		}
+
+		// `yield` is contextually typed too, and the rule does not follow it.
+		if (node.generator) {
+			return true;
+		}
+
+		const returnsDependent =
+			node.body.type === AST_NODE_TYPES.BlockStatement
+				? someDescendant(node.body, isFunctionNode, (child) => {
+						return (
+							child.type === AST_NODE_TYPES.ReturnStatement &&
+							child.argument !== null &&
+							receivesAnnotationContext(child.argument)
+						);
+					})
+				: receivesAnnotationContext(node.body);
+		if (returnsDependent) {
+			return true;
+		}
+
+		const signatures = checker.getSignaturesOfType(
+			services.getTypeAtLocation(node),
+			SignatureKind.Call,
+		);
+		const signature = signatures.length === 1 ? signatures.at(0) : undefined;
+		if (signature === undefined) {
+			return true;
+		}
+
+		let returnType = checker.getReturnTypeOfSignature(signature);
+		if (node.async) {
+			returnType = checker.getAwaitedType(returnType) ?? returnType;
+		}
+
+		return isWideningUnit(returnType) || hasTemplateType(returnType);
+	}
+
+	/**
+	 * Reports whether the annotation's contextual type reaches an expression
+	 * and shapes its type.
+	 *
+	 * The expression is the initializer or a value a function initializer
+	 * returns. There an object or array literal is typed against the
+	 * annotation, which governs excess property checking and literal widening:
+	 * `no-known-value-widening`'s subject, not a restatement. A function there
+	 * takes its `this` and return values from the annotation too. This is kept
+	 * apart from `isContextDependent` because that also runs on call arguments,
+	 * where a literal or a callback takes its context from the callee instead.
+	 *
+	 * @param node - The expression to inspect.
+	 * @returns True when the annotation shapes the expression's type.
+	 */
+	function receivesAnnotationContext(node: TSESTree.Node): boolean {
+		if (
+			node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+			node.type === AST_NODE_TYPES.FunctionExpression
+		) {
+			return (
+				node.params.some(isUntypedParameter) ||
+				usesContextualThis(node) ||
+				returnsContextTypedValue(node)
+			);
+		}
+
+		if (
+			node.type === AST_NODE_TYPES.ObjectExpression ||
+			node.type === AST_NODE_TYPES.ArrayExpression
+		) {
+			return true;
+		}
+
+		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
+			return (
+				receivesAnnotationContext(node.consequent) ||
+				receivesAnnotationContext(node.alternate)
+			);
+		}
+
+		if (node.type === AST_NODE_TYPES.LogicalExpression) {
+			return receivesAnnotationContext(node.left) || receivesAnnotationContext(node.right);
+		}
+
+		if (node.type === AST_NODE_TYPES.AwaitExpression) {
+			return receivesAnnotationContext(node.argument);
+		}
+
+		if (node.type === AST_NODE_TYPES.TSNonNullExpression) {
+			return receivesAnnotationContext(node.expression);
+		}
+
+		if (node.type === AST_NODE_TYPES.SequenceExpression) {
+			const last = node.expressions.at(-1);
+			return last !== undefined && receivesAnnotationContext(last);
+		}
+
+		return isContextDependent(node);
 	}
 
 	/**
@@ -627,17 +873,7 @@ function create(
 				return;
 			}
 
-			// Object and array literals are `no-known-value-widening`'s subject:
-			// there the annotation governs excess property checking and literal
-			// widening, which is a different question from restating a type.
-			if (
-				node.init.type === AST_NODE_TYPES.ObjectExpression ||
-				node.init.type === AST_NODE_TYPES.ArrayExpression
-			) {
-				return;
-			}
-
-			if (isContextDependent(node.init) || suppliesParameterContext(node.init)) {
+			if (receivesAnnotationContext(node.init) || suppliesParameterContext(node.init)) {
 				return;
 			}
 

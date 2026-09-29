@@ -35,16 +35,24 @@ clause variable. Return types are not checked.
 
 ### When an annotation is doing work
 
-| The annotation                         | Example                                   |
-| :------------------------------------- | :---------------------------------------- |
-| widens a literal                       | `const count: number = 5`                 |
-| narrows away `any`                     | `const value: unknown = JSON.parse(text)` |
-| is `any` itself                        | `const value: any = getUnknown()`         |
-| supplies a parameter's contextual type | `const fn: Handler = event => ...`        |
-| pins a generic's type argument         | `const value: string = pick()`            |
-| names an alias TypeScript erases       | `const id: UserId = getString()`          |
+| The annotation                            | Example                                   |
+| :---------------------------------------- | :---------------------------------------- |
+| widens a literal                          | `const count: number = 5`                 |
+| narrows away `any`                        | `const value: unknown = JSON.parse(text)` |
+| is `any` itself                           | `const value: any = getUnknown()`         |
+| supplies a parameter's contextual type    | `const fn: Handler = event => ...`        |
+| types a function's return value or `this` | `const getTag: () => "div" = () => "div"` |
+| pins a generic's type argument            | `const value: string = pick()`            |
+| names an alias TypeScript erases          | `const id: UserId = getString()`          |
 
 Each of these changes meaning if it is removed, so none of them is reported.
+
+A function's return value is checked only where the context can change it.
+Without a context a single returned literal widens (`() => "div"` becomes
+`() => string`), but a union of literals does not, so
+`const fn: () => "a" | "b" = () => (choose ? "a" : "b")` is still reported. A
+returned object or array literal, and any generator, is always skipped, even
+when the annotation really is redundant.
 
 ### `any` is never redundant
 
