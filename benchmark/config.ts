@@ -30,6 +30,9 @@ import builtPlugin from "../dist/index.mjs";
 // re-lint per pass), so fixable and non-fixable rules are no longer conflated.
 // The `fix` knob comes from our patch to eslint-rule-benchmark (see
 // patches/eslint-rule-benchmark.patch); upstream hardcodes fix:true.
+//
+// BENCH_RULES (comma-separated rule IDs) limits the run to those rules; CI sets
+// it from ./affected-rules.mjs. Unset runs everything, as does `*`.
 
 const RULE_PATH = "../dist/index.mjs";
 const RULE_ID = "arrow-return-style";
@@ -249,6 +252,107 @@ const coarseTests = COARSE.flatMap((entry) => {
 	];
 });
 
+const arrowTests = [
+	{
+		name: "no-violation implicit arrows (no worker)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		cases: [{ testPath: "./cases/no-violation-implicit.ts" }],
+	},
+	{
+		name: "block -> implicit fixes (no worker)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		cases: [{ testPath: "./cases/block-to-implicit.ts" }],
+	},
+	{
+		// Worst case for the worker: every consult is distinct. The format
+		// cache persists across lint runs, so only warmup iterations pay the
+		// worker; measured iterations read the warm cache — the steady state
+		// for unchanged code. useOxfmt:false measures the pure line-length
+		// path on the same input.
+		name: "over-limit distinct — useOxfmt:false (pure)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		iterations: 50,
+		timeout: 500,
+		warmup: { iterations: 5 },
+		cases: [
+			{
+				testPath: "./cases/over-limit-distinct.ts",
+				options: [{ useOxfmt: false }],
+			},
+		],
+	},
+	{
+		name: "over-limit distinct — useOxfmt:true (worker, warm cache)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		iterations: 30,
+		timeout: 500,
+		warmup: { iterations: 3 },
+		cases: [
+			{
+				testPath: "./cases/over-limit-distinct.ts",
+				options: [{ useOxfmt: true }],
+			},
+		],
+	},
+	{
+		// Same shape and size as the distinct case, but textually identical
+		// arrows collapse to a single cache entry even on a cold cache.
+		name: "over-limit repeated — useOxfmt:true (worker, cached)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		iterations: 50,
+		timeout: 500,
+		warmup: { iterations: 5 },
+		cases: [
+			{
+				testPath: "./cases/over-limit-repeated.ts",
+				options: [{ useOxfmt: true }],
+			},
+		],
+	},
+	{
+		name: "realistic mixed file (few consults)",
+		ruleId: RULE_ID,
+		rulePath: RULE_PATH,
+		cases: [{ testPath: "./cases/realistic.ts" }],
+	},
+];
+
+// Filtering happens after the coverage gate, so a PR touching one rule still
+// fails when another rule lacks a fixture.
+const benchRules = process.env.BENCH_RULES;
+const selected =
+	benchRules === undefined || benchRules.trim() === "*"
+		? undefined
+		: new Set(
+				benchRules
+					.split(",")
+					.map((ruleId) => ruleId.trim())
+					.filter((ruleId) => ruleId !== ""),
+			);
+const isSelected = (ruleId: string): boolean => selected === undefined || selected.has(ruleId);
+
+const tests = [
+	...(isSelected(RULE_ID) ? arrowTests : []),
+	...(isSelected(FLOATING_RULE_ID) ? floatingTests : []),
+	...coarseTests.filter((test) => isSelected(test.ruleId)),
+];
+
+if (selected !== undefined) {
+	console.log(`Benchmarking affected rule(s): ${[...selected].join(", ") || "none"}.`);
+}
+
+// eslint-rule-benchmark rejects an empty `tests` array, so stop here instead:
+// the change touched no benchmarked rule (e.g. only an UNSUPPORTED one).
+if (tests.length === 0) {
+	console.log("No benchmarks to run.");
+	process.exit(process.exitCode ?? 0);
+}
+
 export default defineConfig({
 	iterations: 100,
 	timeout: 1000,
@@ -256,75 +360,5 @@ export default defineConfig({
 		enabled: true,
 		iterations: 20,
 	},
-	tests: [
-		{
-			name: "no-violation implicit arrows (no worker)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			cases: [{ testPath: "./cases/no-violation-implicit.ts" }],
-		},
-		{
-			name: "block -> implicit fixes (no worker)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			cases: [{ testPath: "./cases/block-to-implicit.ts" }],
-		},
-		{
-			// Worst case for the worker: every consult is distinct. The format
-			// cache persists across lint runs, so only warmup iterations pay the
-			// worker; measured iterations read the warm cache — the steady state
-			// for unchanged code. useOxfmt:false measures the pure line-length
-			// path on the same input.
-			name: "over-limit distinct — useOxfmt:false (pure)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			iterations: 50,
-			timeout: 500,
-			warmup: { iterations: 5 },
-			cases: [
-				{
-					testPath: "./cases/over-limit-distinct.ts",
-					options: [{ useOxfmt: false }],
-				},
-			],
-		},
-		{
-			name: "over-limit distinct — useOxfmt:true (worker, warm cache)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			iterations: 30,
-			timeout: 500,
-			warmup: { iterations: 3 },
-			cases: [
-				{
-					testPath: "./cases/over-limit-distinct.ts",
-					options: [{ useOxfmt: true }],
-				},
-			],
-		},
-		{
-			// Same shape and size as the distinct case, but textually identical
-			// arrows collapse to a single cache entry even on a cold cache.
-			name: "over-limit repeated — useOxfmt:true (worker, cached)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			iterations: 50,
-			timeout: 500,
-			warmup: { iterations: 5 },
-			cases: [
-				{
-					testPath: "./cases/over-limit-repeated.ts",
-					options: [{ useOxfmt: true }],
-				},
-			],
-		},
-		{
-			name: "realistic mixed file (few consults)",
-			ruleId: RULE_ID,
-			rulePath: RULE_PATH,
-			cases: [{ testPath: "./cases/realistic.ts" }],
-		},
-		...floatingTests,
-		...coarseTests,
-	],
+	tests,
 });

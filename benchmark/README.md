@@ -59,9 +59,20 @@ cannot run them (revisit if the tool changes):
 
 ## CI
 
-`.github/workflows/benchmark.yaml` runs on PRs that touch any rule (`src/rules/**`)
-or `benchmark/`, and `eslint-rule-benchmark` posts the results as a single
-(auto-updated) PR comment. The **timings are informational** — GitHub-hosted
+`.github/workflows/benchmark.yaml` runs on PRs that touch `src/`, `benchmark/`,
+the harness patch, or the build/dependency files, and `eslint-rule-benchmark`
+posts the results as a single (auto-updated) PR comment.
+
+Only affected rules run. `affected-rules.mjs` diffs the PR against its base and
+maps each changed file to a rule: `src/rules/<rule>/**` and
+`benchmark/cases/all/<rule>.tsx` to that rule, `cases/floating-*.ts` to
+`no-floating-point-equality`, other `cases/*.ts` to `arrow-return-style`. Specs
+and Markdown are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
+plugin entry, the benchmark config, the patch, dependencies) runs every rule.
+The result reaches `config.ts` as `BENCH_RULES`; when it names no benchmarked
+rule, `config.ts` exits after the coverage gate and the PR comment keeps its
+previous results. Locally, `BENCH_RULES=purity,react-namespace pnpm bench`
+narrows the same way; unset runs everything. The **timings are informational** — GitHub-hosted
 runners are too noisy for absolute wall-clock times to gate a merge, so the job
 never fails on a slowdown. It does fail on the coverage gate above (a rule with
 no fixture), which is intended: that is a config error to fix, not a measurement.

@@ -4,10 +4,17 @@ on:
   pull_request:
     branches:
       - main
+    # Keep in sync with GLOBAL in benchmark/affected-rules.mjs, which narrows
+    # the run to the rules a change can affect.
     paths:
-      - "src/rules/**"
+      - "src/**"
       - "benchmark/**"
+      - "patches/**"
       - .github/workflows/benchmark.yaml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsdown.config.ts
 
 # One run per PR; a new push cancels the in-flight run rather than racing it to
 # update the same comment.
@@ -23,7 +30,11 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      # The PR merge commit plus its first parent (the base tip) is all the
+      # history affected-rules.mjs needs to diff.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 2
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
@@ -37,13 +48,24 @@ jobs:
       - run: pnpm i -g @antfu/ni
       - run: nci
 
+      # Rule IDs the PR can affect, or `*` for all. Empty means only
+      # unbenchmarked files changed; config.ts then runs just the coverage gate.
+      # Assigning first lets a script failure fail the step under `bash -e`.
+      - id: affected
+        name: Find affected rules
+        run: |
+          rules=$(node benchmark/affected-rules.mjs HEAD^1)
+          echo "rules=$rules" >> "$GITHUB_OUTPUT"
+
       # `nr bench` runs prebench (nr build) first, so the rule resolves its
       # oxfmt worker from dist. GITHUB_TOKEN must be mapped explicitly — the
       # tool reads process.env.GITHUB_TOKEN to post the results comment. Timings
       # are informational (shared runners are noisy) and never gate on a
       # slowdown; the job DOES fail if a rule lacks a benchmark fixture, which is
-      # config.ts's deliberate coverage gate (see benchmark/README.md).
+      # config.ts's deliberate coverage gate (see benchmark/README.md). BENCH_RULES
+      # limits the run to the affected rules.
       - env:
+          BENCH_RULES: ${{ steps.affected.outputs.rules }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         name: Benchmark rules
         run: nr bench
