@@ -157,6 +157,25 @@ const valid: Array<ValidTestCase> = [
 		declare const tags: { tag<T>(strings: TemplateStringsArray): Array<T> };
 		const value: Array<string> = tags.tag\`\`;
 	`,
+	// The return type involves `T` even where no written name says so.
+	unindent`
+		function pick<T = number>(fallback: T = null!): typeof fallback {
+			return fallback;
+		}
+		const value: string = pick();
+	`,
+	// An optional call infers the same way.
+	unindent`
+		declare const pick: (<T = number>() => T) | undefined;
+		const value: string | undefined = pick?.();
+	`,
+	// A class without a constructor still infers its type parameters on `new`.
+	unindent`
+		class Box<T> {
+			value?: T;
+		}
+		const box: Box<string> = new Box();
+	`,
 	// The annotation widens away from a type parameter.
 	unindent`
 		function example<T extends string>(value: T): string {
@@ -376,6 +395,42 @@ const valid: Array<ValidTestCase> = [
 		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
 		map([1], async () => (s: string) => s);
 	`,
+	// Any generic callee is left alone, even when the parameter it types names
+	// no type parameter and the annotation really is redundant. Telling the two
+	// apart by name is unsound: `typeof` and aliases hide a type parameter.
+	unindent`
+		declare function run<T>(items: Array<T>, fn: () => (s: string) => number): void;
+		run([1], () => (s: string) => s.length);
+	`,
+	unindent`
+		function run<T>(make: () => typeof source, source: () => T = null!): T {
+			return source();
+		}
+		run(() => () => (s: string) => s);
+	`,
+	// An IIFE types an untyped parameter from its argument, so the argument's
+	// context would come from itself.
+	unindent`
+		((cb) => cb)((s: string) => s);
+	`,
+	// Only a context the rule can prove stable counts. An assignment or a
+	// delegating `yield*` passes one on too, but is not followed.
+	unindent`
+		let f: (s: string) => string = (s) => s;
+		f = (s: string) => s;
+	`,
+	unindent`
+		const make: () => Generator<(s: string) => string> = function* () {
+			yield* [(s: string) => s];
+		};
+	`,
+	// More than one signature means the arguments may pick one, even with type
+	// arguments written out.
+	unindent`
+		declare function f<T>(fn: (value: T) => void): void;
+		declare function f<T>(fn: (value: T) => void, extra: number): void;
+		f<string>((value: string) => {});
+	`,
 	// A generic class declares its type parameters on the class, not on the
 	// constructor, and `new` infers them all the same.
 	unindent`
@@ -464,6 +519,18 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		declare function each(callback: (value?: number) => void): void;
 		each((value: number) => {});
+	`,
+	// A union of function types gives a contextual signature only when every
+	// member agrees, so the annotation may be all the parameter has.
+	unindent`
+		declare function each(callback: ((value: string) => void) | ((value: string, index: number) => void)): void;
+		each((value: string) => {});
+	`,
+	// A function that needs more arguments than the context passes gets no
+	// contextual signature at all.
+	unindent`
+		declare function each(callback: (value: string) => void): void;
+		each((value: string, index: number) => {});
 	`,
 	// An `any` contextual type is not something to inherit silently.
 	unindent`
@@ -971,17 +1038,115 @@ const invalid: Array<InvalidTestCase> = [
 			on(function (this: Target, event: string, detail) {});
 		`,
 	},
-	// The callback's return type names no type parameter, so the returned
-	// function's context holds without its annotation.
+	// Wherever the variable's annotation reaches the parameter, only the
+	// parameter is reported: removing both in one pass would leave it
+	// implicitly `any`.
 	{
 		code: unindent`
-			declare function run<T>(items: Array<T>, fn: () => (s: string) => number): void;
-			run([1], () => (s: string) => s.length);
+			declare function side(): void;
+			const f: (x: number) => number = (side(), (x: number) => x);
 		`,
 		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
-			declare function run<T>(items: Array<T>, fn: () => (s: string) => number): void;
-			run([1], () => (s) => s.length);
+			declare function side(): void;
+			const f: (x: number) => number = (side(), (x) => x);
+		`,
+	},
+	{
+		code: unindent`
+			const f: (x: number) => number = ((x: number) => x)!;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			const f: (x: number) => number = ((x) => x)!;
+		`,
+	},
+	{
+		code: unindent`
+			const f: (x: number) => number = ((x: number) => x) as const;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			const f: (x: number) => number = ((x) => x) as const;
+		`,
+	},
+	{
+		code: unindent`
+			const f: () => (x: number) => number = () => (x: number) => x;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			const f: () => (x: number) => number = () => (x) => x;
+		`,
+	},
+	// An outer parameter's annotation that types an annotated default value
+	// waits for the next pass, once the default no longer depends on it.
+	{
+		code: unindent`
+			const g: (cb: (s: string) => string) => void = (cb: (s: string) => string = (s: string) => s) => {};
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			const g: (cb: (s: string) => string) => void = (cb = (s) => s) => {};
+		`,
+	},
+	// A function an IIFE returns has no proven context, so only the variable
+	// is reported.
+	{
+		code: unindent`
+			const f: (x: number) => number = (() => (x: number) => x)();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			const f = (() => (x: number) => x)();
+		`,
+	},
+	// An IIFE whose parameter is annotated fixes its argument's context.
+	{
+		code: unindent`
+			((cb: (s: string) => string) => cb)((s: string) => s);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			((cb: (s: string) => string) => cb)((s) => s);
+		`,
+	},
+	// A `super` call passes its arguments to the base constructor.
+	{
+		code: unindent`
+			class Base {
+				constructor(fn: (s: string) => void) {}
+			}
+			class Derived extends Base {
+				constructor() {
+					super((s: string) => {});
+				}
+			}
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			class Base {
+				constructor(fn: (s: string) => void) {}
+			}
+			class Derived extends Base {
+				constructor() {
+					super((s) => {});
+				}
+			}
+		`,
+	},
+	// A written return type is the returned function's context.
+	{
+		code: unindent`
+			function make(): (s: string) => string {
+				return (s: string) => s;
+			}
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			function make(): (s: string) => string {
+				return (s) => s;
+			}
 		`,
 	},
 	// A function expression in an object literal gets its context from the
@@ -1061,35 +1226,64 @@ function withJsx(code: string): string {
 	return `declare global { namespace JSX { interface Element {} } }\n${code}`;
 }
 
+const jsxInvalid: Array<InvalidTestCase> = [
+	{
+		code: withJsx(unindent`
+			declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
+			<Button onClick={(count: number) => {}} />;
+		`),
+		errors: [{ messageId: parameterMessageId }],
+		filename: jsxFilename,
+		output: withJsx(unindent`
+			declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
+			<Button onClick={(count) => {}} />;
+		`),
+	},
+	{
+		// An explicit type argument pins the generic, as for a call.
+		code: withJsx(unindent`
+			declare function One<T>(props: { a: T }): JSX.Element;
+			<One<(s: string) => string> a={(s: string) => s} />;
+		`),
+		errors: [{ messageId: parameterMessageId }],
+		filename: jsxFilename,
+		output: withJsx(unindent`
+			declare function One<T>(props: { a: T }): JSX.Element;
+			<One<(s: string) => string> a={(s) => s} />;
+		`),
+	},
+	{
+		// An intrinsic element's props are a fixed entry, with nothing to infer.
+		code: unindent`
+			declare global {
+				namespace JSX {
+					interface Element {}
+					interface IntrinsicElements {
+						button: { onClick: (event: { x: number }) => void };
+					}
+				}
+			}
+			<button onClick={(event: { x: number }) => {}} />;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		filename: jsxFilename,
+		output: unindent`
+			declare global {
+				namespace JSX {
+					interface Element {}
+					interface IntrinsicElements {
+						button: { onClick: (event: { x: number }) => void };
+					}
+				}
+			}
+			<button onClick={(event) => {}} />;
+		`,
+	},
+];
+
 run({
 	name: `${RULE_NAME}/jsx`,
-	invalid: [
-		{
-			code: withJsx(unindent`
-				declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
-				<Button onClick={(count: number) => {}} />;
-			`),
-			errors: [{ messageId: parameterMessageId }],
-			filename: jsxFilename,
-			output: withJsx(unindent`
-				declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
-				<Button onClick={(count) => {}} />;
-			`),
-		},
-		{
-			// An explicit type argument pins the generic, as for a call.
-			code: withJsx(unindent`
-				declare function One<T>(props: { a: T }): JSX.Element;
-				<One<(s: string) => string> a={(s: string) => s} />;
-			`),
-			errors: [{ messageId: parameterMessageId }],
-			filename: jsxFilename,
-			output: withJsx(unindent`
-				declare function One<T>(props: { a: T }): JSX.Element;
-				<One<(s: string) => string> a={(s) => s} />;
-			`),
-		},
-	],
+	invalid: jsxInvalid,
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
@@ -1175,23 +1369,25 @@ const looseNullDirectory = path.resolve(
 	"../../../fixtures/no-redundant-type-annotation/loose-null",
 );
 
+const looseNullInvalid: Array<InvalidTestCase> = [
+	{
+		// A returned value that is not `null` does not widen.
+		code: unindent`
+			declare function getNumber(): number;
+			const fn: () => number = () => getNumber();
+		`,
+		errors: [{ messageId }],
+		filename: path.join(looseNullDirectory, "case.ts"),
+		output: unindent`
+			declare function getNumber(): number;
+			const fn = () => getNumber();
+		`,
+	},
+];
+
 run({
 	name: `${RULE_NAME}/loose-null`,
-	invalid: [
-		{
-			// A returned value that is not `null` does not widen.
-			code: unindent`
-				declare function getNumber(): number;
-				const fn: () => number = () => getNumber();
-			`,
-			errors: [{ messageId }],
-			filename: path.join(looseNullDirectory, "case.ts"),
-			output: unindent`
-				declare function getNumber(): number;
-				const fn = () => getNumber();
-			`,
-		},
-	],
+	invalid: looseNullInvalid,
 	parserOptions: {
 		ecmaVersion: "latest",
 		project: path.join(looseNullDirectory, "tsconfig.json"),
@@ -1221,44 +1417,58 @@ const isolatedDeclarationsDirectory = path.resolve(
 	"../../../fixtures/no-redundant-type-annotation/isolated-declarations",
 );
 
+const isolatedDeclarationsInvalid: Array<InvalidTestCase> = [
+	{
+		// A variable that stays inside the module is out of the option's
+		// reach.
+		code: unindent`
+			declare function getDate(): Date;
+			const value: Date = getDate();
+			export function use(): void {
+				void value;
+			}
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			declare function getDate(): Date;
+			const value = getDate();
+			export function use(): void {
+				void value;
+			}
+		`,
+	},
+	{
+		// The variable annotation is what the emitter reads, so it stays; the
+		// parameter annotation it supplies is still a restatement.
+		code: unindent`
+			type Handler = (value: string) => void;
+			export const handler: Handler = (value: string) => {};
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			type Handler = (value: string) => void;
+			export const handler: Handler = (value) => {};
+		`,
+	},
+	{
+		// A type assertion is what the emitter reads, so the parameter's
+		// annotation is not needed there.
+		code: unindent`
+			export const handler = ((value: string) => value) as (value: string) => string;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			export const handler = ((value) => value) as (value: string) => string;
+		`,
+	},
+];
+
 run({
 	name: `${RULE_NAME}/isolated-declarations`,
-	invalid: [
-		{
-			// A variable that stays inside the module is out of the option's
-			// reach.
-			code: unindent`
-				declare function getDate(): Date;
-				const value: Date = getDate();
-				export function use(): void {
-					void value;
-				}
-			`,
-			errors: [{ messageId }],
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
-			output: unindent`
-				declare function getDate(): Date;
-				const value = getDate();
-				export function use(): void {
-					void value;
-				}
-			`,
-		},
-		{
-			// The variable annotation is what the emitter reads, so it stays; the
-			// parameter annotation it supplies is still a restatement.
-			code: unindent`
-				type Handler = (value: string) => void;
-				export const handler: Handler = (value: string) => {};
-			`,
-			errors: [{ messageId: parameterMessageId }],
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
-			output: unindent`
-				type Handler = (value: string) => void;
-				export const handler: Handler = (value) => {};
-			`,
-		},
-	],
+	invalid: isolatedDeclarationsInvalid,
 	parserOptions: {
 		ecmaVersion: "latest",
 		project: path.join(isolatedDeclarationsDirectory, "tsconfig.json"),
@@ -1288,6 +1498,35 @@ run({
 				declare function getDate(): Date;
 				const value: Date = getDate();
 				export { value };
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			// `satisfies` leaves the emitter to type the object from its syntax,
+			// so the parameter must keep its annotation: the fix gives TS9011.
+			code: unindent`
+				export const handlers = { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			code: unindent`
+				export default { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			code: unindent`
+				const handlers = { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
+				export { handlers };
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			code: unindent`
+				export class Handlers {
+					f = { g: (s: string) => s } satisfies Record<string, (s: string) => string>;
+				}
 			`,
 			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
