@@ -83,11 +83,12 @@ declare function pick<T = number>(): T;
 const value: string = pick(); // NOT reported — without the annotation, `T` is `number`
 ```
 
-The rule skips any call or `new` expression whose signature is generic and whose
-declared return type mentions one of its own type parameters, unless the call
-site writes its type arguments out. That is deliberately conservative: it also
-skips cases such as `const names: Array<string> = items.map(toName)`, where the
-annotation really is redundant.
+The rule skips any call, `new` expression, or tagged template whose signature is
+generic and whose declared return type mentions one of its own type parameters,
+unless the call site writes its type arguments out. That is deliberately
+conservative: it also skips cases such as
+`const names: Array<string> = items.map(toName)`, where the annotation really is
+redundant.
 
 ### Named types are preserved
 

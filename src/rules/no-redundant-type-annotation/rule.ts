@@ -443,8 +443,8 @@ function create(
 	}
 
 	/**
-	 * Reports whether a call or `new` expression could have its result shaped by
-	 * the annotation itself.
+	 * Reports whether a call, `new` expression, or tagged template could have
+	 * its result shaped by the annotation itself.
 	 *
 	 * When a generic signature mentions its own type parameters in its declared
 	 * return type, and the call site supplies no explicit type arguments, the
@@ -452,11 +452,11 @@ function create(
 	 * T; const x: string = foo();` types the call as `string` only because the
 	 * annotation is there; removing it leaves `number`.
 	 *
-	 * @param node - The call or `new` expression to inspect.
+	 * @param node - The call, `new` expression, or tagged template to inspect.
 	 * @returns True when the annotation may be feeding inference.
 	 */
 	function isInferenceSensitiveCall(
-		node: TSESTree.CallExpression | TSESTree.NewExpression,
+		node: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
 	): boolean {
 		if (node.typeArguments !== undefined) {
 			return false;
@@ -622,6 +622,11 @@ function create(
 			node.type === AST_NODE_TYPES.NewExpression
 		) {
 			return isInferenceSensitiveCall(node) || node.arguments.some(isContextDependent);
+		}
+
+		// A tagged template calls its tag, so a generic tag infers the same way.
+		if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
+			return isInferenceSensitiveCall(node);
 		}
 
 		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
