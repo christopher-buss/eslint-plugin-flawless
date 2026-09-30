@@ -193,6 +193,19 @@ declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
 map([1], () => (text: string) => text.length); // NOT reported — without it, `text` is implicitly `any`
 ```
 
+A generator's `yield` counts as a return. The inferring call can also be a
+generic class's `new`, a tagged template, or a generic JSX component:
+
+```ts
+declare class Box<T> {
+	public readonly value: T;
+
+	constructor(value: T);
+}
+
+const box = new Box((text: string) => text); // NOT reported — without it, `text` is implicitly `any`
+```
+
 ## Catch clause variables
 
 Under the `useUnknownInCatchVariables` compiler option, which `strict` turns on,

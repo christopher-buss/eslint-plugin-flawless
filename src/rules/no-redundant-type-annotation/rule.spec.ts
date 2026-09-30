@@ -345,6 +345,84 @@ const valid: Array<ValidTestCase> = [
 		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
 		map([1], async () => (s: string) => s);
 	`,
+	// A generic class declares its type parameters on the class, not on the
+	// constructor, and `new` infers them all the same.
+	unindent`
+		declare class Box<T> {
+			constructor(value: T);
+		}
+		new Box((s: string) => s);
+	`,
+	unindent`
+		declare class Box<T> {
+			constructor(value: T);
+		}
+		new Box([(s: string) => s]);
+	`,
+	unindent`
+		declare class Box<T> {
+			constructor(make: () => T);
+		}
+		new Box(() => [(s: string) => s]);
+	`,
+	unindent`
+		declare class Box<T> {
+			constructor(value?: T);
+			value: T;
+		}
+		const box: Box<string> = new Box();
+	`,
+	// An overloaded constructor can be picked by the parameter type.
+	unindent`
+		declare class Box {
+			constructor(fn: (payload: number) => void);
+			constructor(fn: (payload: string) => void);
+		}
+		new Box((payload: string) => {});
+	`,
+	// A tagged template passes its holes to the tag as arguments.
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray, ...values: Array<T>): T;
+		tag\`\${(s: string) => s}\`;
+	`,
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray, ...values: Array<T>): T;
+		tag\`\${[(s: string) => s]}\`;
+	`,
+	// A yielded value infers the generator's type like a returned one.
+	unindent`
+		declare function gen<T>(make: () => Generator<T>): T;
+		gen(function* () {
+			yield (s: string) => s;
+		});
+	`,
+	unindent`
+		declare function gen<T>(make: () => Generator<T>): T;
+		gen(function* () {
+			yield [(s: string) => s];
+		});
+	`,
+	// A spread and a sequence's last expression pass the call's context on.
+	unindent`
+		declare function wrap<T>(value: T): T;
+		wrap({ ...{ format: (s: string) => s } });
+	`,
+	unindent`
+		declare function wrap<T>(value: T): T;
+		wrap([...[(s: string) => s]]);
+	`,
+	unindent`
+		declare function tick(): void;
+		declare function wrap<T>(value: T): T;
+		wrap((tick(), (s: string) => s));
+	`,
+	// After `this`, the annotation is narrower than the parameter in its
+	// position.
+	unindent`
+		interface Target {}
+		declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+		on(function (this: Target, event: string) {});
+	`,
 	// A rest parameter holds the array, not the element the signature pairs it
 	// with.
 	unindent`
@@ -782,6 +860,63 @@ const invalid: Array<InvalidTestCase> = [
 			wrap<number>((value) => value);
 		`,
 	},
+	{
+		code: unindent`
+			declare class Box<T> {
+				constructor(value: T);
+			}
+			new Box<(s: string) => string>((s: string) => s);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare class Box<T> {
+				constructor(value: T);
+			}
+			new Box<(s: string) => string>((s) => s);
+		`,
+	},
+	// Without a type parameter, a tag or a generator's yield type is the
+	// context the annotation restates.
+	{
+		code: unindent`
+			declare function tag(strings: TemplateStringsArray, ...values: Array<(s: string) => string>): void;
+			tag\`\${(s: string) => s}\`;
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function tag(strings: TemplateStringsArray, ...values: Array<(s: string) => string>): void;
+			tag\`\${(s) => s}\`;
+		`,
+	},
+	{
+		code: unindent`
+			declare function gen(make: () => Generator<(s: string) => string>): void;
+			gen(function* () {
+				yield (s: string) => s;
+			});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function gen(make: () => Generator<(s: string) => string>): void;
+			gen(function* () {
+				yield (s) => s;
+			});
+		`,
+	},
+	// A `this` parameter does not shift the positions after it.
+	{
+		code: unindent`
+			interface Target {}
+			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+			on(function (this: Target, event: string, detail: string) {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Target {}
+			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+			on(function (this: Target, event: string, detail) {});
+		`,
+	},
 	// The callback's return type names no type parameter, so the returned
 	// function's context holds without its annotation.
 	{
@@ -856,6 +991,94 @@ run({
 	invalid,
 	rule: noRedundantTypeAnnotation,
 	valid,
+});
+
+// A JSX element calls its component with the attributes as props, so a
+// generic component infers from them like a generic call.
+const jsxFilename = "file.tsx";
+
+/**
+ * Declares the JSX namespace a component's return type needs.
+ *
+ * @param code - The test source.
+ * @returns The source with the namespace declared above it.
+ */
+function withJsx(code: string): string {
+	return `declare global { namespace JSX { interface Element {} } }\n${code}`;
+}
+
+run({
+	name: `${RULE_NAME}/jsx`,
+	invalid: [
+		{
+			code: withJsx(unindent`
+				declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
+				<Button onClick={(count: number) => {}} />;
+			`),
+			errors: [{ messageId: parameterMessageId }],
+			filename: jsxFilename,
+			output: withJsx(unindent`
+				declare function Button(props: { onClick: (count: number) => void }): JSX.Element;
+				<Button onClick={(count) => {}} />;
+			`),
+		},
+		{
+			// An explicit type argument pins the generic, as for a call.
+			code: withJsx(unindent`
+				declare function One<T>(props: { a: T }): JSX.Element;
+				<One<(s: string) => string> a={(s: string) => s} />;
+			`),
+			errors: [{ messageId: parameterMessageId }],
+			filename: jsxFilename,
+			output: withJsx(unindent`
+				declare function One<T>(props: { a: T }): JSX.Element;
+				<One<(s: string) => string> a={(s) => s} />;
+			`),
+		},
+	],
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			code: withJsx(unindent`
+				declare function One<T>(props: { a: Array<T> }): JSX.Element;
+				<One a={[(s: string) => s]} />;
+			`),
+			filename: jsxFilename,
+		},
+		{
+			code: withJsx(unindent`
+				declare function List<T, R>(props: {
+					items: Array<T>;
+					make: () => R;
+					use: (made: R) => void;
+				}): JSX.Element;
+				<List items={[1]} make={() => (s: string) => s} use={(made) => made("x")} />;
+			`),
+			filename: jsxFilename,
+		},
+		{
+			// Each annotation alone would do, but the fix removes both.
+			code: withJsx(unindent`
+				declare function Pair<T>(props: { a: T; b: T }): JSX.Element;
+				<Pair a={(s: string) => s} b={(s: string) => s} />;
+			`),
+			filename: jsxFilename,
+		},
+		{
+			code: withJsx(unindent`
+				declare function One<T>(props: { a: T }): JSX.Element;
+				<One {...{ a: (s: string) => s }} />;
+			`),
+			filename: jsxFilename,
+		},
+		{
+			code: withJsx(unindent`
+				declare function Render<T>(props: { children: T }): JSX.Element;
+				<Render>{(s: string) => s}</Render>;
+			`),
+			filename: jsxFilename,
+		},
+	],
 });
 
 // `useUnknownInCatchVariables` is what makes a bare catch variable `unknown`.

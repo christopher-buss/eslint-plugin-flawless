@@ -5,6 +5,7 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type {
 	Expression,
 	Signature,
+	SignatureDeclaration,
 	Node as TSNode,
 	Type,
 	TypeReference,
@@ -34,6 +35,16 @@ const PARAMETER_MESSAGE_ID = "redundantParameter";
 export type MessageIds = typeof CATCH_MESSAGE_ID | typeof MESSAGE_ID | typeof PARAMETER_MESSAGE_ID;
 
 type Options = [];
+
+/** A call that passes a node to a parameter, and that parameter's position. */
+interface CallSite {
+	readonly call:
+		| TSESTree.CallExpression
+		| TSESTree.JSXOpeningElement
+		| TSESTree.NewExpression
+		| TSESTree.TaggedTemplateExpression;
+	readonly index: number;
+}
 
 const messages = {
 	[CATCH_MESSAGE_ID]:
@@ -245,7 +256,7 @@ function isFunctionNode(node: TSESTree.Node): boolean {
  * type down to it unchanged.
  *
  * A const assertion forwards the outer context, but any other assertion
- * supplies its own type.
+ * supplies its own type. A sequence forwards it only to its last expression.
  *
  * @param node - The node to start from.
  * @returns The outermost node that still shares the node's context.
@@ -260,7 +271,10 @@ function climbContextForwarders(node: TSESTree.Node): TSESTree.Node {
 			parent.type === AST_NODE_TYPES.LogicalExpression ||
 			parent.type === AST_NODE_TYPES.Property ||
 			parent.type === AST_NODE_TYPES.ObjectExpression ||
+			parent.type === AST_NODE_TYPES.SpreadElement ||
 			parent.type === AST_NODE_TYPES.TSNonNullExpression ||
+			(parent.type === AST_NODE_TYPES.SequenceExpression &&
+				parent.expressions.at(-1) === current) ||
 			isConstAssertion(parent))
 	) {
 		current = parent;
@@ -273,9 +287,10 @@ function climbContextForwarders(node: TSESTree.Node): TSESTree.Node {
 /**
  * Finds the function that returns a node as its value.
  *
- * A concise arrow body and a `return` argument are both return values. The
- * nearest enclosing function owns a `return`; a declaration has no contextual
- * type to pass on, so it ends the search.
+ * A concise arrow body, a `return` argument, and a `yield` operand are all
+ * return values: a generator's context types what it yields. The nearest
+ * enclosing function owns a `return` or `yield`; a declaration has no
+ * contextual type to pass on, so it ends the search.
  *
  * @param node - The expression to locate.
  * @returns The returning function, or undefined when the node is not a
@@ -289,7 +304,10 @@ function getReturningFunction(
 		return parent;
 	}
 
-	if (parent?.type !== AST_NODE_TYPES.ReturnStatement) {
+	if (
+		parent?.type !== AST_NODE_TYPES.ReturnStatement &&
+		parent?.type !== AST_NODE_TYPES.YieldExpression
+	) {
 		return undefined;
 	}
 
@@ -305,6 +323,113 @@ function getReturningFunction(
 }
 
 /**
+ * Finds the call a node is passed to, and the parameter that receives it.
+ *
+ * Besides call and `new` arguments, a tagged template passes each hole after
+ * the strings array, and a JSX element passes its attributes and children
+ * together as the component's first parameter.
+ *
+ * @param node - The expression to locate.
+ * @returns The call and the parameter index, or undefined when the node is
+ *   not an argument.
+ */
+function getCallSite(node: TSESTree.Node): CallSite | undefined {
+	const { parent } = node;
+	if (
+		(parent?.type === AST_NODE_TYPES.CallExpression ||
+			parent?.type === AST_NODE_TYPES.NewExpression) &&
+		parent.arguments.includes(node as TSESTree.CallExpressionArgument)
+	) {
+		return {
+			call: parent,
+			index: parent.arguments.indexOf(node as TSESTree.CallExpressionArgument),
+		};
+	}
+
+	if (
+		parent?.type === AST_NODE_TYPES.TemplateLiteral &&
+		parent.parent.type === AST_NODE_TYPES.TaggedTemplateExpression &&
+		parent.parent.quasi === parent
+	) {
+		return {
+			call: parent.parent,
+			index: parent.expressions.indexOf(node as TSESTree.Expression) + 1,
+		};
+	}
+
+	if (parent?.type === AST_NODE_TYPES.JSXSpreadAttribute) {
+		return { call: parent.parent, index: 0 };
+	}
+
+	if (parent?.type !== AST_NODE_TYPES.JSXExpressionContainer) {
+		return undefined;
+	}
+
+	const holder = parent.parent;
+	if (holder.type === AST_NODE_TYPES.JSXAttribute) {
+		return { call: holder.parent, index: 0 };
+	}
+
+	return holder.type === AST_NODE_TYPES.JSXElement
+		? { call: holder.openingElement, index: 0 }
+		: undefined;
+}
+
+/**
+ * Finds the expression that names what a call invokes.
+ *
+ * @param call - The call to read.
+ * @returns The callee, tag, or component name.
+ */
+function getCallee(call: CallSite["call"]): TSESTree.Node {
+	switch (call.type) {
+		case AST_NODE_TYPES.CallExpression:
+		case AST_NODE_TYPES.NewExpression: {
+			return call.callee;
+		}
+		case AST_NODE_TYPES.JSXOpeningElement: {
+			return call.name;
+		}
+		case AST_NODE_TYPES.TaggedTemplateExpression: {
+			return call.tag;
+		}
+	}
+}
+
+/**
+ * Lists the kinds of signature a call can resolve to.
+ *
+ * A JSX component may be a function or a class.
+ *
+ * @param call - The call to read.
+ * @returns The signature kinds to look up on the callee.
+ */
+function getSignatureKinds(call: CallSite["call"]): Array<SignatureKind> {
+	if (call.type === AST_NODE_TYPES.NewExpression) {
+		return [SignatureKind.Construct];
+	}
+
+	if (call.type === AST_NODE_TYPES.JSXOpeningElement) {
+		return [SignatureKind.Call, SignatureKind.Construct];
+	}
+
+	return [SignatureKind.Call];
+}
+
+/**
+ * Reports whether a function declares a `this` parameter.
+ *
+ * @param node - The function to inspect.
+ * @returns True when the first parameter is `this`.
+ */
+function hasThisParameter(
+	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
+): boolean {
+	const [first] = node.params;
+	return first?.type === AST_NODE_TYPES.Identifier && first.name === "this";
+}
+
+/**
  * Reports whether a function expression reads a `this` that only its
  * contextual type gives a type.
  *
@@ -317,12 +442,7 @@ function getReturningFunction(
 function usesContextualThis(
 	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
 ): boolean {
-	if (node.type !== AST_NODE_TYPES.FunctionExpression) {
-		return false;
-	}
-
-	const [first] = node.params;
-	if (first?.type === AST_NODE_TYPES.Identifier && first.name === "this") {
+	if (node.type !== AST_NODE_TYPES.FunctionExpression || hasThisParameter(node)) {
 		return false;
 	}
 
@@ -466,19 +586,39 @@ function create(
 		// `getDeclaration` is typed as total, but synthesized signatures have no
 		// declaration at runtime.
 		const declaration = signature?.getDeclaration();
-		const typeParameters = declaration?.typeParameters;
-		if (typeParameters === undefined || typeParameters.length === 0) {
+		if (declaration === undefined) {
 			return false;
 		}
 
-		// An inferred return type could resolve to anything; treat it as
-		// sensitive.
-		if (declaration?.type === undefined) {
+		const names = getTypeParameterNames(declaration);
+		if (names.size === 0) {
+			return false;
+		}
+
+		// An inferred return type could resolve to anything, and a constructor
+		// returns its generic class; treat both as sensitive.
+		if (declaration.type === undefined) {
 			return true;
 		}
 
-		const names = new Set(typeParameters.map((parameter) => parameter.name.text));
 		return referencesName(declaration.type, names);
+	}
+
+	/**
+	 * Collects the names of the type parameters a call to a declaration
+	 * infers.
+	 *
+	 * A constructor declares none of its own: they sit on the class, where
+	 * only the signature built from the declaration finds them.
+	 *
+	 * @param declaration - The called signature's declaration.
+	 * @returns The type parameter names, empty when the call is not generic.
+	 */
+	function getTypeParameterNames(declaration: SignatureDeclaration): ReadonlySet<string> {
+		const typeParameters = checker
+			.getSignatureFromDeclaration(declaration)
+			?.getTypeParameters();
+		return new Set(typeParameters?.map((parameter) => parameter.symbol.name));
 	}
 
 	/**
@@ -710,7 +850,10 @@ function create(
 	 * call: `map(items, () => (s: string) => s.length)` against
 	 * `map<T, R>(items: Array<T>, fn: (item: T) => R)` infers `R` from the
 	 * returned function, so its context exists only because of the
-	 * annotation.
+	 * annotation. A generator's `yield` is followed the same way.
+	 *
+	 * The call may also be a generic class's `new`, a tagged template, or a
+	 * generic JSX component.
 	 *
 	 * @param node - The function expression to locate.
 	 * @returns True when an enclosing call still depends on the annotations.
@@ -725,36 +868,33 @@ function create(
 			returning = getReturningFunction(current);
 		}
 
-		const { parent } = current;
+		const site = getCallSite(current);
+		if (site === undefined) {
+			return false;
+		}
+
+		const { call, index } = site;
+		if (call.typeArguments !== undefined) {
+			return false;
+		}
+
+		const calleeType = services.getTypeAtLocation(getCallee(call));
 		if (
-			parent === undefined ||
-			(parent.type !== AST_NODE_TYPES.CallExpression &&
-				parent.type !== AST_NODE_TYPES.NewExpression)
+			getSignatureKinds(call).some(
+				(kind) => checker.getSignaturesOfType(calleeType, kind).length > 1,
+			)
 		) {
-			return false;
-		}
-
-		if (!parent.arguments.includes(current as TSESTree.CallExpressionArgument)) {
-			return false;
-		}
-
-		if (parent.typeArguments !== undefined) {
-			return false;
-		}
-
-		const calleeType = services.getTypeAtLocation(parent.callee);
-		if (checker.getSignaturesOfType(calleeType, SignatureKind.Call).length > 1) {
 			return true;
 		}
 
-		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(parent));
+		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
 		const declaration = signature?.getDeclaration();
-		const typeParameters = declaration?.typeParameters;
-		if (
-			declaration === undefined ||
-			typeParameters === undefined ||
-			typeParameters.length === 0
-		) {
+		if (declaration === undefined) {
+			return false;
+		}
+
+		const names = getTypeParameterNames(declaration);
+		if (names.size === 0) {
 			return false;
 		}
 
@@ -766,7 +906,6 @@ function create(
 		// the declared parameter type. With a callback argument, only its
 		// return type can take the returned value.
 		const { parameters } = declaration;
-		const index = parent.arguments.indexOf(current as TSESTree.CallExpressionArgument);
 		const typeNode = parameters[Math.min(index, parameters.length - 1)]?.type;
 		if (typeNode === undefined) {
 			return true;
@@ -774,7 +913,6 @@ function create(
 
 		const target =
 			isFunctionNode(current) && isFunctionTypeNode(typeNode) ? typeNode.type : typeNode;
-		const names = new Set(typeParameters.map((parameter) => parameter.name.text));
 		return referencesName(target, names);
 	}
 
@@ -854,15 +992,12 @@ function create(
 			return;
 		}
 
-		for (const [index, parameter] of node.params.entries()) {
+		// A `this` parameter has no counterpart in the contextual signature's
+		// positional list, so the positions start after it.
+		const parameters = hasThisParameter(node) ? node.params.slice(1) : node.params;
+		for (const [index, parameter] of parameters.entries()) {
 			const annotation = getParameterAnnotation(parameter);
 			if (annotation === undefined) {
-				continue;
-			}
-
-			// A `this` parameter has no counterpart in the contextual signature's
-			// positional list.
-			if (parameter.type === AST_NODE_TYPES.Identifier && parameter.name === "this") {
 				continue;
 			}
 
