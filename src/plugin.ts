@@ -31,6 +31,7 @@ import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-asser
 import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
 import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/rule";
 import { preferExpectAssertionsCount } from "./rules/prefer-expect-assertions-count/rule";
+import { preferMockThrow } from "./rules/prefer-mock-throw/rule";
 import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
 import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
 import { preferVitestLocalContext } from "./rules/prefer-vitest-local-context/rule";
@@ -91,6 +92,7 @@ export const plugin = {
 		"prefer-destructuring-assignment": preferDestructuringAssignment,
 		"prefer-ending-with-an-expect": preferEndingWithAnExpect,
 		"prefer-expect-assertions-count": preferExpectAssertionsCount,
+		"prefer-mock-throw": preferMockThrow,
 		"prefer-parameter-destructuring": preferParameterDestructuring,
 		"prefer-read-only-props": preferReadOnlyProps,
 		"prefer-vitest-local-context": preferVitestLocalContext,
