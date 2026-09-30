@@ -165,6 +165,20 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// Tagged-template `it.each` table.
+	{
+		code: unindent`
+			it.each\`
+				a    | b
+				\${1} | \${2}
+			\`("adds $a and $b", ({ a, b }) => {
+				if (a) {
+					doThing(b);
+				}
+			});
+		`,
+		errors: [{ messageId }],
+	},
 	// If statement in a test.
 	{
 		code: unindent`

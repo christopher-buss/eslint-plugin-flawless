@@ -148,3 +148,33 @@ export function getCalleeRootIdentifier(node: TSESTree.Node): null | TSESTree.Id
 		current = current.tag;
 	}
 }
+
+/**
+ * Builds the dotted name of a callee chain, unwrapping intervening calls
+ * (`request(app).get("/").expect` -> `request.get.expect`) the way
+ * eslint-plugin-jest's `getNodeChain` does. A computed member access yields
+ * `null`, since its property is not a static name.
+ *
+ * @param node - The callee node.
+ * @returns The dotted name, or `null` when it cannot be built statically.
+ */
+export function getNodeName(node: TSESTree.Node): null | string {
+	if (node.type === AST_NODE_TYPES.Identifier) {
+		return node.name;
+	}
+
+	if (node.type === AST_NODE_TYPES.CallExpression) {
+		return getNodeName(node.callee);
+	}
+
+	if (
+		node.type === AST_NODE_TYPES.MemberExpression &&
+		!node.computed &&
+		node.property.type === AST_NODE_TYPES.Identifier
+	) {
+		const objectName = getNodeName(node.object);
+		return objectName === null ? null : `${objectName}.${node.property.name}`;
+	}
+
+	return null;
+}

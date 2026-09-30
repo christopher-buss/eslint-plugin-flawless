@@ -75,6 +75,18 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// Tagged-template `it.each` table.
+	{
+		code: unindent`
+			it.each\`
+				a    | b
+				\${1} | \${2}
+			\`("adds $a and $b", ({ a, b }) => {
+				add(a, b);
+			});
+		`,
+		errors: [{ messageId }],
+	},
 	// Last statement is not an assertion.
 	{
 		code: unindent`
