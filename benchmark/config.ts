@@ -157,6 +157,7 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 	{ ruleId: "no-reflect-set", testPath: "./cases/all/no-reflect-set.tsx" },
 	{ ruleId: "no-shape-in-symbol-names", testPath: "./cases/all/no-shape-in-symbol-names.tsx" },
 	{ ruleId: "no-shared-mocks", testPath: "./cases/all/no-shared-mocks.tsx" },
+	{ ruleId: "no-shared-test-state", testPath: "./cases/all/no-shared-test-state.tsx" },
 	{
 		ruleId: "no-unnecessary-use-callback",
 		testPath: "./cases/all/no-unnecessary-use-callback.tsx",
