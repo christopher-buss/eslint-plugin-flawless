@@ -1,5 +1,10 @@
 import { DefinitionType, type ScopeVariable } from "@typescript-eslint/scope-manager";
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import {
+	AST_NODE_TYPES,
+	type JSONSchema,
+	type TSESLint,
+	type TSESTree,
+} from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
@@ -10,7 +15,31 @@ export const RULE_NAME = "prefer-vitest-local-context";
 const MESSAGE_ID = "preferLocalContext";
 
 export type MessageIds = typeof MESSAGE_ID;
-export type Options = [];
+
+export interface PreferVitestLocalContextOptions {
+	/**
+	 * Most parameters a helper may have after the autofix threads fixtures
+	 * through it.
+	 */
+	readonly maxParams?: number;
+}
+
+export type Options = [PreferVitestLocalContextOptions?];
+
+const schema: Array<JSONSchema.JSONSchema4> = [
+	{
+		additionalProperties: false,
+		properties: {
+			maxParams: {
+				description:
+					"Most parameters a helper may have after the autofix threads fixtures through it. Past this, the fixtures go in one object parameter; if that also does not fit, the fix is withheld.",
+				minimum: 0,
+				type: "integer",
+			},
+		},
+		type: "object",
+	},
+];
 
 type FunctionNode =
 	| TSESTree.ArrowFunctionExpression
@@ -35,13 +64,17 @@ interface TestCase {
 
 interface Helper {
 	readonly calls: Array<HelperCall>;
-	contextName: string;
+	/** Name of an existing `TestContext` parameter, if the helper has one. */
+	readonly contextName: null | string;
 	readonly directUses: Map<TSESTree.Identifier, FixtureName>;
-	hasContext: boolean;
-	needsContext: boolean;
+	/** Fixtures the helper uses, directly or through the helpers it calls. */
+	readonly fixtures: Set<FixtureName>;
 	readonly node: FunctionNode;
 	readonly variable: ScopeVariable;
 }
+
+/** How a helper receives its fixtures: one parameter each, or one object. */
+type HelperShape = "object" | "separate";
 
 interface HelperCall {
 	readonly call: TSESTree.CallExpression;
@@ -57,6 +90,58 @@ interface Edit {
 const CONTEXT_FIXTURES = new Set<FixtureName>(["expect", "onTestFailed", "onTestFinished"]);
 
 const TEST_NAMES = new Set(["it", "test"]);
+
+/** Property names that cannot become a shorthand binding in strict code. */
+const RESERVED_WORDS: ReadonlySet<string> = new Set([
+	"arguments",
+	"await",
+	"break",
+	"case",
+	"catch",
+	"class",
+	"const",
+	"continue",
+	"debugger",
+	"default",
+	"delete",
+	"do",
+	"else",
+	"enum",
+	"eval",
+	"export",
+	"extends",
+	"false",
+	"finally",
+	"for",
+	"function",
+	"if",
+	"implements",
+	"import",
+	"in",
+	"instanceof",
+	"interface",
+	"let",
+	"new",
+	"null",
+	"package",
+	"private",
+	"protected",
+	"public",
+	"return",
+	"static",
+	"super",
+	"switch",
+	"this",
+	"throw",
+	"true",
+	"try",
+	"typeof",
+	"var",
+	"void",
+	"while",
+	"with",
+	"yield",
+]);
 
 const messages = {
 	[MESSAGE_ID]: "Use `{{name}}` from the local Vitest test context instead of the module import.",
@@ -233,19 +318,20 @@ function functionVariable(
 	return null;
 }
 
+/**
+ * Finds a test call's body. Vitest accepts `(name, fn, timeout)` as well as
+ * `(name, options, fn)`, so the body is not always the last argument.
+ *
+ * @param call - The test call.
+ * @returns The callback, or `null` when there is none or a spread hides it.
+ */
 function callbackArgument(call: TSESTree.CallExpression): FunctionNode | null {
-	for (let index = call.arguments.length - 1; index >= 0; index -= 1) {
-		const argument = call.arguments[index];
-		if (argument !== undefined && argument.type !== AST_NODE_TYPES.SpreadElement) {
-			if (isFunction(argument)) {
-				return argument;
-			}
-
-			return null;
-		}
+	if (call.arguments.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement)) {
+		return null;
 	}
 
-	return null;
+	const callback = call.arguments.slice(1).findLast((argument) => isFunction(argument));
+	return isFunction(callback) ? callback : null;
 }
 
 function enclosingTest(
@@ -330,6 +416,101 @@ function freshName(node: FunctionNode, preferred: string, sourceCode: TSESLint.S
 	}
 }
 
+/**
+ * Determines whether a new binding in a function would shadow nothing the
+ * function reads and collide with nothing it declares.
+ *
+ * @param node - The function that gets the binding.
+ * @param name - The binding's name.
+ * @param replaced - Variables whose references the fix rewrites, so reads of
+ *   them do not count.
+ * @param sourceCode - The file's source code.
+ * @returns `true` when the name is safe to bind.
+ */
+function isNameFree(
+	node: FunctionNode,
+	name: string,
+	replaced: ReadonlySet<ScopeVariable>,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): boolean {
+	const scope = sourceCode.getScope(node);
+	const pending = [scope];
+	for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+		if (current.set.has(name)) {
+			return false;
+		}
+
+		pending.push(...current.childScopes);
+	}
+
+	return !scope.through.some((reference) => {
+		return (
+			reference.identifier.name === name &&
+			(reference.resolved === null || !replaced.has(reference.resolved))
+		);
+	});
+}
+
+function freeName(
+	node: FunctionNode,
+	preferred: string,
+	replaced: ReadonlySet<ScopeVariable>,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): string {
+	for (let index = 1; ; index += 1) {
+		const candidate = index === 1 ? preferred : `${preferred}${index}`;
+		if (isNameFree(node, candidate, replaced, sourceCode)) {
+			return candidate;
+		}
+	}
+}
+
+function propertyText(key: string, local: string): string {
+	return key === local ? key : `${key}: ${local}`;
+}
+
+/**
+ * Determines whether a member expression is assigned to, deleted, or
+ * otherwise written.
+ *
+ * @param node - The member expression.
+ * @returns `true` when evaluating the parent writes to the node.
+ */
+function isWriteTarget(node: TSESTree.MemberExpression): boolean {
+	const { parent } = node;
+	if (
+		parent.type === AST_NODE_TYPES.ArrayPattern ||
+		parent.type === AST_NODE_TYPES.RestElement ||
+		parent.type === AST_NODE_TYPES.UpdateExpression
+	) {
+		return true;
+	}
+
+	if (
+		parent.type === AST_NODE_TYPES.AssignmentExpression ||
+		parent.type === AST_NODE_TYPES.AssignmentPattern ||
+		parent.type === AST_NODE_TYPES.ForInStatement ||
+		parent.type === AST_NODE_TYPES.ForOfStatement
+	) {
+		return parent.left === node;
+	}
+
+	if (parent.type === AST_NODE_TYPES.Property) {
+		return parent.parent.type === AST_NODE_TYPES.ObjectPattern;
+	}
+
+	return parent.type === AST_NODE_TYPES.UnaryExpression && parent.operator === "delete";
+}
+
+function addAll(target: Set<FixtureName>, source: ReadonlySet<FixtureName>): boolean {
+	const before = target.size;
+	for (const fixture of source) {
+		target.add(fixture);
+	}
+
+	return target.size !== before;
+}
+
 function parameterParens(
 	node: FunctionNode,
 	sourceCode: Readonly<TSESLint.SourceCode>,
@@ -363,6 +544,33 @@ function parameterParens(
 	return null;
 }
 
+/**
+ * Appends to a parenthesized list, keeping a trailing comma if it has one.
+ *
+ * @param close - The list's closing parenthesis.
+ * @param isEmpty - Whether the list has no items yet.
+ * @param text - The items to append.
+ * @param sourceCode - The file's source code.
+ * @returns The insertion.
+ */
+function appendToListEdit(
+	close: TSESTree.Token,
+	isEmpty: boolean,
+	text: string,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): Edit {
+	if (isEmpty) {
+		return { range: [close.range[0], close.range[0]], text };
+	}
+
+	const previous = sourceCode.getTokenBefore(close);
+	if (previous?.value === ",") {
+		return { range: [previous.range[1], previous.range[1]], text: ` ${text},` };
+	}
+
+	return { range: [close.range[0], close.range[0]], text: `, ${text}` };
+}
+
 function addParameterEdit(
 	node: FunctionNode,
 	text: string,
@@ -374,10 +582,7 @@ function addParameterEdit(
 
 	const parens = parameterParens(node, sourceCode);
 	if (parens !== null) {
-		return {
-			range: [parens.close.range[0], parens.close.range[0]],
-			text: node.params.length === 0 ? text : `, ${text}`,
-		};
+		return appendToListEdit(parens.close, node.params.length === 0, text, sourceCode);
 	}
 
 	if (
@@ -395,19 +600,29 @@ function addParameterEdit(
 	return null;
 }
 
-function insertArgumentEdit(call: TSESTree.CallExpression, index: number, text: string): Edit {
+function insertArgumentEdit(
+	call: TSESTree.CallExpression,
+	index: number,
+	text: string,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): Edit | null {
 	const argument = call.arguments[index];
 	if (argument !== undefined) {
 		return { range: [argument.range[0], argument.range[0]], text: `${text}, ` };
 	}
 
 	const missing = Array.from({ length: index - call.arguments.length }, () => "undefined");
-	const argumentsToAdd = [...missing, text].join(", ");
-	const [, end] = call.range;
-	return {
-		range: [end - 1, end - 1],
-		text: call.arguments.length === 0 ? argumentsToAdd : `, ${argumentsToAdd}`,
-	};
+	const close = sourceCode.getLastToken(call);
+	if (close?.value !== ")") {
+		return null;
+	}
+
+	return appendToListEdit(
+		close,
+		call.arguments.length === 0,
+		[...missing, text].join(", "),
+		sourceCode,
+	);
 }
 
 function patternBinding(pattern: TSESTree.ObjectPattern, fixture: FixtureName): null | string {
@@ -486,6 +701,35 @@ function importText(
 	return `${prefix}${otherSpecifiers.join(", ")}${separator}${named} from ${source}${tail}`;
 }
 
+function helperShape(helper: Helper, maxParameters: number): HelperShape {
+	return helper.node.params.length + helper.fixtures.size <= maxParameters
+		? "separate"
+		: "object";
+}
+
+function helperParameterText(
+	shape: HelperShape,
+	locals: ReadonlyMap<FixtureName, string>,
+	typeName: null | string,
+): string {
+	const entries = [...locals];
+	if (shape === "separate") {
+		return entries
+			.map(([fixture, local]) => {
+				return typeName === null ? local : `${local}: ${typeName}["${fixture}"]`;
+			})
+			.join(", ");
+	}
+
+	const pattern = `{ ${entries.map(([fixture, local]) => propertyText(fixture, local)).join(", ")} }`;
+	if (typeName === null) {
+		return pattern;
+	}
+
+	const keys = entries.map(([fixture]) => `"${fixture}"`).join(" | ");
+	return `${pattern}: Pick<${typeName}, ${keys}>`;
+}
+
 function typeScriptFile(filename: string): boolean {
 	return /\.(?:cts|mts|ts|tsx)$/iu.test(filename);
 }
@@ -554,6 +798,44 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		return tests;
 	}
 
+	function importVariables(): Set<ScopeVariable> {
+		return new Set(fixtureImports.map(({ variable }) => variable));
+	}
+
+	function helperOf(
+		owner: FunctionNode | null,
+		helpers: ReadonlyMap<ScopeVariable, Helper>,
+	): Helper | undefined {
+		const variable = owner === null ? null : functionVariable(owner, context.sourceCode);
+		return variable === null ? undefined : helpers.get(variable);
+	}
+
+	/**
+	 * Finds the nearest helper around a node, looking through anonymous
+	 * closures such as `forEach` callbacks.
+	 *
+	 * @param node - The node inside the helper.
+	 * @param helpers - Same-file helpers by variable.
+	 * @returns The helper, or `undefined` when the node is not in one.
+	 */
+	function enclosingHelper(
+		node: TSESTree.Node,
+		helpers: ReadonlyMap<ScopeVariable, Helper>,
+	): Helper | undefined {
+		for (
+			let owner = enclosingFunction(node);
+			owner !== null;
+			owner = enclosingFunction(owner)
+		) {
+			const helper = helperOf(owner, helpers);
+			if (helper !== undefined) {
+				return helper;
+			}
+		}
+
+		return undefined;
+	}
+
 	function collectHelpers(): Map<ScopeVariable, Helper> {
 		const helpers = new Map<ScopeVariable, Helper>();
 		for (const node of functions) {
@@ -562,13 +844,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				continue;
 			}
 
-			const existing = existingContextParameter(node, context.sourceCode);
 			helpers.set(variable, {
 				calls: [],
-				contextName: existing?.name ?? freshName(node, "context", context.sourceCode),
+				contextName: existingContextParameter(node, context.sourceCode)?.name ?? null,
 				directUses: new Map(),
-				hasContext: existing !== null,
-				needsContext: false,
+				fixtures: new Set(),
 				node,
 				variable,
 			});
@@ -598,13 +878,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					continue;
 				}
 
-				const owner = enclosingFunction(identifier);
-				const variable =
-					owner === null ? null : functionVariable(owner, context.sourceCode);
-				const helper = variable === null ? undefined : helpers.get(variable);
+				const helper = enclosingHelper(identifier, helpers);
 				if (helper !== undefined) {
 					helper.directUses.set(identifier, fixture.name);
-					helper.needsContext = true;
+					helper.fixtures.add(fixture.name);
 				}
 			}
 		}
@@ -630,7 +907,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 
 				const test = enclosingTest(reference.identifier, tests);
-				const owner = test?.callback ?? enclosingFunction(reference.identifier);
+				const owner =
+					test?.callback ??
+					enclosingHelper(reference.identifier, helpers)?.node ??
+					enclosingFunction(reference.identifier);
 				const helperCall = { call, helper, owner };
 				helper.calls.push(helperCall);
 				if (test !== null) {
@@ -640,7 +920,14 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 	}
 
-	function propagateContext(
+	/**
+	 * Adds each helper's fixtures to the helpers that call it, since a caller
+	 * must pass those fixtures on.
+	 *
+	 * @param tests - Test callbacks by node.
+	 * @param helpers - Same-file helpers by variable.
+	 */
+	function propagateFixtures(
 		tests: ReadonlyMap<FunctionNode, TestCase>,
 		helpers: ReadonlyMap<ScopeVariable, Helper>,
 	): void {
@@ -648,7 +935,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		while (changed) {
 			changed = false;
 			for (const helper of helpers.values()) {
-				if (!helper.needsContext || helper.hasContext) {
+				if (helper.contextName !== null) {
 					continue;
 				}
 
@@ -657,10 +944,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 						continue;
 					}
 
-					const variable = functionVariable(call.owner, context.sourceCode);
-					const caller = variable === null ? undefined : helpers.get(variable);
-					if (caller !== undefined && !caller.needsContext) {
-						caller.needsContext = true;
+					const caller = helperOf(call.owner, helpers);
+					if (caller !== undefined && addAll(caller.fixtures, helper.fixtures)) {
 						changed = true;
 					}
 				}
@@ -672,10 +957,15 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		tests: ReadonlyMap<FunctionNode, TestCase>,
 		helpers: ReadonlyMap<ScopeVariable, Helper>,
 		activeHelpers: ReadonlySet<Helper>,
+		maxParameters: number,
 	): boolean {
 		for (const helper of activeHelpers) {
-			if (helper.hasContext) {
+			if (helper.contextName !== null) {
 				continue;
+			}
+
+			if (helper.node.params.length + 1 > maxParameters) {
+				return false;
 			}
 
 			if (
@@ -725,10 +1015,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					continue;
 				}
 
-				const owner = enclosingFunction(reference.identifier);
-				const variable =
-					owner === null ? null : functionVariable(owner, context.sourceCode);
-				const caller = variable === null ? undefined : helpers.get(variable);
+				const caller = enclosingHelper(reference.identifier, helpers);
 				if (caller === undefined || !activeHelpers.has(caller)) {
 					return false;
 				}
@@ -744,14 +1031,14 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	): Set<Helper> {
 		const reachable = new Set<Helper>();
 		for (const helper of helpers.values()) {
-			if (helper.hasContext && helper.needsContext) {
+			if (helper.contextName !== null && helper.fixtures.size > 0) {
 				reachable.add(helper);
 			}
 		}
 
 		for (const test of tests.values()) {
 			for (const { helper } of test.helperCalls) {
-				if (helper.needsContext) {
+				if (helper.fixtures.size > 0) {
 					reachable.add(helper);
 				}
 			}
@@ -761,7 +1048,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		while (changed) {
 			changed = false;
 			for (const helper of helpers.values()) {
-				if (!helper.needsContext || reachable.has(helper)) {
+				if (helper.fixtures.size === 0 || reachable.has(helper)) {
 					continue;
 				}
 
@@ -780,129 +1067,177 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		return reachable;
 	}
 
-	function contextParameter(
-		test: TestCase,
-		needsWholeContext: boolean,
+	/**
+	 * Rewrites a whole-context parameter to a destructuring pattern when the
+	 * body only reads plain `context.name` properties from it.
+	 *
+	 * @param callback - The test callback.
+	 * @param parameter - Its context parameter.
+	 * @param fixtures - Fixtures the test needs bound.
+	 * @param edits - Receives the rewrite.
+	 * @returns Local names by fixture, or `null` when the context cannot be
+	 *   destructured.
+	 */
+	function destructureContext(
+		callback: FunctionNode,
+		parameter: TSESTree.Identifier,
+		fixtures: ReadonlySet<FixtureName>,
 		edits: Array<Edit>,
-	): null | { bindings: Map<FixtureName, string>; name: null | string } {
-		function addContextParameter(text: string): Edit | null {
-			const prefix =
-				test.contextIndex === 1 && test.callback.params.length === 0
-					? `${freshName(test.callback, "_value", context.sourceCode)}, `
-					: "";
-			return addParameterEdit(test.callback, `${prefix}${text}`, context.sourceCode);
+	): Map<FixtureName, string> | null {
+		const variable = context.sourceCode.getScope(callback).set.get(parameter.name);
+		if (parameter.optional || variable === undefined) {
+			return null;
 		}
 
-		const parameter = test.callback.params[test.contextIndex];
-		if (needsWholeContext) {
-			if (parameter?.type === AST_NODE_TYPES.Identifier) {
-				return { name: parameter.name, bindings: new Map() };
-			}
-
-			const name = freshName(test.callback, "context", context.sourceCode);
-			if (parameter === undefined) {
-				const edit = addContextParameter(name);
-				if (edit === null) {
-					return null;
-				}
-
-				edits.push(edit);
-				return { name, bindings: new Map() };
-			}
-
+		const members: Array<{ key: string; node: TSESTree.MemberExpression }> = [];
+		for (const reference of variable.references) {
+			const { parent } = reference.identifier;
 			if (
-				parameter.type !== AST_NODE_TYPES.ObjectPattern ||
-				test.callback.body.type !== AST_NODE_TYPES.BlockStatement
+				parent.type !== AST_NODE_TYPES.MemberExpression ||
+				parent.object !== reference.identifier ||
+				parent.computed ||
+				parent.property.type !== AST_NODE_TYPES.Identifier ||
+				isWriteTarget(parent)
 			) {
 				return null;
 			}
 
-			const annotationStart = parameter.typeAnnotation?.range[0] ?? parameter.range[1];
-			const pattern = context.sourceCode.text
-				.slice(parameter.range[0], annotationStart)
-				.trimEnd();
-			edits.push({ range: parameter.range, text: name });
-			const openBrace = context.sourceCode.getFirstToken(test.callback.body);
-			if (openBrace === null) {
+			members.push({ key: parent.property.name, node: parent });
+		}
+
+		const keys = new Set<string>([...fixtures, ...members.map(({ key }) => key)]);
+		if ([...keys].some((key) => RESERVED_WORDS.has(key))) {
+			return null;
+		}
+
+		const replaced = importVariables();
+		for (const key of keys) {
+			if (!isNameFree(callback, key, replaced, context.sourceCode)) {
+				return null;
+			}
+		}
+
+		const pattern = `{ ${[...keys].toSorted().join(", ")} }`;
+		const parenthesized = parameterParens(callback, context.sourceCode) !== null;
+		edits.push({
+			range: [parameter.range[0], parameter.range[0] + parameter.name.length],
+			text: parenthesized ? pattern : `(${pattern})`,
+		});
+		for (const { key, node } of members) {
+			edits.push({ range: node.range, text: key });
+		}
+
+		return new Map([...fixtures].map((fixture) => [fixture, fixture]));
+	}
+
+	/**
+	 * Binds each fixture in the test callback.
+	 *
+	 * @param test - The test being fixed.
+	 * @param test.callback - Its callback.
+	 * @param test.contextIndex - Position of the context parameter.
+	 * @param fixtures - Fixtures to bind.
+	 * @param edits - Receives the bindings.
+	 * @returns Local names by fixture, or `null` when they cannot be bound.
+	 */
+	function testBindings(
+		{ callback, contextIndex }: TestCase,
+		fixtures: ReadonlySet<FixtureName>,
+		edits: Array<Edit>,
+	): Map<FixtureName, string> | null {
+		const replaced = importVariables();
+		const bindings = new Map<FixtureName, string>();
+		const parameter = callback.params[contextIndex];
+
+		if (parameter === undefined) {
+			const properties = [...fixtures].toSorted().map((fixture) => {
+				const local = freeName(callback, fixture, replaced, context.sourceCode);
+				bindings.set(fixture, local);
+				return propertyText(fixture, local);
+			});
+			const prefix =
+				contextIndex === 1 && callback.params.length === 0
+					? `${freshName(callback, "_value", context.sourceCode)}, `
+					: "";
+			const edit = addParameterEdit(
+				callback,
+				`${prefix}{ ${properties.join(", ")} }`,
+				context.sourceCode,
+			);
+			if (edit === null) {
 				return null;
 			}
 
-			const first = test.callback.body.body.at(0);
-			if (first === undefined) {
-				edits.push({
-					range: [openBrace.range[1], openBrace.range[1]],
-					text: `\n\tconst ${pattern} = ${name};\n`,
-				});
-			} else {
-				const indentation = context.sourceCode.text.slice(
-					context.sourceCode.getIndexFromLoc({
-						column: 0,
-						line: first.loc.start.line,
-					}),
-					first.range[0],
-				);
-				edits.push({
-					range: [first.range[0], first.range[0]],
-					text: `const ${pattern} = ${name};\n${indentation}`,
-				});
-			}
-
-			return { name, bindings: new Map() };
+			edits.push(edit);
+			return bindings;
 		}
 
-		if (parameter?.type === AST_NODE_TYPES.Identifier) {
-			return { name: parameter.name, bindings: new Map() };
+		if (parameter.type === AST_NODE_TYPES.Identifier) {
+			const { name } = parameter;
+			return (
+				destructureContext(callback, parameter, fixtures, edits) ??
+				new Map([...fixtures].map((fixture) => [fixture, `${name}.${fixture}`]))
+			);
 		}
 
-		const fixtures = new Set(test.directUses.values());
-		const bindings = new Map<FixtureName, string>();
-		if (parameter?.type === AST_NODE_TYPES.ObjectPattern) {
-			const additions: Array<string> = [];
-			for (const fixture of fixtures) {
-				const existing = patternBinding(parameter, fixture);
-				if (existing !== null) {
-					bindings.set(fixture, existing);
-					continue;
-				}
-
-				const local = freshName(test.callback, fixture, context.sourceCode);
-				bindings.set(fixture, local);
-				additions.push(local === fixture ? fixture : `${fixture}: ${local}`);
-			}
-
-			if (additions.length > 0) {
-				const edit = appendPatternProperties(parameter, additions, context.sourceCode);
-				if (edit === null) {
-					return null;
-				}
-
-				edits.push(edit);
-			}
-
-			return { name: null, bindings };
-		}
-
-		if (parameter !== undefined) {
+		if (
+			parameter.type !== AST_NODE_TYPES.ObjectPattern ||
+			parameter.properties.some(({ type }) => type === AST_NODE_TYPES.RestElement)
+		) {
 			return null;
 		}
 
-		const properties = [...fixtures].map((fixture) => {
-			const local = freshName(test.callback, fixture, context.sourceCode);
+		const additions: Array<string> = [];
+		for (const fixture of [...fixtures].toSorted()) {
+			const existing = patternBinding(parameter, fixture);
+			if (existing !== null) {
+				bindings.set(fixture, existing);
+				continue;
+			}
+
+			const local = freeName(callback, fixture, replaced, context.sourceCode);
 			bindings.set(fixture, local);
-			return local === fixture ? fixture : `${fixture}: ${local}`;
-		});
-		const edit = addContextParameter(`{ ${properties.join(", ")} }`);
-		if (edit === null) {
-			return null;
+			additions.push(propertyText(fixture, local));
 		}
 
-		edits.push(edit);
-		return { name: null, bindings };
+		if (additions.length > 0) {
+			const edit = appendPatternProperties(parameter, additions, context.sourceCode);
+			if (edit === null) {
+				return null;
+			}
+
+			edits.push(edit);
+		}
+
+		return bindings;
+	}
+
+	function argumentText(
+		helper: Helper,
+		shape: HelperShape,
+		callerBindings: ReadonlyMap<FixtureName, string> | undefined,
+	): null | string {
+		const values: Array<[FixtureName, string]> = [];
+		for (const fixture of [...helper.fixtures].toSorted()) {
+			const value = callerBindings?.get(fixture);
+			if (value === undefined) {
+				return null;
+			}
+
+			values.push([fixture, value]);
+		}
+
+		if (shape === "separate") {
+			return values.map(([, value]) => value).join(", ");
+		}
+
+		return `{ ${values.map(([fixture, value]) => propertyText(fixture, value)).join(", ")} }`;
 	}
 
 	function buildEdits(
 		tests: ReadonlyMap<FunctionNode, TestCase>,
 		activeHelpers: ReadonlySet<Helper>,
+		maxParameters: number,
 	): Array<Edit> | null {
 		const edits: Array<Edit> = [];
 		const replaced = new Set<TSESTree.Identifier>();
@@ -920,14 +1255,76 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					importedName(specifier) === "TestContext"
 				);
 			});
-		const contextTypeName = existingContextImport?.local.name ?? "TestContext";
+		const typeName = typeScriptFile(context.filename)
+			? (existingContextImport?.local.name ?? "TestContext")
+			: null;
+		const importedFixtures = importVariables();
+
+		const bindings = new Map<Helper, Map<FixtureName, string>>();
+		for (const helper of activeHelpers) {
+			const fixtures = [...helper.fixtures].toSorted();
+			const { contextName } = helper;
+			if (contextName !== null) {
+				bindings.set(
+					helper,
+					new Map(fixtures.map((fixture) => [fixture, `${contextName}.${fixture}`])),
+				);
+				continue;
+			}
+
+			const { node } = helper;
+			const locals = new Map(
+				fixtures.map((fixture) => {
+					return [fixture, freeName(node, fixture, importedFixtures, context.sourceCode)];
+				}),
+			);
+			const edit = addParameterEdit(
+				node,
+				helperParameterText(helperShape(helper, maxParameters), locals, typeName),
+				context.sourceCode,
+			);
+			if (edit === null) {
+				return null;
+			}
+
+			edits.push(edit);
+			bindings.set(helper, locals);
+		}
 
 		for (const helper of activeHelpers) {
-			if (!helper.hasContext) {
-				const type = typeScriptFile(context.filename) ? `: ${contextTypeName}` : "";
-				const edit = addParameterEdit(
-					helper.node,
-					`${helper.contextName}${type}`,
+			for (const [identifier, fixture] of helper.directUses) {
+				const text = bindings.get(helper)?.get(fixture);
+				if (text === undefined) {
+					return null;
+				}
+
+				edits.push(replacementEdit(identifier, text));
+				replaced.add(identifier);
+			}
+
+			if (helper.contextName !== null) {
+				continue;
+			}
+
+			for (const helperCall of helper.calls) {
+				const caller = [...activeHelpers].find(({ node }) => node === helperCall.owner);
+				if (caller === undefined) {
+					continue;
+				}
+
+				const text = argumentText(
+					helper,
+					helperShape(helper, maxParameters),
+					bindings.get(caller),
+				);
+				if (text === null) {
+					return null;
+				}
+
+				const edit = insertArgumentEdit(
+					helperCall.call,
+					helper.node.params.length,
+					text,
 					context.sourceCode,
 				);
 				if (edit === null) {
@@ -936,69 +1333,55 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 				edits.push(edit);
 			}
-
-			for (const [identifier, fixture] of helper.directUses) {
-				edits.push(replacementEdit(identifier, `${helper.contextName}.${fixture}`));
-				replaced.add(identifier);
-			}
 		}
 
 		for (const test of tests.values()) {
-			const helperCalls = test.helperCalls.filter(
-				({ helper }) => activeHelpers.has(helper) && !helper.hasContext,
-			);
-			if (test.directUses.size === 0 && helperCalls.length === 0) {
+			const helperCalls = test.helperCalls.filter(({ helper }) => {
+				return activeHelpers.has(helper) && helper.contextName === null;
+			});
+			const fixtures = new Set(test.directUses.values());
+			for (const { helper } of helperCalls) {
+				for (const fixture of helper.fixtures) {
+					fixtures.add(fixture);
+				}
+			}
+
+			if (fixtures.size === 0) {
 				continue;
 			}
 
-			const parameter = contextParameter(test, helperCalls.length > 0, edits);
-			if (parameter === null) {
+			const testLocals = testBindings(test, fixtures, edits);
+			if (testLocals === null) {
 				return null;
 			}
 
 			for (const [identifier, fixture] of test.directUses) {
-				const replacement =
-					parameter.name === null
-						? parameter.bindings.get(fixture)
-						: `${parameter.name}.${fixture}`;
-				if (replacement === undefined) {
+				const text = testLocals.get(fixture);
+				if (text === undefined) {
 					return null;
 				}
 
-				edits.push(replacementEdit(identifier, replacement));
+				edits.push(replacementEdit(identifier, text));
 				replaced.add(identifier);
 			}
 
-			if (parameter.name !== null) {
-				for (const helperCall of helperCalls) {
-					if (!helperCall.helper.hasContext) {
-						edits.push(
-							insertArgumentEdit(
-								helperCall.call,
-								helperCall.helper.node.params.length,
-								parameter.name,
-							),
-						);
-					}
+			for (const { call, helper } of helperCalls) {
+				const text = argumentText(helper, helperShape(helper, maxParameters), testLocals);
+				if (text === null) {
+					return null;
 				}
-			}
-		}
 
-		for (const caller of activeHelpers) {
-			for (const helper of activeHelpers) {
-				for (const helperCall of helper.calls) {
-					if (helperCall.owner !== caller.node || helper.hasContext) {
-						continue;
-					}
-
-					edits.push(
-						insertArgumentEdit(
-							helperCall.call,
-							helper.node.params.length,
-							caller.contextName,
-						),
-					);
+				const edit = insertArgumentEdit(
+					call,
+					helper.node.params.length,
+					text,
+					context.sourceCode,
+				);
+				if (edit === null) {
+					return null;
 				}
+
+				edits.push(edit);
 			}
 		}
 
@@ -1018,8 +1401,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		const needsTypeImport =
-			typeScriptFile(context.filename) &&
-			[...activeHelpers].some(({ hasContext }) => !hasContext);
+			typeName !== null && [...activeHelpers].some(({ contextName }) => contextName === null);
 		let addedTypeImport = existingContextImport !== undefined;
 		for (const [declaration, removed] of removable) {
 			const remaining = declaration.specifiers.filter(
@@ -1071,7 +1453,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			});
 		}
 
-		const ordered = edits.toSorted((left, right) => left.range[0] - right.range[0]);
+		const ordered = edits.toSorted(
+			(left, right) => left.range[0] - right.range[0] || left.range[1] - right.range[1],
+		);
 		for (let index = 1; index < ordered.length; index += 1) {
 			const previous = ordered[index - 1];
 			const current = ordered[index];
@@ -1093,11 +1477,12 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
+		const maxParameters = context.options[0]?.maxParams ?? Number.POSITIVE_INFINITY;
 		const tests = collectTests();
 		const helpers = collectHelpers();
 		assignFixtureUses(tests, helpers);
 		collectHelperCalls(tests, helpers);
-		propagateContext(tests, helpers);
+		propagateFixtures(tests, helpers);
 		const reachable = reachableHelpers(tests, helpers);
 		const relevant = [
 			...[...tests.values()].flatMap(({ directUses }) => [...directUses.keys()]),
@@ -1107,10 +1492,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		const activeHelpers = helpersAreFixable(tests, helpers, reachable)
+		const activeHelpers = helpersAreFixable(tests, helpers, reachable, maxParameters)
 			? reachable
 			: new Set<Helper>();
-		const edits = buildEdits(tests, activeHelpers);
+		const edits = buildEdits(tests, activeHelpers, maxParameters);
 		for (const [index, identifier] of relevant.entries()) {
 			const fixture = fixtureImports.find(({ variable }) => {
 				return variable.references.some((reference) => reference.identifier === identifier);
@@ -1155,8 +1540,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 export const preferVitestLocalContext = createFlawlessRule<Options, MessageIds>({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
+	defaultOptions: [{}],
 	meta: {
+		defaultOptions: [{}],
 		docs: {
 			description: "Prefer test-bound Vitest APIs from the local test context",
 			recommended: false,
@@ -1165,7 +1551,7 @@ export const preferVitestLocalContext = createFlawlessRule<Options, MessageIds>(
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema,
 		type: "suggestion",
 	},
 });
