@@ -213,6 +213,20 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.message).toContain("'shared'");
 	});
 
+	it("no-shared-test-state reports shared state but not a test-local binding", () => {
+		// Leans on scope `through` references under oxlint's runtime: `shared`
+		// passes through the test's scope, `local` resolves inside it.
+		const { diagnostics } = runOxlint({
+			code: 'let shared = 0;\nit("t", () => {\n\tlet local = 0;\n\tshared += 1;\n\t[1].forEach(() => { local += 1; });\n});\n',
+			filename: "file.ts",
+			rule: "no-shared-test-state",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-shared-test-state)");
+		expect(diagnostics[0]?.message).toContain("'shared'");
+	});
+
 	it("no-unnecessary-use-memo reports an empty-deps useMemo", () => {
 		const { diagnostics } = runOxlint({
 			code: 'import { useMemo } from "react";\nexport function D() {\n\tconst m = useMemo(() => 1, []);\n\treturn <div>{m}</div>;\n}\n',

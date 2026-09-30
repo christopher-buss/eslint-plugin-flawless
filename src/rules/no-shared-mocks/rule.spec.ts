@@ -189,6 +189,21 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [{ data: { name: "mockFn" }, messageId }],
 	},
+	// The tagged-template table form roots at `describe` through its tag.
+	{
+		code: unindent`
+			describe.each\`
+				value
+				\${1}
+			\`("group $value", ({ value }) => {
+				const mockFn = jest.fn();
+				it("works", () => {
+					expect(mockFn).toHaveBeenCalledWith(value);
+				});
+			});
+		`,
+		errors: [{ data: { name: "mockFn" }, messageId }],
+	},
 	// Reassigning at module scope creates the mock once all the same, so it is
 	// not the per-test rebuild the hook form earns its exemption with.
 	{

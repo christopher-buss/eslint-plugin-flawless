@@ -3,6 +3,7 @@ import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescr
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
 import {
+	getCalleeRootIdentifier,
 	getTestGlobalSources,
 	resolveImportedTestGlobalName,
 	resolveTestGlobalName,
@@ -145,35 +146,6 @@ function getEnclosingFunction(node: TSESTree.Node): null | TSESTree.Node {
 }
 
 /**
- * Walks a callee chain down to the identifier it is rooted at, stepping through
- * member accesses (`describe.each` -> `describe`) and intervening calls
- * (`describe.each(cases)()` -> `describe`).
- *
- * @param node - The callee node.
- * @returns The root identifier, or `null` when the chain is not rooted at one.
- */
-function getRootIdentifier(node: TSESTree.Node): null | TSESTree.Identifier {
-	let current = node;
-	for (;;) {
-		if (current.type === AST_NODE_TYPES.Identifier) {
-			return current;
-		}
-
-		if (current.type === AST_NODE_TYPES.CallExpression) {
-			current = current.callee;
-			continue;
-		}
-
-		if (current.type === AST_NODE_TYPES.MemberExpression) {
-			current = current.object;
-			continue;
-		}
-
-		return null;
-	}
-}
-
-/**
  * Flags mock functions created once outside the tests that use them, whose
  * recorded calls and configured implementations persist from one test to the
  * next. Such a mock only behaves if each test remembers to reset it by hand;
@@ -286,7 +258,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return false;
 		}
 
-		const root = getRootIdentifier(parent.callee);
+		const root = getCalleeRootIdentifier(parent.callee);
 		return (
 			root !== null &&
 			TEST_SUITE_NAMES.has(resolveTestGlobalName(sourceCode, root, sources) ?? "")

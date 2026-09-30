@@ -150,3 +150,5 @@ jest.mock("./replicator", () => ({ hook: mockHookFunction }));
 - [`jest.fn()`](https://jestjs.io/docs/jest-object#jestfnimplementation)
 - [`vi.fn()`](https://vitest.dev/api/vi#vi-fn)
 - [`jest.mock()`](https://jestjs.io/docs/jest-object#jestmockmodulename-factory-options)
+- [`no-shared-test-state`](../no-shared-test-state/documentation.md), for state
+  other than mocks
