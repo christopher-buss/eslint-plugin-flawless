@@ -128,6 +128,11 @@ const valid: Array<ValidTestCase> = [
 	`,
 	// A generic tag infers from the annotation the same way a generic call does.
 	unindent`
+		declare function tag<T>(strings: TemplateStringsArray): T;
+		const value: string = tag\`\`;
+		value.toUpperCase();
+	`,
+	unindent`
 		declare function tag<T>(strings: TemplateStringsArray): Array<T>;
 		const value: Array<string> = tag\`\`;
 	`,
