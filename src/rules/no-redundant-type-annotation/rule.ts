@@ -5,15 +5,11 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type {
 	Expression,
 	Signature,
-	SignatureDeclaration,
-	Node as TSNode,
 	Type,
 	TypeReference,
 	UnionOrIntersectionType,
 } from "typescript";
 import {
-	isFunctionTypeNode,
-	isIdentifier,
 	isParameter,
 	isTypeReferenceNode,
 	ObjectFlags,
@@ -36,15 +32,15 @@ export type MessageIds = typeof CATCH_MESSAGE_ID | typeof MESSAGE_ID | typeof PA
 
 type Options = [];
 
-/** A call that passes a node to a parameter, and that parameter's position. */
-interface CallSite {
-	readonly call:
-		| TSESTree.CallExpression
-		| TSESTree.JSXOpeningElement
-		| TSESTree.NewExpression
-		| TSESTree.TaggedTemplateExpression;
-	readonly index: number;
-}
+/** A node that passes its operands to a signature's parameters. */
+type CallLike =
+	| TSESTree.CallExpression
+	| TSESTree.JSXOpeningElement
+	| TSESTree.NewExpression
+	| TSESTree.TaggedTemplateExpression;
+
+/** A function whose parameters can take their types from a context. */
+type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
 
 const messages = {
 	[CATCH_MESSAGE_ID]:
@@ -77,26 +73,6 @@ function isUntypedParameter(parameter: TSESTree.Parameter): boolean {
 	}
 
 	return parameter.typeAnnotation === undefined;
-}
-
-/**
- * Reports whether any identifier under `node` matches one of `names`.
- *
- * Used to ask whether a signature's declared return type mentions one of that
- * signature's own type parameters. The match is by name, scoped to the single
- * declaration that introduced those names, so shadowing elsewhere cannot leak
- * in.
- *
- * @param node - The TypeScript AST node to walk.
- * @param names - The type parameter names to look for.
- * @returns True when the subtree references one of the names.
- */
-function referencesName(node: TSNode, names: ReadonlySet<string>): boolean {
-	if (isIdentifier(node) && names.has(node.text)) {
-		return true;
-	}
-
-	return node.forEachChild((child) => referencesName(child, names) || undefined) === true;
 }
 
 /**
@@ -143,12 +119,46 @@ function isRestParameter(signature: Signature, index: number): boolean {
 }
 
 /**
+ * Counts the parameters a caller must pass, up to the first optional, default,
+ * or rest parameter.
+ *
+ * @param parameters - The parameters, after any `this` parameter.
+ * @returns How many leading parameters are required.
+ */
+function countLeadingRequired(parameters: ReadonlyArray<TSESTree.Parameter>): number {
+	const index = parameters.findIndex((parameter) => {
+		return (
+			parameter.type === AST_NODE_TYPES.AssignmentPattern ||
+			parameter.type === AST_NODE_TYPES.RestElement ||
+			parameter.type === AST_NODE_TYPES.TSParameterProperty ||
+			parameter.optional
+		);
+	});
+	return index === -1 ? parameters.length : index;
+}
+
+/**
+ * Reports whether a signature declares type parameters of its own.
+ *
+ * A constructor declares none itself: they sit on the class, and the
+ * signature built from it carries them.
+ *
+ * @param signature - The signature to inspect.
+ * @returns True when a call to it infers type arguments.
+ */
+function isGeneric(signature: Signature): boolean {
+	return (signature.getTypeParameters()?.length ?? 0) > 0;
+}
+
+/**
  * Reports whether the node is an `as const` or `<const>` assertion.
  *
  * @param node - The node to inspect.
  * @returns True when the node asserts `const`.
  */
-function isConstAssertion(node: TSESTree.Node): boolean {
+function isConstAssertion(
+	node: TSESTree.Node,
+): node is TSESTree.TSAsExpression | TSESTree.TSTypeAssertion {
 	return (
 		(node.type === AST_NODE_TYPES.TSAsExpression ||
 			node.type === AST_NODE_TYPES.TSTypeAssertion) &&
@@ -185,21 +195,30 @@ function isWideningUnit(type: Type): boolean {
 }
 
 /**
+ * Reports whether a type, or a member of its union, has any of `flags`.
+ *
+ * @param type - The type to inspect.
+ * @param flags - The type flags to look for.
+ * @returns True when the type or a union member matches.
+ */
+function someMember(type: Type, flags: TypeFlags): boolean {
+	const members =
+		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
+	return members.some((member) => (member.flags & flags) !== 0);
+}
+
+/**
  * Reports whether a type, or a member of it, is a template literal or
  * string mapping type.
  *
  * A template expression is typed as one of these only under a context that
  * asks for it; without one it is `string`.
  *
- * @param type - The return type to inspect.
+ * @param type - The type to inspect.
  * @returns True when the type holds a template type.
  */
 function hasTemplateType(type: Type): boolean {
-	const members =
-		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
-	return members.some(
-		(member) => (member.flags & (TypeFlags.TemplateLiteral | TypeFlags.StringMapping)) !== 0,
-	);
+	return someMember(type, TypeFlags.TemplateLiteral | TypeFlags.StringMapping);
 }
 
 /**
@@ -243,7 +262,12 @@ function someDescendant(
  * @param node - The node to inspect.
  * @returns True for any function node.
  */
-function isFunctionNode(node: TSESTree.Node): boolean {
+function isFunctionNode(
+	node: TSESTree.Node,
+): node is
+	| TSESTree.ArrowFunctionExpression
+	| TSESTree.FunctionDeclaration
+	| TSESTree.FunctionExpression {
 	return (
 		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
 		node.type === AST_NODE_TYPES.FunctionExpression ||
@@ -252,127 +276,230 @@ function isFunctionNode(node: TSESTree.Node): boolean {
 }
 
 /**
- * Climbs from a node through the expressions that pass an outer contextual
- * type down to it unchanged.
+ * Reports whether a node is a function expression, the only kind of function
+ * whose parameters can take their types from a context.
  *
- * A const assertion forwards the outer context, but any other assertion
- * supplies its own type. A sequence forwards it only to its last expression.
- *
- * @param node - The node to start from.
- * @returns The outermost node that still shares the node's context.
+ * @param node - The node to inspect.
+ * @returns True for an arrow or function expression.
  */
-function climbContextForwarders(node: TSESTree.Node): TSESTree.Node {
-	let current = node;
-	let { parent } = node;
-	while (
-		parent !== undefined &&
-		(parent.type === AST_NODE_TYPES.ArrayExpression ||
-			parent.type === AST_NODE_TYPES.ConditionalExpression ||
-			parent.type === AST_NODE_TYPES.LogicalExpression ||
-			parent.type === AST_NODE_TYPES.Property ||
-			parent.type === AST_NODE_TYPES.ObjectExpression ||
-			parent.type === AST_NODE_TYPES.SpreadElement ||
-			parent.type === AST_NODE_TYPES.TSNonNullExpression ||
-			(parent.type === AST_NODE_TYPES.SequenceExpression &&
-				parent.expressions.at(-1) === current) ||
-			isConstAssertion(parent))
-	) {
-		current = parent;
-		({ parent } = parent);
-	}
-
-	return current;
+function isFunctionExpressionNode(node: TSESTree.Node): node is FunctionExpressionNode {
+	return (
+		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+		node.type === AST_NODE_TYPES.FunctionExpression
+	);
 }
 
 /**
- * Finds the function that returns a node as its value.
+ * Reports whether a parent hands its own contextual type down to a child
+ * unchanged, so the child's context is decided further up.
+ *
+ * This is the closed set of forwarders the anchor search climbs through: an
+ * array element, an object property value or method, a spread, a
+ * conditional's branch, a logical operand, a sequence's last expression, a
+ * non-null assertion, and a const assertion. Any other assertion supplies a
+ * type of its own, so it is an anchor rather than a forwarder.
+ *
+ * @param parent - The parent to inspect.
+ * @param child - The child the search climbed from.
+ * @returns True when the child shares the parent's context.
+ */
+function forwardsContext(parent: TSESTree.Node, child: TSESTree.Node): boolean {
+	if (
+		parent.type === AST_NODE_TYPES.ArrayExpression ||
+		parent.type === AST_NODE_TYPES.LogicalExpression ||
+		parent.type === AST_NODE_TYPES.ObjectExpression ||
+		parent.type === AST_NODE_TYPES.SpreadElement ||
+		parent.type === AST_NODE_TYPES.TSNonNullExpression ||
+		isConstAssertion(parent)
+	) {
+		return true;
+	}
+
+	if (parent.type === AST_NODE_TYPES.ConditionalExpression) {
+		return parent.test !== child;
+	}
+
+	if (parent.type === AST_NODE_TYPES.Property) {
+		return (
+			parent.parent.type === AST_NODE_TYPES.ObjectExpression &&
+			parent.kind === "init" &&
+			parent.value === child
+		);
+	}
+
+	return parent.type === AST_NODE_TYPES.SequenceExpression && parent.expressions.at(-1) === child;
+}
+
+/**
+ * Finds the function that returns a child as its value.
  *
  * A concise arrow body, a `return` argument, and a `yield` operand are all
  * return values: a generator's context types what it yields. The nearest
- * enclosing function owns a `return` or `yield`; a declaration has no
- * contextual type to pass on, so it ends the search.
+ * enclosing function owns a `return` or `yield`. A delegating `yield*` passes
+ * its operand an iterable of the context instead, so it is not followed.
  *
- * @param node - The expression to locate.
- * @returns The returning function, or undefined when the node is not a
+ * @param parent - The parent to inspect.
+ * @param child - The child the search climbed from.
+ * @returns The returning function, or undefined when the child is not a
  *   return value.
  */
 function getReturningFunction(
-	node: TSESTree.Node,
-): TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression | undefined {
-	const { parent } = node;
-	if (parent?.type === AST_NODE_TYPES.ArrowFunctionExpression && parent.body === node) {
+	parent: TSESTree.Node,
+	child: TSESTree.Node,
+):
+	| TSESTree.ArrowFunctionExpression
+	| TSESTree.FunctionDeclaration
+	| TSESTree.FunctionExpression
+	| undefined {
+	if (parent.type === AST_NODE_TYPES.ArrowFunctionExpression && parent.body === child) {
 		return parent;
 	}
 
-	if (
-		parent?.type !== AST_NODE_TYPES.ReturnStatement &&
-		parent?.type !== AST_NODE_TYPES.YieldExpression
-	) {
+	const isReturned =
+		(parent.type === AST_NODE_TYPES.ReturnStatement && parent.argument === child) ||
+		(parent.type === AST_NODE_TYPES.YieldExpression &&
+			!parent.delegate &&
+			parent.argument === child);
+	if (!isReturned) {
 		return undefined;
 	}
 
-	let ancestor: TSESTree.Node | undefined = parent.parent;
-	while (ancestor !== undefined && !isFunctionNode(ancestor)) {
+	// ESLint gives the program a null parent, so the walk stops there.
+	let ancestor: TSESTree.Node = parent;
+	while (!isFunctionNode(ancestor)) {
+		if (ancestor.type === AST_NODE_TYPES.Program) {
+			return undefined;
+		}
+
 		ancestor = ancestor.parent;
 	}
 
-	return ancestor?.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-		ancestor?.type === AST_NODE_TYPES.FunctionExpression
-		? ancestor
-		: undefined;
+	return ancestor;
 }
 
 /**
- * Finds the call a node is passed to, and the parameter that receives it.
+ * Reports whether an assignment pattern is a parameter's default value, as
+ * opposed to a default inside a destructuring pattern.
+ *
+ * @param pattern - The pattern to inspect.
+ * @returns True when the pattern is a whole parameter.
+ */
+function isParameterDefault(pattern: TSESTree.AssignmentPattern): boolean {
+	const owner = pattern.parent;
+	if (owner.type === AST_NODE_TYPES.TSParameterProperty) {
+		return true;
+	}
+
+	return isFunctionNode(owner) && owner.params.includes(pattern);
+}
+
+/**
+ * Reports whether a parent gives a child a contextual type written in the
+ * source, one no annotation this rule removes can change.
+ *
+ * These are the anchors that need no type information: a variable's or class
+ * property's annotation, a `satisfies`, a type assertion, and an annotated
+ * parameter's default value. A variable's or outer parameter's annotation can
+ * itself be reported, so the check that owns it asks whether it anchors
+ * anything before reporting it.
+ *
+ * @param parent - The parent to inspect.
+ * @param child - The child the search climbed from.
+ * @returns True when the parent is the child's anchor.
+ */
+function isWrittenAnchor(parent: TSESTree.Node, child: TSESTree.Node): boolean {
+	if (
+		parent.type === AST_NODE_TYPES.AccessorProperty ||
+		parent.type === AST_NODE_TYPES.PropertyDefinition
+	) {
+		return parent.value === child && parent.typeAnnotation !== undefined;
+	}
+
+	if (parent.type === AST_NODE_TYPES.AssignmentPattern) {
+		return (
+			parent.right === child &&
+			isParameterDefault(parent) &&
+			getParameterAnnotation(parent) !== undefined
+		);
+	}
+
+	if (parent.type === AST_NODE_TYPES.VariableDeclarator) {
+		return parent.init === child && parent.id.typeAnnotation !== undefined;
+	}
+
+	if (
+		parent.type === AST_NODE_TYPES.TSAsExpression ||
+		parent.type === AST_NODE_TYPES.TSTypeAssertion
+	) {
+		return !isConstAssertion(parent);
+	}
+
+	return parent.type === AST_NODE_TYPES.TSSatisfiesExpression;
+}
+
+/**
+ * Finds the call that passes a child to one of its parameters.
  *
  * Besides call and `new` arguments, a tagged template passes each hole after
  * the strings array, and a JSX element passes its attributes and children
- * together as the component's first parameter.
+ * together as the component's props.
  *
- * @param node - The expression to locate.
- * @returns The call and the parameter index, or undefined when the node is
- *   not an argument.
+ * @param parent - The parent to inspect.
+ * @param child - The child the search climbed from.
+ * @returns The call, or undefined when the child is not an argument.
  */
-function getCallSite(node: TSESTree.Node): CallSite | undefined {
-	const { parent } = node;
+function getReceivingCall(parent: TSESTree.Node, child: TSESTree.Node): CallLike | undefined {
 	if (
-		(parent?.type === AST_NODE_TYPES.CallExpression ||
-			parent?.type === AST_NODE_TYPES.NewExpression) &&
-		parent.arguments.includes(node as TSESTree.CallExpressionArgument)
+		parent.type === AST_NODE_TYPES.CallExpression ||
+		parent.type === AST_NODE_TYPES.NewExpression
 	) {
-		return {
-			call: parent,
-			index: parent.arguments.indexOf(node as TSESTree.CallExpressionArgument),
-		};
+		return parent.arguments.includes(child as TSESTree.CallExpressionArgument)
+			? parent
+			: undefined;
 	}
 
-	if (
-		parent?.type === AST_NODE_TYPES.TemplateLiteral &&
-		parent.parent.type === AST_NODE_TYPES.TaggedTemplateExpression &&
-		parent.parent.quasi === parent
-	) {
-		return {
-			call: parent.parent,
-			index: parent.expressions.indexOf(node as TSESTree.Expression) + 1,
-		};
+	if (parent.type === AST_NODE_TYPES.TemplateLiteral) {
+		return parent.parent.type === AST_NODE_TYPES.TaggedTemplateExpression &&
+			parent.parent.quasi === parent
+			? parent.parent
+			: undefined;
 	}
 
-	if (parent?.type === AST_NODE_TYPES.JSXSpreadAttribute) {
-		return { call: parent.parent, index: 0 };
+	if (parent.type === AST_NODE_TYPES.JSXSpreadAttribute) {
+		return parent.parent;
 	}
 
-	if (parent?.type !== AST_NODE_TYPES.JSXExpressionContainer) {
+	if (parent.type !== AST_NODE_TYPES.JSXExpressionContainer) {
 		return undefined;
 	}
 
 	const holder = parent.parent;
 	if (holder.type === AST_NODE_TYPES.JSXAttribute) {
-		return { call: holder.parent, index: 0 };
+		return holder.parent;
 	}
 
-	return holder.type === AST_NODE_TYPES.JSXElement
-		? { call: holder.openingElement, index: 0 }
-		: undefined;
+	return holder.type === AST_NODE_TYPES.JSXElement ? holder.openingElement : undefined;
+}
+
+/**
+ * Reports whether a JSX tag names an intrinsic element rather than a
+ * component.
+ *
+ * An intrinsic element's props come from a fixed entry of
+ * `JSX.IntrinsicElements`, so there is no signature to infer through.
+ *
+ * @param name - The tag name.
+ * @returns True for a lowercase, dashed, or namespaced tag.
+ */
+function isIntrinsicElement(name: TSESTree.JSXTagNameExpression): boolean {
+	if (name.type === AST_NODE_TYPES.JSXNamespacedName) {
+		return true;
+	}
+
+	return (
+		name.type === AST_NODE_TYPES.JSXIdentifier &&
+		(/^[a-z]/u.test(name.name) || name.name.includes("-"))
+	);
 }
 
 /**
@@ -381,7 +508,7 @@ function getCallSite(node: TSESTree.Node): CallSite | undefined {
  * @param call - The call to read.
  * @returns The callee, tag, or component name.
  */
-function getCallee(call: CallSite["call"]): TSESTree.Node {
+function getCallee(call: CallLike): TSESTree.Node {
 	switch (call.type) {
 		case AST_NODE_TYPES.CallExpression:
 		case AST_NODE_TYPES.NewExpression: {
@@ -399,13 +526,17 @@ function getCallee(call: CallSite["call"]): TSESTree.Node {
 /**
  * Lists the kinds of signature a call can resolve to.
  *
- * A JSX component may be a function or a class.
+ * A `super` call runs the base class's constructor, and a JSX component may
+ * be a function or a class.
  *
  * @param call - The call to read.
  * @returns The signature kinds to look up on the callee.
  */
-function getSignatureKinds(call: CallSite["call"]): Array<SignatureKind> {
-	if (call.type === AST_NODE_TYPES.NewExpression) {
+function getSignatureKinds(call: CallLike): Array<SignatureKind> {
+	if (
+		call.type === AST_NODE_TYPES.NewExpression ||
+		(call.type === AST_NODE_TYPES.CallExpression && call.callee.type === AST_NODE_TYPES.Super)
+	) {
 		return [SignatureKind.Construct];
 	}
 
@@ -422,9 +553,7 @@ function getSignatureKinds(call: CallSite["call"]): Array<SignatureKind> {
  * @param node - The function to inspect.
  * @returns True when the first parameter is `this`.
  */
-function hasThisParameter(
-	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
-): boolean {
+function hasThisParameter(node: FunctionExpressionNode): boolean {
 	const [first] = node.params;
 	return first?.type === AST_NODE_TYPES.Identifier && first.name === "this";
 }
@@ -439,9 +568,7 @@ function hasThisParameter(
  * @param node - The function to inspect.
  * @returns True when the body reads an untyped `this`.
  */
-function usesContextualThis(
-	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
-): boolean {
+function usesContextualThis(node: FunctionExpressionNode): boolean {
 	if (node.type !== AST_NODE_TYPES.FunctionExpression || hasThisParameter(node)) {
 		return false;
 	}
@@ -458,39 +585,6 @@ function usesContextualThis(
 			return child.type === AST_NODE_TYPES.ThisExpression;
 		},
 	);
-}
-
-/**
- * Reports whether the initializer is a function whose parameters take their
- * types from the variable's own annotation.
- *
- * Both annotations say the same thing, so both look redundant, but only one
- * of them can go: deleting the variable annotation and the parameter
- * annotations in the same pass would leave the parameters implicitly `any`.
- * The parameter check owns this case, so the variable check steps back.
- *
- * @param node - The initializer to inspect.
- * @returns True when the annotation is a function's parameter context.
- */
-function suppliesParameterContext(node: TSESTree.Node): boolean {
-	if (
-		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-		node.type === AST_NODE_TYPES.FunctionExpression
-	) {
-		return node.params.some((parameter) => getParameterAnnotation(parameter) !== undefined);
-	}
-
-	if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-		return (
-			suppliesParameterContext(node.consequent) || suppliesParameterContext(node.alternate)
-		);
-	}
-
-	if (node.type === AST_NODE_TYPES.LogicalExpression) {
-		return suppliesParameterContext(node.left) || suppliesParameterContext(node.right);
-	}
-
-	return false;
 }
 
 function create(
@@ -512,6 +606,7 @@ function create(
 	// read, and removing it turns the report into error TS9010.
 	const declarationsAreIsolated = compilerOptions.isolatedDeclarations ?? false;
 	let exportedNames: Set<string> | undefined;
+	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
 
 	/**
 	 * Renders a type the way TypeScript would print it, without truncation.
@@ -563,14 +658,35 @@ function create(
 	}
 
 	/**
+	 * Lists the signatures a call's callee offers, before any inference.
+	 *
+	 * An optional call only goes ahead when the callee is there, so its
+	 * nullish half is dropped first.
+	 *
+	 * @param call - The call to read.
+	 * @returns The callee's call or construct signatures.
+	 */
+	function getCalleeSignatures(call: CallLike): ReadonlyArray<Signature> {
+		const calleeType = checker.getNonNullableType(services.getTypeAtLocation(getCallee(call)));
+		return getSignatureKinds(call).flatMap((kind) =>
+			checker.getSignaturesOfType(calleeType, kind),
+		);
+	}
+
+	/**
 	 * Reports whether a call, `new` expression, or tagged template could have
 	 * its result shaped by the annotation itself.
 	 *
-	 * When a generic signature mentions its own type parameters in its declared
-	 * return type, and the call site supplies no explicit type arguments, the
-	 * contextual type flows into inference. `declare function foo<T = number>():
-	 * T; const x: string = foo();` types the call as `string` only because the
-	 * annotation is there; removing it leaves `number`.
+	 * When a generic signature's return type involves its own type parameters,
+	 * and the call site supplies no explicit type arguments, the contextual type
+	 * flows into inference. `declare function foo<T = number>(): T; const x:
+	 * string = foo();` types the call as `string` only because the annotation
+	 * is there; removing it leaves `number`.
+	 *
+	 * Whether the return type involves a type parameter is asked of the types,
+	 * not the written names, which `typeof` or an inferred return type can hide:
+	 * instantiating a type that mentions none of the parameters hands back the
+	 * very same type, so any other result counts as sensitive.
 	 *
 	 * @param node - The call, `new` expression, or tagged template to inspect.
 	 * @returns True when the annotation may be feeding inference.
@@ -583,42 +699,228 @@ function create(
 		}
 
 		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(node));
-		// `getDeclaration` is typed as total, but synthesized signatures have no
-		// declaration at runtime.
-		const declaration = signature?.getDeclaration();
+		if (signature === undefined) {
+			return false;
+		}
+
+		// `getDeclaration` is typed as total, but synthesized signatures, such
+		// as a class's implicit constructor, have no declaration at runtime.
+		// Without one there is no declared form to compare against.
+		const declaration = signature.getDeclaration() as
+			| ReturnType<Signature["getDeclaration"]>
+			| undefined;
 		if (declaration === undefined) {
+			return getCalleeSignatures(node).some(isGeneric);
+		}
+
+		const declared = checker.getSignatureFromDeclaration(declaration);
+		if (declared === undefined || !isGeneric(declared)) {
 			return false;
 		}
 
-		const names = getTypeParameterNames(declaration);
-		if (names.size === 0) {
-			return false;
-		}
-
-		// An inferred return type could resolve to anything, and a constructor
-		// returns its generic class; treat both as sensitive.
-		if (declaration.type === undefined) {
-			return true;
-		}
-
-		return referencesName(declaration.type, names);
+		return (
+			checker.getReturnTypeOfSignature(signature) !==
+			checker.getReturnTypeOfSignature(declared)
+		);
 	}
 
 	/**
-	 * Collects the names of the type parameters a call to a declaration
-	 * infers.
+	 * Reports whether a call passes its arguments to one signature whose
+	 * parameter types are settled before the arguments are looked at.
 	 *
-	 * A constructor declares none of its own: they sit on the class, where
-	 * only the signature built from the declaration finds them.
+	 * That takes exactly one signature, so no argument can pick an overload,
+	 * and no type parameters left to infer, so no argument can change what
+	 * they resolve to. Explicit type arguments settle a generic signature.
+	 * Both are asked of the callee's type, not of how it is written.
 	 *
-	 * @param declaration - The called signature's declaration.
-	 * @returns The type parameter names, empty when the call is not generic.
+	 * @param call - The call to inspect.
+	 * @returns True when the call's parameter types are fixed.
 	 */
-	function getTypeParameterNames(declaration: SignatureDeclaration): ReadonlySet<string> {
-		const typeParameters = checker
-			.getSignatureFromDeclaration(declaration)
-			?.getTypeParameters();
-		return new Set(typeParameters?.map((parameter) => parameter.symbol.name));
+	function hasFixedSignature(call: CallLike): boolean {
+		if (call.type === AST_NODE_TYPES.JSXOpeningElement && isIntrinsicElement(call.name)) {
+			return true;
+		}
+
+		// An immediately invoked function types an untyped parameter from its
+		// argument, so the argument's context would come from itself.
+		if (
+			call.type === AST_NODE_TYPES.CallExpression &&
+			isFunctionExpressionNode(call.callee) &&
+			call.callee.params.some(isUntypedParameter)
+		) {
+			return false;
+		}
+
+		const signatures = getCalleeSignatures(call);
+		const signature = signatures.length === 1 ? signatures.at(0) : undefined;
+		if (signature === undefined) {
+			return false;
+		}
+
+		return call.typeArguments !== undefined || !isGeneric(signature);
+	}
+
+	/**
+	 * Finds the node that fixes a function expression's contextual type,
+	 * independent of any annotation this rule could remove.
+	 *
+	 * A parameter annotation is only a restatement when its context would
+	 * survive the fix: when it depends on the annotation itself, as it does
+	 * through a generic call's inference or an overload pick, or on another
+	 * annotation removed in the same pass, removing it changes the parameter's
+	 * type. So the search climbs only through the closed set of forwarders in
+	 * `forwardsContext`, follows a returned value out to its function when that
+	 * function has no return type of its own, and stops at the first other
+	 * parent. That parent must be a recognized anchor: a written type (see
+	 * `isWrittenAnchor`), a function's return type, or a call whose signature
+	 * is fixed (see `hasFixedSignature`). Anything else, including a shape this
+	 * search does not know, finds no anchor, so an unknown context costs a
+	 * report rather than a wrong fix.
+	 *
+	 * @param node - The function expression to locate.
+	 * @returns The anchor, or undefined when the context is not proven stable.
+	 */
+	function resolveContextAnchor(node: FunctionExpressionNode): TSESTree.Node | undefined {
+		if (anchors.has(node)) {
+			return anchors.get(node);
+		}
+
+		let current: TSESTree.Node = node;
+		let anchor: TSESTree.Node | undefined;
+		while (current.type !== AST_NODE_TYPES.Program) {
+			const parent: TSESTree.Node = current.parent;
+			if (forwardsContext(parent, current)) {
+				current = parent;
+				continue;
+			}
+
+			const returning = getReturningFunction(parent, current);
+			if (returning !== undefined) {
+				// A written return type is the returned value's context. Without
+				// one, a declaration has no context to pass on, and an expression
+				// passes on its own.
+				if (returning.returnType !== undefined) {
+					anchor = returning;
+				} else if (returning.type !== AST_NODE_TYPES.FunctionDeclaration) {
+					current = returning;
+					continue;
+				}
+
+				break;
+			}
+
+			if (isWrittenAnchor(parent, current)) {
+				anchor = parent;
+				break;
+			}
+
+			const call = getReceivingCall(parent, current);
+			if (call !== undefined && hasFixedSignature(call)) {
+				anchor = call;
+			}
+
+			break;
+		}
+
+		anchors.set(node, anchor);
+		return anchor;
+	}
+
+	/**
+	 * Reports whether an annotated parameter in `root` takes its context from
+	 * `anchor`.
+	 *
+	 * When the anchor is itself an annotation this rule can report, both it and
+	 * the parameter's annotation look redundant, but only one of them can go:
+	 * ESLint applies every fix of a pass together, and removing both leaves the
+	 * parameter implicitly `any`. The parameter check owns the case, so the
+	 * check that owns the anchor steps back when this answers true.
+	 *
+	 * @param anchor - The variable declarator or parameter default to match.
+	 * @param root - The expression to search, the anchor's value.
+	 * @returns True when some annotated parameter anchors to it.
+	 */
+	function anchorsAnnotatedParameter(anchor: TSESTree.Node, root: TSESTree.Node): boolean {
+		function test(child: TSESTree.Node): boolean {
+			return (
+				isFunctionExpressionNode(child) &&
+				!child.params.every(isUntypedParameter) &&
+				resolveContextAnchor(child) === anchor
+			);
+		}
+
+		return test(root) || someDescendant(root, () => false, test);
+	}
+
+	/**
+	 * Reports whether the declaration emitter reads a node's type from the
+	 * expression around it.
+	 *
+	 * Under `isolatedDeclarations` the emitter types an exported variable
+	 * without an annotation, or a default export, from its syntax alone, so a
+	 * function's parameters there must be annotated: `satisfies` does not
+	 * change that. A written type on the declaration, a type assertion, a
+	 * function's return type, or a block ends the search, since the emitter
+	 * reads the written type or nothing. A class property without an annotation is treated as emitted
+	 * whether or not its class is exported.
+	 *
+	 * @param node - The function expression to locate.
+	 * @returns True when the emitter would need the parameter annotations.
+	 */
+	function feedsEmittedType(node: FunctionExpressionNode): boolean {
+		let current: TSESTree.Node = node;
+		while (current.type !== AST_NODE_TYPES.Program) {
+			const parent: TSESTree.Node = current.parent;
+			if (
+				parent.type === AST_NODE_TYPES.BlockStatement ||
+				parent.type === AST_NODE_TYPES.StaticBlock
+			) {
+				return false;
+			}
+
+			// A written return type is what the emitter reads for the body.
+			if (
+				isFunctionNode(parent) &&
+				parent.body === current &&
+				parent.returnType !== undefined
+			) {
+				return false;
+			}
+
+			if (
+				parent.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
+				parent.type === AST_NODE_TYPES.TSExportAssignment
+			) {
+				return true;
+			}
+
+			if (
+				parent.type === AST_NODE_TYPES.AccessorProperty ||
+				parent.type === AST_NODE_TYPES.PropertyDefinition
+			) {
+				return parent.value === current && parent.typeAnnotation === undefined;
+			}
+
+			if (parent.type === AST_NODE_TYPES.VariableDeclarator) {
+				return (
+					parent.init === current &&
+					parent.id.typeAnnotation === undefined &&
+					isExported(parent)
+				);
+			}
+
+			if (
+				(parent.type === AST_NODE_TYPES.TSAsExpression ||
+					parent.type === AST_NODE_TYPES.TSTypeAssertion) &&
+				!isConstAssertion(parent)
+			) {
+				return false;
+			}
+
+			current = parent;
+		}
+
+		return false;
 	}
 
 	/**
@@ -703,6 +1005,12 @@ function create(
 			);
 		}
 
+		// A template expression is a template type only because the context
+		// asks for one.
+		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
+			return hasTemplateType(services.getTypeAtLocation(node));
+		}
+
 		if (
 			node.type === AST_NODE_TYPES.ObjectExpression ||
 			node.type === AST_NODE_TYPES.ArrayExpression
@@ -725,7 +1033,7 @@ function create(
 			return receivesAnnotationContext(node.argument);
 		}
 
-		if (node.type === AST_NODE_TYPES.TSNonNullExpression) {
+		if (node.type === AST_NODE_TYPES.TSNonNullExpression || isConstAssertion(node)) {
 			return receivesAnnotationContext(node.expression);
 		}
 
@@ -744,7 +1052,8 @@ function create(
 	 *
 	 * The walk follows only the positions the annotation's contextual type
 	 * actually reaches: the initializer, both branches of a conditional or
-	 * logical expression, through `await` and `!`, and into call arguments.
+	 * logical expression, through `await`, `!`, `as const`, and an optional
+	 * chain, and into call arguments.
 	 *
 	 * @param node - The expression to inspect.
 	 * @returns True when the expression depends on its context.
@@ -781,7 +1090,12 @@ function create(
 			return isContextDependent(node.argument);
 		}
 
-		if (node.type === AST_NODE_TYPES.TSNonNullExpression) {
+		// An optional chain wraps the call it makes.
+		if (
+			node.type === AST_NODE_TYPES.ChainExpression ||
+			node.type === AST_NODE_TYPES.TSNonNullExpression ||
+			isConstAssertion(node)
+		) {
 			return isContextDependent(node.expression);
 		}
 
@@ -842,86 +1156,6 @@ function create(
 	}
 
 	/**
-	 * Reports whether a function expression sits in an argument position of a
-	 * call that is still inferring its type arguments.
-	 *
-	 * There the parameter annotations are inference sources, not restatements:
-	 * `wrap((value: number) => value)` against `wrap<T>(fn: (a: T) => T)` types
-	 * the parameter as `number` only because the annotation says so. Removing it
-	 * leaves `T` as `unknown`. An overloaded callee is treated the same way,
-	 * since the parameter types can be what picks the overload.
-	 *
-	 * A function that a callback returns is followed out to the callback's
-	 * call: `map(items, () => (s: string) => s.length)` against
-	 * `map<T, R>(items: Array<T>, fn: (item: T) => R)` infers `R` from the
-	 * returned function, so its context exists only because of the
-	 * annotation. A generator's `yield` is followed the same way.
-	 *
-	 * The call may also be a generic class's `new`, a tagged template, or a
-	 * generic JSX component.
-	 *
-	 * @param node - The function expression to locate.
-	 * @returns True when an enclosing call still depends on the annotations.
-	 */
-	function isArgumentOfInferringCall(node: TSESTree.Node): boolean {
-		let current = climbContextForwarders(node);
-		let isReturned = false;
-		let returning = getReturningFunction(current);
-		while (returning !== undefined) {
-			isReturned = true;
-			current = climbContextForwarders(returning);
-			returning = getReturningFunction(current);
-		}
-
-		const site = getCallSite(current);
-		if (site === undefined) {
-			return false;
-		}
-
-		const { call, index } = site;
-		if (call.typeArguments !== undefined) {
-			return false;
-		}
-
-		const calleeType = services.getTypeAtLocation(getCallee(call));
-		if (
-			getSignatureKinds(call).some(
-				(kind) => checker.getSignaturesOfType(calleeType, kind).length > 1,
-			)
-		) {
-			return true;
-		}
-
-		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
-		const declaration = signature?.getDeclaration();
-		if (declaration === undefined) {
-			return false;
-		}
-
-		const names = getTypeParameterNames(declaration);
-		if (names.size === 0) {
-			return false;
-		}
-
-		if (!isReturned) {
-			return true;
-		}
-
-		// A returned value only feeds inference through a type parameter in
-		// the declared parameter type. With a callback argument, only its
-		// return type can take the returned value.
-		const { parameters } = declaration;
-		const typeNode = parameters[Math.min(index, parameters.length - 1)]?.type;
-		if (typeNode === undefined) {
-			return true;
-		}
-
-		const target =
-			isFunctionNode(current) && isFunctionTypeNode(typeNode) ? typeNode.type : typeNode;
-		return referencesName(target, names);
-	}
-
-	/**
 	 * Collects the names an `export { ... }` list sends out of this module.
 	 *
 	 * A declaration can be exported away from its own statement, so the
@@ -958,34 +1192,165 @@ function create(
 	 * question decides whether the annotation is load-bearing.
 	 *
 	 * @param node - The declarator to inspect.
-	 * @param name - The name it binds.
 	 * @returns True when the module exports that variable.
 	 */
-	function isExported(node: TSESTree.VariableDeclarator, name: string): boolean {
+	function isExported(node: TSESTree.VariableDeclarator): boolean {
 		const statement = node.parent.parent;
 		if (statement.type === AST_NODE_TYPES.ExportNamedDeclaration) {
 			return true;
 		}
 
-		// An export list can only reach a binding at the top of the module.
-		return statement.type === AST_NODE_TYPES.Program && getExportedNames().has(name);
+		// An export list can only reach a binding at the top of the module. The
+		// names a destructuring pattern binds are not followed into it, so the
+		// pattern counts as exported.
+		return (
+			statement.type === AST_NODE_TYPES.Program &&
+			(node.id.type !== AST_NODE_TYPES.Identifier || getExportedNames().has(node.id.name))
+		);
 	}
 
-	function checkFunctionParameters(
-		node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
-	): void {
+	/**
+	 * Reports whether an initializer is a literal written in place, whose type
+	 * `let` widens.
+	 *
+	 * An enum member read straight off its enum counts too: `let x = E.A` is
+	 * `E`.
+	 *
+	 * @param node - The initializer to inspect.
+	 * @returns True for a fresh literal.
+	 */
+	function isFreshLiteral(node: TSESTree.Expression): boolean {
+		if (node.type === AST_NODE_TYPES.Literal) {
+			return node.value !== null && !(node.value instanceof RegExp);
+		}
+
+		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
+			return node.expressions.length === 0;
+		}
+
+		if (node.type === AST_NODE_TYPES.UnaryExpression) {
+			return (
+				(node.operator === "-" || node.operator === "+") &&
+				node.argument.type === AST_NODE_TYPES.Literal &&
+				(typeof node.argument.value === "number" || typeof node.argument.value === "bigint")
+			);
+		}
+
+		if (node.type !== AST_NODE_TYPES.MemberExpression) {
+			return false;
+		}
+
+		const symbol = checker.getSymbolAtLocation(services.esTreeNodeToTSNodeMap.get(node));
+		return symbol !== undefined && (symbol.flags & SymbolFlags.EnumMember) !== 0;
+	}
+
+	/**
+	 * Reports whether an initializer depends on the type of an annotated
+	 * variable in a way that can loop back.
+	 *
+	 * Without its annotation a variable takes its type from its initializer,
+	 * so an initializer that reads the variable itself, or that reads another
+	 * annotated variable from inside a nested function, may form a cycle once
+	 * both annotations go: the variable becomes implicitly `any`. A cycle made
+	 * only of direct reads is already a use before declaration, so every cycle
+	 * has a read from a nested function, and the variable holding it keeps
+	 * its annotation.
+	 *
+	 * @param node - The declarator to inspect.
+	 * @param init - Its initializer.
+	 * @returns True when the annotation may be what breaks a cycle.
+	 */
+	function referencesAnnotatedVariable(
+		node: TSESTree.VariableDeclarator,
+		init: TSESTree.Expression,
+	): boolean {
+		const [start, end] = init.range;
+		function isInside(child: TSESTree.Node): boolean {
+			return child.range[0] >= start && child.range[1] <= end;
+		}
+
+		const readsItself = context.sourceCode
+			.getDeclaredVariables(node)
+			.some((variable) => variable.references.some(({ identifier }) => isInside(identifier)));
+		if (readsItself) {
+			return true;
+		}
+
+		const scopes = context.sourceCode.scopeManager?.scopes ?? [];
+		return scopes.some((scope) => {
+			return (
+				isInside(scope.block) &&
+				scope.references.some(({ resolved }) => {
+					return (resolved?.defs ?? []).some(({ node: definition }) => {
+						return (
+							definition.type === AST_NODE_TYPES.VariableDeclarator &&
+							definition.id.typeAnnotation !== undefined &&
+							definition.init !== null
+						);
+					});
+				})
+			);
+		});
+	}
+
+	/**
+	 * Reports whether the declaration emitter reads a variable that the module
+	 * does not export.
+	 *
+	 * An exported declaration can still mention it, through `typeof`, a
+	 * computed key, or `export default`. Only a read inside a function body is
+	 * out of the emitter's sight, so any other read counts.
+	 *
+	 * @param node - The declarator to inspect.
+	 * @returns True when the emitter may need the variable's type.
+	 */
+	function isReadByEmitter(node: TSESTree.VariableDeclarator): boolean {
+		return context.sourceCode.getDeclaredVariables(node).some((variable) => {
+			return variable.references.some(({ identifier }) => {
+				if (identifier === node.id) {
+					return false;
+				}
+
+				let current: TSESTree.Node = identifier;
+				while (current.type !== AST_NODE_TYPES.Program) {
+					const parent: TSESTree.Node = current.parent;
+					if (
+						current.type === AST_NODE_TYPES.BlockStatement &&
+						isFunctionNode(parent) &&
+						parent.body === current
+					) {
+						return false;
+					}
+
+					current = parent;
+				}
+
+				return true;
+			});
+		});
+	}
+
+	function checkFunctionParameters(node: FunctionExpressionNode): void {
 		if (node.params.every((parameter) => isUntypedParameter(parameter))) {
 			return;
 		}
 
-		if (isArgumentOfInferringCall(node)) {
+		if (resolveContextAnchor(node) === undefined) {
+			return;
+		}
+
+		// The emitter reads these annotations, so they are not restatements.
+		if (declarationsAreIsolated && feedsEmittedType(node)) {
 			return;
 		}
 
 		const contextualType = checker.getContextualType(
 			services.esTreeNodeToTSNodeMap.get(node) as Expression,
 		);
-		if (contextualType === undefined) {
+		// TypeScript takes a contextual signature from a union only when every
+		// member offers the same one, which the union's own signatures do not
+		// show, so a union is left alone.
+		if (contextualType === undefined || contextualType.isUnion()) {
 			return;
 		}
 
@@ -1000,6 +1365,16 @@ function create(
 		// A `this` parameter has no counterpart in the contextual signature's
 		// positional list, so the positions start after it.
 		const parameters = hasThisParameter(node) ? node.params.slice(1) : node.params;
+
+		// A function that needs more arguments than the signature passes gets no
+		// contextual signature at all.
+		if (
+			!isRestParameter(signature, signature.parameters.length - 1) &&
+			signature.parameters.length < countLeadingRequired(parameters)
+		) {
+			return;
+		}
+
 		for (const [index, parameter] of parameters.entries()) {
 			const annotation = getParameterAnnotation(parameter);
 			if (annotation === undefined) {
@@ -1013,6 +1388,15 @@ function create(
 
 			const target = signature.parameters[index];
 			if (target === undefined) {
+				continue;
+			}
+
+			// A default value can take its context from this annotation, which
+			// then has to stay for that parameter's report to hold.
+			if (
+				parameter.type === AST_NODE_TYPES.AssignmentPattern &&
+				anchorsAnnotatedParameter(parameter, parameter.right)
+			) {
 				continue;
 			}
 
@@ -1096,11 +1480,11 @@ function create(
 				return;
 			}
 
-			if (declarationsAreIsolated && isExported(node, node.id.name)) {
+			if (declarationsAreIsolated && (isExported(node) || isReadByEmitter(node))) {
 				return;
 			}
 
-			if (receivesAnnotationContext(node.init) || suppliesParameterContext(node.init)) {
+			if (receivesAnnotationContext(node.init)) {
 				return;
 			}
 
@@ -1121,11 +1505,24 @@ function create(
 				return;
 			}
 
-			// `let` widens a single literal type on inference, so compare against
-			// the widened form. A union is left alone: collapsing `"a" | "b"` to
-			// `string` is a real change, not widening TypeScript would do here.
-			if (kind === "let" && (inferredType.flags & TypeFlags.Union) === 0) {
-				inferredType = checker.getBaseTypeOfLiteralType(inferredType);
+			// `let` widens a literal type on inference, but only one the
+			// initializer creates fresh: `let x = "a"` is `string`, while a
+			// variable of type `"a"` stays `"a"`. The checker does not say which,
+			// so only a literal written right there is widened, and any other
+			// initializer whose type widening would change is left alone.
+			if (kind === "let") {
+				const widenedType = checker.getBaseTypeOfLiteralType(inferredType);
+				if (widenedType !== inferredType && !isFreshLiteral(node.init)) {
+					return;
+				}
+
+				inferredType = widenedType;
+			}
+
+			// A `unique symbol` survives only on a declaration initialized by
+			// `Symbol()`; anywhere else it widens to `symbol`.
+			if (someMember(inferredType, TypeFlags.UniqueESSymbol)) {
+				return;
 			}
 
 			if (containsAny(inferredType)) {
@@ -1133,6 +1530,17 @@ function create(
 			}
 
 			if (!typesAreIdentical(annotationType, inferredType)) {
+				return;
+			}
+
+			// Last, as these walk the whole initializer. The parameter check owns
+			// an annotation that anchors a parameter's context, and an
+			// initializer that refers back to the variable needs its annotation
+			// to break the cycle.
+			if (
+				anchorsAnnotatedParameter(node, node.init) ||
+				referencesAnnotatedVariable(node, node.init)
+			) {
 				return;
 			}
 

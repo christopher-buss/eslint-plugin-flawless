@@ -84,9 +84,11 @@ const value: string = pick(); // NOT reported — without the annotation, `T` is
 ```
 
 The rule skips any call, `new` expression, or tagged template whose signature is
-generic and whose declared return type mentions one of its own type parameters,
-unless the call site writes its type arguments out. That is deliberately
-conservative: it also skips cases such as
+generic and whose return type involves one of its own type parameters, unless
+the call site writes its type arguments out. The question is asked of the types,
+not of the written names, so a return type of `typeof fallback` that resolves to
+`T` counts too, as does a generic class without a constructor of its own. That
+is deliberately conservative: it also skips cases such as
 `const names: Array<string> = items.map(toName)`, where the annotation really is
 redundant.
 
@@ -162,9 +164,27 @@ each((item: Item) => {
 The check runs on function and arrow expressions only. A function declaration
 has no contextual type, so its parameters must be annotated.
 
+A parameter is reported only when the rule can prove where its context comes
+from, and that the fix cannot change it. The search climbs from the function
+through array elements, object properties, spreads, conditional branches,
+logical operands, a sequence's last expression, `!`, and `as const`, and out of
+a function that returns it when that function has no return type of its own. It
+must then reach an anchor:
+
+- a variable's, class property's, or parameter's written type;
+- a `satisfies`, `as`, or `<T>` assertion;
+- a function's written return type;
+- an argument of a call, `new`, `super`, tagged template, or JSX element whose
+  callee has exactly one signature and no type parameters to infer, or whose
+  type arguments are written out.
+
+Any other position ends the search without an anchor, and the parameter is not
+reported. An unfamiliar shape costs a missed report, never a wrong fix.
+
 When the variable's own annotation is what supplies the context, only the
 parameter is reported. Both look redundant, but removing both would leave the
-parameter implicitly `any`:
+parameter implicitly `any`. This holds wherever the annotation reaches the
+parameter, and for an outer parameter's annotation that types a default value:
 
 ```ts
 type Handler = (payload: string) => void;
@@ -183,16 +203,18 @@ wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 ```
 
 The same applies to an overloaded callee, where the parameter types can be what
-picks the overload.
-
-It also applies to a function that a callback returns, when the callback's
-declared return type mentions a type parameter:
+picks the overload, and to a function that a callback returns:
 
 ```ts
 declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
 
 map([1], () => (text: string) => text.length); // NOT reported — without it, `text` is implicitly `any`
 ```
+
+Any generic callee is left alone, even when the parameter it types names no type
+parameter and the annotation really is redundant. Telling the two apart by the
+written names is unsound, because `typeof` and aliases can hide a type
+parameter.
 
 A generator's `yield` counts as a return. The inferring call can also be a
 generic class's `new`, a tagged template, or a generic JSX component:
@@ -248,8 +270,22 @@ Inference gives the same `unique symbol` here, so the annotation does restate
 the initializer, but removing it stops the build. The check reads the option
 from the project the file belongs to and stands down on every exported variable
 while it is on, whether the export sits on the declaration or in a later
-`export { ... }` list. Variables that stay inside the module are out of the
-option's reach and are still reported.
+`export { ... }` list, and on a variable that is read anywhere outside a
+function body, since an exported declaration can mention it through `typeof`, a
+computed key, or `export default`. Variables used only inside function bodies
+are out of the option's reach and are still reported.
+
+The option reaches parameters too. When the emitter types an exported value from
+its syntax (an exported variable without an annotation, a default export, or a
+class property without one), a function's parameters inside it must be
+annotated, and `satisfies` does not change that:
+
+```ts
+export const handlers = {
+	format: (text: string) => text.trim(),
+	//             ^^^^^^^^ NOT reported — the fix would give error TS9011
+} satisfies Record<string, (text: string) => string>;
+```
 
 An annotation that supplies a function's parameter types is unaffected: the
 variable keeps its own annotation, so the emitter still has what it needs.
@@ -274,8 +310,20 @@ export const handler: Handler = (value: string) => {
   governs excess property checking and literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
   subject.
-- A `let` whose initializer is a union of literals is skipped, because widening
-  a union is a real change rather than the widening TypeScript would apply.
+- `let` widens a literal type only when the initializer writes the literal in
+  place (`let x = "a"` is `string`, but `let x = a` keeps `a`'s `"a"`), and the
+  checker does not tell the two apart. So a `let` is compared against the
+  widened type only for a literal or enum member written right there, and is
+  skipped when any other initializer's type would widen, including a union of
+  literals.
+- A variable whose initializer reads the variable itself, or reads another
+  annotated variable from inside a nested function, is skipped. Without the
+  annotations the cycle leaves it implicitly `any`.
+- A `unique symbol` initializer is skipped: without the annotation the variable
+  widens to `symbol`.
+- A parameter whose context arrives through a position the anchor search does
+  not follow, such as an assignment, a delegating `yield*`, an `await`, or an
+  immediately invoked function with an untyped parameter, is not reported.
 - An optional parameter is skipped. The contextual type carries `| undefined`
   that the written annotation does not, so the two never compare as identical.
 - Under `isolatedDeclarations` no exported variable is reported, even when the
