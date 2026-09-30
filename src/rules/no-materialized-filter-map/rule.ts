@@ -130,6 +130,16 @@ const EXPRESSION_END_TOKENS = new Set<string>([
 
 // `!` covers a TypeScript non-null assertion and `>` the end of a JSX element.
 // Both also appear as operators, where bailing out only costs a fix.
+/**
+ * First tokens that start a declaration, a block, or a type assertion when an
+ * expression begins a statement, so a receiver starting with one needs
+ * parentheses.
+ */
+const STATEMENT_START_TOKENS = new Set(["<", "async", "class", "function", "let", "{"]);
+
+/** A character that joins an adjacent word, such as `return` and `set`. */
+const WORD_CHARACTER = /[\w$]/u;
+
 const EXPRESSION_END_PUNCTUATORS = new Set(["!", ")", "++", "--", ">", "]", "}"]);
 
 type SourceCode = Readonly<TSESLint.SourceCode>;
@@ -526,8 +536,10 @@ function isExpressionEnd(token: TSESTree.Token): boolean {
  * replacement is safe to write.
  *
  * No replacement is written when a comment sits in the removed text, when
- * `Iterator` is shadowed, or when the new text would start with a `(` or `[`
- * that could join the previous line under automatic semicolon insertion.
+ * `Array.from` has type arguments the fix would drop, when `Iterator` is
+ * shadowed, or when the new text would start with a `(` or `[` that could join
+ * the previous line under automatic semicolon insertion. A space is added when
+ * a keyword such as `return` touches the copy.
  *
  * @param sourceCode - The source code of the linted file.
  * @param copy - The `[...x]` or `Array.from(x)` expression.
@@ -551,6 +563,10 @@ function getReplacement(
 		return undefined;
 	}
 
+	if (copy.type === AST_NODE_TYPES.CallExpression && copy.typeArguments !== undefined) {
+		return undefined;
+	}
+
 	const text = sourceCode.getText(iterable);
 	let replacement: string;
 	if (source.kind === "from") {
@@ -561,19 +577,33 @@ function getReplacement(
 		const argument = iterable.type === AST_NODE_TYPES.SequenceExpression ? `(${text})` : text;
 		replacement = `Iterator.from(${argument})`;
 	} else {
-		const receiver = MEMBER_SAFE_TYPES.has(iterable.type) ? text : `(${text})`;
+		const firstToken = sourceCode.getFirstToken(iterable);
+		const isMemberSafe =
+			MEMBER_SAFE_TYPES.has(iterable.type) &&
+			(firstToken === null || !STATEMENT_START_TOKENS.has(firstToken.value));
+		const receiver = isMemberSafe ? text : `(${text})`;
 		replacement = source.kind === "method" ? `${receiver}.${source.method}()` : receiver;
 	}
 
 	const first = replacement.charAt(0);
-	if ((first === "(" || first === "[") && first !== sourceCode.getText(copy).charAt(0)) {
-		const previous = sourceCode.getTokenBefore(copy);
-		if (previous !== null && isExpressionEnd(previous)) {
-			return undefined;
-		}
+	const previous = sourceCode.getTokenBefore(copy);
+	if (previous === null) {
+		return replacement;
 	}
 
-	return replacement;
+	if (
+		(first === "(" || first === "[") &&
+		first !== sourceCode.getText(copy).charAt(0) &&
+		isExpressionEnd(previous)
+	) {
+		return undefined;
+	}
+
+	const touchesWord =
+		previous.range[1] === copy.range[0] &&
+		WORD_CHARACTER.test(previous.value.at(-1) ?? "") &&
+		WORD_CHARACTER.test(first);
+	return touchesWord ? ` ${replacement}` : replacement;
 }
 
 /**

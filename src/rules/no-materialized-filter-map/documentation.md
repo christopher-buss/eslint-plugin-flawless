@@ -159,6 +159,8 @@ or a suggestion:
 - **Optional chaining** anywhere in the chain.
 - **A comment in the removed text**, such as `[/* note */ ...set]`. A comment
   inside the iterable itself is kept.
+- **Type arguments on `Array.from`**, such as `Array.from<number>(set)`. The fix
+  would drop them.
 - **A shadowed `Iterator`**, when the fix needs `Iterator.from`.
 - **An ASI hazard.** When the replacement starts with `(` and the token before
   it ends an expression, the replacement would continue the previous line. A
@@ -178,7 +180,11 @@ the rule cannot see whether it reads a third argument.
 - **Parentheses.** A parenthesized copy keeps its parentheses:
   `([...set]).map(f)` becomes `(set.values()).map(f).toArray()`. An iterable
   that needs parentheses to take a member access gets them: `[...(a ?? b)]`
-  becomes `(a ?? b).values()`.
+  becomes `(a ?? b).values()`. So does an iterable whose first token would start
+  a declaration or a block at the start of a statement: `function`, `class`,
+  `async`, `let`, `{`, or a `<T>` type assertion.
+- **Keywords.** When a keyword touches the copy, as in `return[...set]`, the fix
+  adds a space: `return set.values()`.
 
 ## Options
 

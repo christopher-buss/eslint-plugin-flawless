@@ -339,6 +339,41 @@ const invalid: Array<InvalidTestCase> = [
 			export const doubled = (first ?? second).values().map((n) => n * 2).toArray();
 		`,
 	},
+	// A keyword directly before the copy keeps a space before the new text.
+	{
+		code: unindent`
+			declare const set: Set<number>;
+
+			export function double(): void {
+				void[...set].map((n) => n * 2);
+			}
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const set: Set<number>;
+
+			export function double(): void {
+				void set.values().map((n) => n * 2).toArray();
+			}
+		`,
+	},
+	{
+		code: unindent`
+			declare const set: Set<number>;
+
+			export function double() {
+				return[...set].map((n) => n * 2);
+			}
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const set: Set<number>;
+
+			export function double() {
+				return set.values().map((n) => n * 2).toArray();
+			}
+		`,
+	},
 	// A type guard narrows through the helper's own type-guard overload.
 	{
 		code: unindent`
@@ -516,6 +551,20 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 	}),
+	// An iterable that would start a declaration at the start of a statement
+	// gets parentheses.
+	suggestionCase({
+		code: unindent`
+			[...function* () {
+				yield 1;
+			}()].map((n) => n * 2);
+		`,
+		suggestion: unindent`
+			(function* () {
+				yield 1;
+			}()).map((n) => n * 2).toArray();
+		`,
+	}),
 	// --- Report only: no equivalent iterator form ---
 	// Iterator helpers take no `thisArg`.
 	suggestionCase({
@@ -646,6 +695,15 @@ const invalid: Array<InvalidTestCase> = [
 					Array.from(first ?? second).map((n) => n + 1);
 				}
 			}
+		`,
+		suggestion: null,
+	}),
+	// The fix would drop the type arguments of \`Array.from\`.
+	suggestionCase({
+		code: unindent`
+			declare const set: Set<number>;
+
+			export const doubled = Array.from<number>(set).map((n) => n * 2);
 		`,
 		suggestion: null,
 	}),
