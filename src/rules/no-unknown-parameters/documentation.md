@@ -34,18 +34,23 @@ still report.
 
 A function that wraps a caught error takes the cause as `unknown`, because
 `catch` gives it that type. The name `cause` alone exempts nothing. A plain
-`cause` parameter (a default value is fine) is exempt only when the function
-body records that same value as an error cause:
+`cause` parameter (a default value is fine) is exempt only when the value itself
+reaches one of these positions in the function's body:
 
-- as the `cause` of an options object passed straight to a construction:
-  `new …(message, { cause })` or `super(message, { cause })`. Any constructor
-  counts;
-- in a plain `=` assignment to a `.cause` member: `error.cause = cause`;
-- as a constructor parameter property named `cause`, which is the same
-  assignment to `this.cause`.
+- `new …(message, { cause })`: the `cause` of an options object passed straight
+  to a construction. Any constructor counts;
+- `super(message, { cause })`;
+- `error.cause = cause`: a plain `=` assignment to a `.cause` member;
+- a constructor parameter property named `cause`, which is the same assignment
+  to `this.cause`.
+
+Type-only wrappers do not change the value, so `{ cause } as ErrorOptions`,
+`{ cause } satisfies ErrorOptions`, `{ cause: cause as Error }`, and
+`{ cause: cause! }` count too.
 
 The rule uses scope analysis, so a different variable named `cause` in a nested
-scope does not count.
+scope does not count. The parameter must also keep the caller's value: any write
+to it in the body, a nested function included, removes the exemption.
 
 These forms do not record the value, and report:
 
@@ -57,6 +62,8 @@ These forms do not record the value, and report:
   `new Error(message, { details: { cause } })`;
 - a different key: `new Error(message, { reason: cause })`;
 - a compound assignment: `error.cause ??= cause`;
+- a reassigned parameter: `cause = String(cause)` or `cause += ""` before the
+  value is recorded;
 - `Object.assign(error, { cause })`; write `error.cause = cause`;
 - a destructured `{ cause }: unknown` or a rest `...cause: unknown` parameter.
 
@@ -65,7 +72,8 @@ reports on a `declare function`, an abstract method, an interface method, and a
 function type. An overload signature is the one exception: it defers to the
 implementation with the same name in the same scope, and is exempt when the
 implementation's parameter at the same position is a `cause` parameter that
-records the value.
+records the value. A method `wrap` and a private method `#wrap` are different
+methods.
 
 ## Examples
 

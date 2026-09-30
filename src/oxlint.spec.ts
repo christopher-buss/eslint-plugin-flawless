@@ -411,17 +411,20 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 	});
 
 	// The cause exemption reads `context.sourceCode.getDeclaredVariables` on
-	// the implementation, so this covers that scope API under oxlint.
+	// the implementation and the `isWrite()`/`init` flags of its references, so
+	// this covers that scope API under oxlint. The default value must not count
+	// as a reassignment; the `=` in `reset` must.
 	it("no-unknown-parameters exempts only a recorded cause", () => {
 		const { diagnostics } = runOxlint({
-			code: 'export function wrap(cause: unknown): Error;\nexport function wrap(cause: unknown): Error {\n\treturn new Error("m", { cause });\n}\nexport function log(cause: unknown): void {\n\tconsole.log(cause);\n}\nexport function parse(value: unknown): void {}\n',
+			code: 'export function wrap(cause: unknown): Error;\nexport function wrap(cause: unknown = undefined): Error {\n\treturn new Error("m", { cause });\n}\nexport function log(cause: unknown): void {\n\tconsole.log(cause);\n}\nexport function parse(value: unknown): void {}\nexport function reset(cause: unknown): Error {\n\tcause = 1;\n\treturn new Error("m", { cause });\n}\n',
 			filename: "file.ts",
 			rule: "no-unknown-parameters",
 		});
 
-		expect(diagnostics).toHaveLength(2);
+		expect(diagnostics).toHaveLength(3);
 		expect(diagnostics[0]?.code).toBe("flawless(no-unknown-parameters)");
 		expect(diagnostics[0]?.message).toContain("The name alone exempts nothing");
 		expect(diagnostics[1]?.message).toContain("Parameter `value` leaves input unparsed");
+		expect(diagnostics[2]?.message).toContain("The name alone exempts nothing");
 	});
 });

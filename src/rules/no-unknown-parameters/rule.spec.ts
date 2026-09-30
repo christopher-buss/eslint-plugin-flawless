@@ -22,6 +22,14 @@ const valid: Array<ValidTestCase> = [
 	"function wrap(cause: Error | unknown): Error { return new Error('m', { cause }); }",
 	"const wrap = (cause: unknown): Error => new Error('m', { cause });",
 	"function toError(cause: unknown): Error { return cause instanceof Error ? cause : new Error(String(cause), { cause }); }",
+	// Type-only wrappers leave the runtime value as is.
+	"function wrap(cause: unknown): Error { return new Error('m', { cause } as ErrorOptions); }",
+	"function wrap(cause: unknown): Error { return new Error('m', { cause } satisfies ErrorOptions); }",
+	"function wrap(cause: unknown): Error { return new Error('m', { cause: cause as Error }); }",
+	"function wrap(cause: unknown): Error { return new Error('m', { cause: cause! }); }",
+	"function attach(error: Error, cause: unknown): void { error.cause = cause as Error; }",
+	// A read in a nested closure still records the caller's value.
+	"function wrap(cause: unknown): () => Error { return () => new Error('m', { cause }); }",
 	// A plain assignment to `.cause` records it.
 	"function attach(error: Error, cause: unknown): void { error.cause = cause; }",
 	// `super(…, { cause })` and a parameter property record it too.
@@ -73,6 +81,25 @@ const valid: Array<ValidTestCase> = [
 			constructor(cause: unknown) {
 				super("m", { cause });
 			}
+		}
+	`,
+	unindent`
+		class Wrappers {
+			static {
+				function wrap(cause: unknown): Error;
+				function wrap(cause: unknown): Error {
+					return new Error("m", { cause });
+				}
+			}
+		}
+	`,
+	unindent`
+		switch (mode) {
+			case "wrap":
+				function wrap(cause: unknown): Error;
+				function wrap(cause: unknown): Error {
+					return new Error("m", { cause });
+				}
 		}
 	`,
 	// Types without `unknown` are out of scope.
@@ -148,6 +175,24 @@ const invalid: Array<InvalidTestCase> = [
 	},
 	{
 		code: "function wrap(cause: unknown) { return new Error(cause, {}); }",
+		errors: [{ messageId: causeMessageId }],
+	},
+	// A reassigned cause no longer holds the caller's value.
+	{
+		code: "function wrap(cause: unknown): Error { cause = String(cause); return new Error('m', { cause }); }",
+		errors: [{ messageId: causeMessageId }],
+	},
+	{
+		code: "function wrap(cause: unknown): Error { cause += ''; return new Error('m', { cause }); }",
+		errors: [{ messageId: causeMessageId }],
+	},
+	{
+		code: "function wrap(cause: unknown = undefined): Error { const reset = () => { cause = undefined; }; reset(); return new Error('m', { cause }); }",
+		errors: [{ messageId: causeMessageId }],
+	},
+	// A wrapper does not turn a plain call into a construction.
+	{
+		code: "function wrap(cause: unknown) { return make('m', { cause } as ErrorOptions); }",
 		errors: [{ messageId: causeMessageId }],
 	},
 	// Only a plain `=` to `.cause` records the value.
@@ -238,6 +283,18 @@ const invalid: Array<InvalidTestCase> = [
 			class Wrapper {
 				wrap(cause: unknown): Error;
 				static wrap(cause: unknown): Error {
+					return new Error("m", { cause });
+				}
+			}
+		`,
+		errors: [{ line: 2, messageId: causeMessageId }],
+	},
+	// `#wrap` is a different method from `wrap`.
+	{
+		code: unindent`
+			class Wrapper {
+				wrap(cause: unknown): Error;
+				#wrap(cause: unknown): Error {
 					return new Error("m", { cause });
 				}
 			}

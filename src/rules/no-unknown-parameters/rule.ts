@@ -24,9 +24,9 @@ const CAUSE = "cause";
 
 const messages = {
 	[CAUSE_NOT_RECORDED]:
-		"Parameter `cause` is `unknown` but is never recorded as an error cause. The name alone exempts nothing: pass it as `{ cause }` or assign it to `.cause`, or accept a named type and parse the input at its boundary.",
+		"Parameter `cause` is `unknown` but this function never records it as an error cause. The name alone exempts nothing: the value itself must reach `new …(message, { cause })`, `super(message, { cause })`, or `error.cause = cause` in this function's body. Otherwise accept a named domain type, or parse the input at its I/O boundary.",
 	[UNKNOWN_PARAMETER]:
-		"Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type; run the expected schema or parser at the I/O boundary before calling this function. The only exception is a `cause` parameter passed on as `{ cause }` or assigned to `error.cause`.",
+		"Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type; run the expected schema or parser at the I/O boundary before calling this function. The one exception is wrapping a caught error: a parameter named `cause` passed on as `new …(message, { cause })` or assigned to `error.cause`.",
 };
 
 type ParameterOwner =
@@ -71,6 +71,28 @@ function isTypePredicateSubject(owner: ParameterOwner, name: string): boolean {
 }
 
 /**
+ * Climbs out of the type-only wrappers around an expression: `as`,
+ * `satisfies`, `!`, and `<T>` assertions. They leave the runtime value as is.
+ *
+ * @param node - The expression to start from.
+ * @returns The outermost wrapper, or the node itself when there is none.
+ */
+function outermostTypeWrapper(node: TSESTree.Node): TSESTree.Node {
+	let current = node;
+	while (
+		(current.parent?.type === AST_NODE_TYPES.TSAsExpression ||
+			current.parent?.type === AST_NODE_TYPES.TSNonNullExpression ||
+			current.parent?.type === AST_NODE_TYPES.TSSatisfiesExpression ||
+			current.parent?.type === AST_NODE_TYPES.TSTypeAssertion) &&
+		current.parent.expression === current
+	) {
+		current = current.parent;
+	}
+
+	return current;
+}
+
+/**
  * Whether a property is the `cause` of an options object passed straight to a
  * construction: `new …(…, { cause })` or `super(…, { cause })`, the ES2022
  * `ErrorOptions` shape. Any constructor counts; checking for an Error-like
@@ -85,14 +107,21 @@ function isCauseArgument(property: TSESTree.Property): boolean {
 		return false;
 	}
 
-	const call = object.parent;
-	const isConstruction =
-		call.type === AST_NODE_TYPES.NewExpression ||
-		(call.type === AST_NODE_TYPES.CallExpression && call.callee.type === AST_NODE_TYPES.Super);
+	const argument = outermostTypeWrapper(object);
+	const call = argument.parent;
+	if (
+		call?.type !== AST_NODE_TYPES.NewExpression &&
+		call?.type !== AST_NODE_TYPES.CallExpression
+	) {
+		return false;
+	}
+
+	if (call.type === AST_NODE_TYPES.CallExpression && call.callee.type !== AST_NODE_TYPES.Super) {
+		return false;
+	}
 
 	return (
-		isConstruction &&
-		call.arguments.includes(object) &&
+		(call.arguments as Array<TSESTree.Node>).includes(argument) &&
 		ASTUtils.getPropertyName(property) === CAUSE
 	);
 }
@@ -101,21 +130,23 @@ function isCauseArgument(property: TSESTree.Property): boolean {
  * Whether a reference hands the value on unchanged into a cause slot: the
  * `cause` of a construction's options object, or the right side of a plain
  * `=` to a `.cause` member. `??=` and friends may drop the value, so they do
- * not count.
+ * not count. Type-only wrappers on the value or the options object do not
+ * change the value, so they are looked through.
  *
  * @param reference - One read of the `cause` parameter.
  * @returns True when this read records the value as an error cause.
  */
 function isCauseSlot(reference: TSESTree.Identifier | TSESTree.JSXIdentifier): boolean {
-	const { parent } = reference;
-	if (parent.type === AST_NODE_TYPES.Property) {
-		return parent.value === reference && isCauseArgument(parent);
+	const value = outermostTypeWrapper(reference);
+	const { parent } = value;
+	if (parent?.type === AST_NODE_TYPES.Property) {
+		return parent.value === value && isCauseArgument(parent);
 	}
 
 	return (
-		parent.type === AST_NODE_TYPES.AssignmentExpression &&
+		parent?.type === AST_NODE_TYPES.AssignmentExpression &&
 		parent.operator === "=" &&
-		parent.right === reference &&
+		parent.right === value &&
 		parent.left.type === AST_NODE_TYPES.MemberExpression &&
 		ASTUtils.getPropertyName(parent.left) === CAUSE
 	);
@@ -125,7 +156,8 @@ function isCauseSlot(reference: TSESTree.Identifier | TSESTree.JSXIdentifier): b
  * Whether an implementation records the parameter at an index as an error
  * cause. That parameter must be a plain `cause` binding (a default value is
  * fine) whose own variable — so a shadowing `cause` does not count — reaches a
- * cause slot. A `cause` parameter property is that same assignment to
+ * cause slot and is never written again, so the recorded value is the one the
+ * caller passed. A `cause` parameter property is that same assignment to
  * `this.cause`.
  *
  * @param context - The rule context.
@@ -152,12 +184,25 @@ function recordsCause(context: Context, implementation: Implementation, index: n
 		.getDeclaredVariables(implementation)
 		.find((declared) => declared.identifiers.includes(binding));
 
-	return variable?.references.some((reference) => isCauseSlot(reference.identifier)) === true;
+	if (variable === undefined) {
+		return false;
+	}
+
+	// A default value is the parameter's own initializer; any other write
+	// replaces the caller's value before it can be recorded.
+	const isReassigned = variable.references.some(
+		(reference) => reference.isWrite() && reference.init !== true,
+	);
+
+	return (
+		!isReassigned && variable.references.some((reference) => isCauseSlot(reference.identifier))
+	);
 }
 
 /**
  * The statements a function declaration sits among, looking through an
- * `export` wrapper.
+ * `export` wrapper: a block, a module or namespace body, a class `static`
+ * block, or a `case` clause.
  *
  * @param node - The function declaration or overload signature.
  * @returns The sibling statements, or undefined outside a statement list.
@@ -174,9 +219,14 @@ function siblingStatements(
 	if (
 		container.type === AST_NODE_TYPES.BlockStatement ||
 		container.type === AST_NODE_TYPES.Program ||
+		container.type === AST_NODE_TYPES.StaticBlock ||
 		container.type === AST_NODE_TYPES.TSModuleBlock
 	) {
 		return container.body;
+	}
+
+	if (container.type === AST_NODE_TYPES.SwitchCase) {
+		return container.consequent;
 	}
 
 	return undefined;
@@ -223,7 +273,8 @@ function functionImplementation(
 /**
  * The implementation that follows a method overload signature: the method of
  * the same class with the same static name, kind and placement that has a
- * body. An abstract method or a `declare class` member has none.
+ * body. `#wrap` and `wrap` share a property name but are different methods,
+ * so the key kind must match too. An abstract method or a `declare class` member has none.
  *
  * @param signature - The body-less method function.
  * @returns The implementation, or undefined when there is none.
@@ -247,6 +298,8 @@ function methodImplementation(
 			member.value.type === AST_NODE_TYPES.FunctionExpression &&
 			member.kind === method.kind &&
 			member.static === method.static &&
+			(member.key.type === AST_NODE_TYPES.PrivateIdentifier) ===
+				(method.key.type === AST_NODE_TYPES.PrivateIdentifier) &&
 			ASTUtils.getPropertyName(member) === name
 		) {
 			return member.value;
