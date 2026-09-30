@@ -13,6 +13,7 @@ import { noConditionalInTest } from "./rules/no-conditional-in-test/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
 import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
+import { noMaterializedFilterMap } from "./rules/no-materialized-filter-map/rule";
 import { noObjectParameters } from "./rules/no-object-parameters/rule";
 import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
 import { noRedundantTypeAnnotation } from "./rules/no-redundant-type-annotation/rule";
@@ -70,6 +71,7 @@ export const plugin = {
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-floating-point-equality": noFloatingPointEquality,
 		"no-known-value-widening": noKnownValueWidening,
+		"no-materialized-filter-map": noMaterializedFilterMap,
 		"no-object-parameters": noObjectParameters,
 		"no-redundant-tsconfig-options": noRedundantTsconfigOptions,
 		"no-redundant-type-annotation": noRedundantTypeAnnotation,

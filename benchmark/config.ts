@@ -196,16 +196,18 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 
 // Rules eslint-rule-benchmark structurally cannot run, so they are exempt from
 // the coverage check below. Revisit if the tool gains support.
-//   - prefer-read-only-props, no-redundant-type-annotation, and
-//     no-unknown-returns need type information, but the harness lints each
-//     fixture by bare basename, which no tsconfig can include — so a typed
-//     program is impossible and all three silently report nothing.
+//   - prefer-read-only-props, no-redundant-type-annotation,
+//     no-materialized-filter-map, and no-unknown-returns need type
+//     information, but the harness lints each fixture by bare basename, which
+//     no tsconfig can include — so a typed program is impossible and all four
+//     silently report nothing.
 //   - toml-sort-keys / yaml-block-key-blank-lines lint non-JS languages, whose
 //     extensions are absent from the tool's SUPPORTED_EXTENSIONS.
 //   - no-redundant-tsconfig-options lints JSON (also unsupported) and resolves
 //     the tsconfig `extends` chain from sibling files on disk — which the
 //     harness's bare-basename lint can never provide.
 const UNSUPPORTED = new Set([
+	"no-materialized-filter-map",
 	"no-redundant-tsconfig-options",
 	"no-redundant-type-annotation",
 	"no-unknown-returns",
