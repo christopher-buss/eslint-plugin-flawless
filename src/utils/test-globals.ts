@@ -115,3 +115,36 @@ export function resolveImportedTestGlobalName(
 
 	return resolveTestGlobalName(sourceCode, identifier, sources);
 }
+
+/**
+ * Walks a callee chain down to the identifier it is rooted at, stepping through
+ * member accesses (`it.each` -> `it`), intervening calls (`it.each(cases)()` ->
+ * `it`), and template tags (a tagged `it.each` table -> `it`).
+ *
+ * @param node - The callee expression to walk.
+ * @returns The root identifier, or `null` when the chain is not rooted at one.
+ */
+export function getCalleeRootIdentifier(node: TSESTree.Node): null | TSESTree.Identifier {
+	let current = node;
+	for (;;) {
+		if (current.type === AST_NODE_TYPES.Identifier) {
+			return current;
+		}
+
+		if (current.type === AST_NODE_TYPES.CallExpression) {
+			current = current.callee;
+			continue;
+		}
+
+		if (current.type === AST_NODE_TYPES.MemberExpression) {
+			current = current.object;
+			continue;
+		}
+
+		if (current.type !== AST_NODE_TYPES.TaggedTemplateExpression) {
+			return null;
+		}
+
+		current = current.tag;
+	}
+}

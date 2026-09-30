@@ -21,6 +21,7 @@ import { noReflectGet } from "./rules/no-reflect-get/rule";
 import { noReflectSet } from "./rules/no-reflect-set/rule";
 import { noShapeInSymbolNames } from "./rules/no-shape-in-symbol-names/rule";
 import { noSharedMocks } from "./rules/no-shared-mocks/rule";
+import { noSharedTestState } from "./rules/no-shared-test-state/rule";
 import { noUnknownParameters } from "./rules/no-unknown-parameters/rule";
 import { noUnknownReturns } from "./rules/no-unknown-returns/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
@@ -80,6 +81,7 @@ export const plugin = {
 		"no-reflect-set": noReflectSet,
 		"no-shape-in-symbol-names": noShapeInSymbolNames,
 		"no-shared-mocks": noSharedMocks,
+		"no-shared-test-state": noSharedTestState,
 		"no-unknown-parameters": noUnknownParameters,
 		"no-unknown-returns": noUnknownReturns,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
