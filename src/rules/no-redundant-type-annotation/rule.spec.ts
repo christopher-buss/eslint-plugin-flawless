@@ -1,7 +1,10 @@
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 
 import { run } from "../test";
+import { checkFixes, checkRuleFixes, type FixedSnippet } from "./fix-safety";
+import { corpus } from "./fix-safety-corpus";
 import { noRedundantTypeAnnotation, RULE_NAME } from "./rule";
 
 const catchMessageId = "redundantCatch";
@@ -1531,4 +1534,68 @@ run({
 			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 	],
+});
+
+// The fix-safety oracle checks what every report above promises: type-check
+// the source and the fixed output with the case's own project, and require no
+// new diagnostic and no changed type. See `./fix-safety.ts`.
+const fixturesDirectory = path.resolve(__dirname, "../../../fixtures");
+
+/**
+ * Pairs each invalid case with its fixed output and the file it runs as.
+ *
+ * @param cases - The invalid cases.
+ * @param defaultFilename - The file a case without its own runs as.
+ * @returns The cases the oracle can check.
+ */
+function toFixedSnippets(
+	cases: ReadonlyArray<InvalidTestCase>,
+	defaultFilename: string,
+): Array<FixedSnippet> {
+	return cases.flatMap((testCase) => {
+		if (typeof testCase === "string" || typeof testCase.output !== "string") {
+			return [];
+		}
+
+		const filename = path.resolve(fixturesDirectory, testCase.filename ?? defaultFilename);
+		return [{ code: testCase.code, filename, output: testCase.output }];
+	});
+}
+
+describe(`${RULE_NAME}/fix-safety`, () => {
+	it("keeps every type an invalid case's fix touches", () => {
+		expect.hasAssertions();
+
+		const failures = checkFixes([
+			...toFixedSnippets(invalid, "file.ts"),
+			...toFixedSnippets(jsxInvalid, jsxFilename),
+			...toFixedSnippets(looseNullInvalid, "file.ts"),
+			...toFixedSnippets(isolatedDeclarationsInvalid, "file.ts"),
+		]);
+
+		expect(failures).toStrictEqual([]);
+	});
+
+	// The corpus makes no claim about what is reported, only that whatever is
+	// fixed keeps every type, under each project the rule reads options from.
+	it.each([
+		["strict", fixturesDirectory],
+		["isolated-declarations", isolatedDeclarationsDirectory],
+		["loose-catch", looseCatchDirectory],
+	])("keeps every type the corpus fix touches under %s", (_, directory) => {
+		expect.hasAssertions();
+
+		const failures = checkRuleFixes(
+			noRedundantTypeAnnotation,
+			corpus.map(({ name, code, tsx }) => {
+				return {
+					name,
+					code,
+					filename: path.join(directory, tsx === true ? "case.tsx" : "case.ts"),
+				};
+			}),
+		);
+
+		expect(failures).toStrictEqual([]);
+	});
 });
