@@ -11,6 +11,7 @@ import type {
 	UnionOrIntersectionType,
 } from "typescript";
 import {
+	isFunctionTypeNode,
 	isIdentifier,
 	isParameter,
 	isTypeReferenceNode,
@@ -237,6 +238,70 @@ function isFunctionNode(node: TSESTree.Node): boolean {
 		node.type === AST_NODE_TYPES.FunctionExpression ||
 		node.type === AST_NODE_TYPES.FunctionDeclaration
 	);
+}
+
+/**
+ * Climbs from a node through the expressions that pass an outer contextual
+ * type down to it unchanged.
+ *
+ * A const assertion forwards the outer context, but any other assertion
+ * supplies its own type.
+ *
+ * @param node - The node to start from.
+ * @returns The outermost node that still shares the node's context.
+ */
+function climbContextForwarders(node: TSESTree.Node): TSESTree.Node {
+	let current = node;
+	let { parent } = node;
+	while (
+		parent !== undefined &&
+		(parent.type === AST_NODE_TYPES.ArrayExpression ||
+			parent.type === AST_NODE_TYPES.ConditionalExpression ||
+			parent.type === AST_NODE_TYPES.LogicalExpression ||
+			parent.type === AST_NODE_TYPES.Property ||
+			parent.type === AST_NODE_TYPES.ObjectExpression ||
+			parent.type === AST_NODE_TYPES.TSNonNullExpression ||
+			isConstAssertion(parent))
+	) {
+		current = parent;
+		({ parent } = parent);
+	}
+
+	return current;
+}
+
+/**
+ * Finds the function that returns a node as its value.
+ *
+ * A concise arrow body and a `return` argument are both return values. The
+ * nearest enclosing function owns a `return`; a declaration has no contextual
+ * type to pass on, so it ends the search.
+ *
+ * @param node - The expression to locate.
+ * @returns The returning function, or undefined when the node is not a
+ *   return value.
+ */
+function getReturningFunction(
+	node: TSESTree.Node,
+): TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression | undefined {
+	const { parent } = node;
+	if (parent?.type === AST_NODE_TYPES.ArrowFunctionExpression && parent.body === node) {
+		return parent;
+	}
+
+	if (parent?.type !== AST_NODE_TYPES.ReturnStatement) {
+		return undefined;
+	}
+
+	let ancestor: TSESTree.Node | undefined = parent.parent;
+	while (ancestor !== undefined && !isFunctionNode(ancestor)) {
+		ancestor = ancestor.parent;
+	}
+
+	return ancestor?.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+		ancestor?.type === AST_NODE_TYPES.FunctionExpression
+		? ancestor
+		: undefined;
 }
 
 /**
@@ -641,29 +706,26 @@ function create(
 	 * leaves `T` as `unknown`. An overloaded callee is treated the same way,
 	 * since the parameter types can be what picks the overload.
 	 *
+	 * A function that a callback returns is followed out to the callback's
+	 * call: `map(items, () => (s: string) => s.length)` against
+	 * `map<T, R>(items: Array<T>, fn: (item: T) => R)` infers `R` from the
+	 * returned function, so its context exists only because of the
+	 * annotation.
+	 *
 	 * @param node - The function expression to locate.
 	 * @returns True when an enclosing call still depends on the annotations.
 	 */
 	function isArgumentOfInferringCall(node: TSESTree.Node): boolean {
-		let current = node;
-		let parent: TSESTree.Node | undefined = node.parent;
-		// Walk out through the expression forms that keep an argument's
-		// contextual typing intact. A const assertion forwards the outer
-		// call's context, but any other assertion supplies its own type.
-		while (
-			parent !== undefined &&
-			(parent.type === AST_NODE_TYPES.ArrayExpression ||
-				parent.type === AST_NODE_TYPES.ConditionalExpression ||
-				parent.type === AST_NODE_TYPES.LogicalExpression ||
-				parent.type === AST_NODE_TYPES.Property ||
-				parent.type === AST_NODE_TYPES.ObjectExpression ||
-				parent.type === AST_NODE_TYPES.TSNonNullExpression ||
-				isConstAssertion(parent))
-		) {
-			current = parent;
-			({ parent } = parent);
+		let current = climbContextForwarders(node);
+		let isReturned = false;
+		let returning = getReturningFunction(current);
+		while (returning !== undefined) {
+			isReturned = true;
+			current = climbContextForwarders(returning);
+			returning = getReturningFunction(current);
 		}
 
+		const { parent } = current;
 		if (
 			parent === undefined ||
 			(parent.type !== AST_NODE_TYPES.CallExpression &&
@@ -688,7 +750,32 @@ function create(
 		const signature = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(parent));
 		const declaration = signature?.getDeclaration();
 		const typeParameters = declaration?.typeParameters;
-		return typeParameters !== undefined && typeParameters.length > 0;
+		if (
+			declaration === undefined ||
+			typeParameters === undefined ||
+			typeParameters.length === 0
+		) {
+			return false;
+		}
+
+		if (!isReturned) {
+			return true;
+		}
+
+		// A returned value only feeds inference through a type parameter in
+		// the declared parameter type. With a callback argument, only its
+		// return type can take the returned value.
+		const { parameters } = declaration;
+		const index = parent.arguments.indexOf(current as TSESTree.CallExpressionArgument);
+		const typeNode = parameters[Math.min(index, parameters.length - 1)]?.type;
+		if (typeNode === undefined) {
+			return true;
+		}
+
+		const target =
+			isFunctionNode(current) && isFunctionTypeNode(typeNode) ? typeNode.type : typeNode;
+		const names = new Set(typeParameters.map((parameter) => parameter.name.text));
+		return referencesName(target, names);
 	}
 
 	/**

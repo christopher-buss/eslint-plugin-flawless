@@ -184,6 +184,15 @@ wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 The same applies to an overloaded callee, where the parameter types can be what
 picks the overload.
 
+It also applies to a function that a callback returns, when the callback's
+declared return type mentions a type parameter:
+
+```ts
+declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
+
+map([1], () => (text: string) => text.length); // NOT reported — without it, `text` is implicitly `any`
+```
+
 ## Catch clause variables
 
 Under the `useUnknownInCatchVariables` compiler option, which `strict` turns on,

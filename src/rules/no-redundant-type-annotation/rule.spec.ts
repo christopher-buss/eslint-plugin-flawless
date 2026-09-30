@@ -311,6 +311,40 @@ const valid: Array<ValidTestCase> = [
 		declare function on(event: "key", handler: (payload: string) => void): void;
 		on("click", (payload: number) => {});
 	`,
+	// A function the callback returns infers the generic's return type, so its
+	// annotation is the only source of the context it would appear to restate.
+	unindent`
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], () => (s: string) => s.length);
+	`,
+	unindent`
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], () => ({ format: (n: number) => \`\${n}\` }));
+	`,
+	unindent`
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], () => {
+			return { format: (n: number) => \`\${n}\` };
+		});
+	`,
+	unindent`
+		declare const choose: boolean;
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], () => {
+			if (choose) {
+				return (s: string) => s.length;
+			}
+			return (s: string) => s.length + 1;
+		});
+	`,
+	unindent`
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], () => [(s: string) => s]);
+	`,
+	unindent`
+		declare function map<T, R>(items: Array<T>, fn: (item: T) => R): Array<R>;
+		map([1], async () => (s: string) => s);
+	`,
 	// A rest parameter holds the array, not the element the signature pairs it
 	// with.
 	unindent`
@@ -746,6 +780,19 @@ const invalid: Array<InvalidTestCase> = [
 		output: unindent`
 			declare function wrap<T>(callback: (value: T) => T): void;
 			wrap<number>((value) => value);
+		`,
+	},
+	// The callback's return type names no type parameter, so the returned
+	// function's context holds without its annotation.
+	{
+		code: unindent`
+			declare function run<T>(items: Array<T>, fn: () => (s: string) => number): void;
+			run([1], () => (s: string) => s.length);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function run<T>(items: Array<T>, fn: () => (s: string) => number): void;
+			run([1], () => (s) => s.length);
 		`,
 	},
 	// A function expression in an object literal gets its context from the
