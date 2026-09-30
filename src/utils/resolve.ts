@@ -19,7 +19,7 @@ export function resolve(
 	node: TSESTree.Identifier,
 ): null | TSESTree.Node {
 	const scope = sourceCode.getScope(node);
-	const variable = findVariable(scope, node);
+	const variable = findVariable(scope, node.name);
 	if (variable === null) {
 		return null;
 	}

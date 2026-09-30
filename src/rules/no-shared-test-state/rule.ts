@@ -282,7 +282,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @returns `true` when no local binding shadows the global.
 	 */
 	function isGlobal(identifier: TSESTree.Identifier): boolean {
-		const variable = ASTUtils.findVariable(sourceCode.getScope(identifier), identifier);
+		const variable = ASTUtils.findVariable(sourceCode.getScope(identifier), identifier.name);
 		return variable === null || variable.defs.length === 0;
 	}
 
@@ -450,7 +450,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return null;
 		}
 
-		const variable = ASTUtils.findVariable(sourceCode.getScope(argument), argument);
+		const variable = ASTUtils.findVariable(sourceCode.getScope(argument), argument.name);
 		return variable === null ? null : getLocalFunction(variable);
 	}
 
