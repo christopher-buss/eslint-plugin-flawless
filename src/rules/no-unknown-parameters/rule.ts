@@ -188,10 +188,11 @@ function recordsCause(context: Context, implementation: Implementation, index: n
 		return false;
 	}
 
-	// A default value is the parameter's own initializer; any other write
-	// replaces the caller's value before it can be recorded.
+	// A default value is the parameter's own initializer; any other write,
+	// including a `var cause = …` that joins the same variable, replaces the
+	// caller's value before it can be recorded.
 	const isReassigned = variable.references.some(
-		(reference) => reference.isWrite() && reference.init !== true,
+		(reference) => reference.isWrite() && reference.identifier !== binding,
 	);
 
 	return (
@@ -271,10 +272,24 @@ function functionImplementation(
 }
 
 /**
+ * The static key of a method. A private key keeps its `#`, so `#wrap` and
+ * `wrap` stay different methods.
+ *
+ * @param method - The method definition.
+ * @returns The key, or undefined when it is computed from a runtime value.
+ */
+function methodKey(method: TSESTree.MethodDefinition): string | undefined {
+	if (method.key.type === AST_NODE_TYPES.PrivateIdentifier) {
+		return `#${method.key.name}`;
+	}
+
+	return ASTUtils.getPropertyName(method) ?? undefined;
+}
+
+/**
  * The implementation that follows a method overload signature: the method of
  * the same class with the same static name, kind and placement that has a
- * body. `#wrap` and `wrap` share a property name but are different methods,
- * so the key kind must match too. An abstract method or a `declare class` member has none.
+ * body. An abstract method or a `declare class` member has none.
  *
  * @param signature - The body-less method function.
  * @returns The implementation, or undefined when there is none.
@@ -287,8 +302,8 @@ function methodImplementation(
 		return undefined;
 	}
 
-	const name = ASTUtils.getPropertyName(method);
-	if (name === null) {
+	const name = methodKey(method);
+	if (name === undefined) {
 		return undefined;
 	}
 
@@ -298,9 +313,7 @@ function methodImplementation(
 			member.value.type === AST_NODE_TYPES.FunctionExpression &&
 			member.kind === method.kind &&
 			member.static === method.static &&
-			(member.key.type === AST_NODE_TYPES.PrivateIdentifier) ===
-				(method.key.type === AST_NODE_TYPES.PrivateIdentifier) &&
-			ASTUtils.getPropertyName(member) === name
+			methodKey(member) === name
 		) {
 			return member.value;
 		}

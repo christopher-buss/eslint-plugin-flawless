@@ -76,6 +76,14 @@ const valid: Array<ValidTestCase> = [
 		}
 	`,
 	unindent`
+		class Wrapper {
+			#wrap(cause: unknown): Error;
+			#wrap(cause: unknown): Error {
+				return new Error("m", { cause });
+			}
+		}
+	`,
+	unindent`
 		class WrapError extends Error {
 			constructor(cause: unknown);
 			constructor(cause: unknown) {
@@ -190,6 +198,10 @@ const invalid: Array<InvalidTestCase> = [
 		code: "function wrap(cause: unknown = undefined): Error { const reset = () => { cause = undefined; }; reset(); return new Error('m', { cause }); }",
 		errors: [{ messageId: causeMessageId }],
 	},
+	{
+		code: "function wrap(cause: unknown): Error { var cause: unknown = String(cause); return new Error('m', { cause }); }",
+		errors: [{ messageId: causeMessageId }],
+	},
 	// A wrapper does not turn a plain call into a construction.
 	{
 		code: "function wrap(cause: unknown) { return make('m', { cause } as ErrorOptions); }",
@@ -295,6 +307,17 @@ const invalid: Array<InvalidTestCase> = [
 			class Wrapper {
 				wrap(cause: unknown): Error;
 				#wrap(cause: unknown): Error {
+					return new Error("m", { cause });
+				}
+			}
+		`,
+		errors: [{ line: 2, messageId: causeMessageId }],
+	},
+	{
+		code: unindent`
+			class Wrapper {
+				#wrap(cause: unknown): Error;
+				wrap(cause: unknown): Error {
 					return new Error("m", { cause });
 				}
 			}
