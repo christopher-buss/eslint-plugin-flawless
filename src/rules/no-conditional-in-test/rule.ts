@@ -1,14 +1,17 @@
-import { DefinitionType } from "@typescript-eslint/scope-manager";
 import {
 	AST_NODE_TYPES,
 	type JSONSchema,
 	type TSESLint,
 	type TSESTree,
 } from "@typescript-eslint/utils";
-import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
 import { createFlawlessRule } from "../../util";
+import {
+	getCalleeRootIdentifier,
+	getNodeName,
+	resolveTestGlobalName,
+} from "../../utils/test-globals";
 
 export const RULE_NAME = "no-conditional-in-test";
 
@@ -41,6 +44,9 @@ const DEFAULTS: Config = {
 
 /** Callee identifiers that name a vitest test block (`describe` is excluded). */
 const TEST_BLOCK_NAMES = new Set(["it", "test"]);
+
+/** The only module whose named exports count as test globals for this rule. */
+const VITEST_SOURCES: ReadonlySet<string> = new Set(["vitest"]);
 
 /**
  * Root identifiers whose call arguments are assertion conditions. Matched by
@@ -82,115 +88,6 @@ interface OptionalTokenFix {
 }
 
 /**
- * Builds the dotted name of a callee chain, unwrapping intervening calls
- * (`each.test` -> `each.test`, `request(app).get` -> `request.get`). A computed
- * member access yields `null`, since its property is not a static name. Ported
- * from eslint-plugin-jest's `getNodeName`.
- *
- * @param node - The callee node.
- * @returns The dotted name, or `null` when it cannot be built statically.
- */
-function getNodeName(node: TSESTree.Node): null | string {
-	if (node.type === AST_NODE_TYPES.Identifier) {
-		return node.name;
-	}
-
-	if (node.type === AST_NODE_TYPES.CallExpression) {
-		return getNodeName(node.callee);
-	}
-
-	if (
-		node.type === AST_NODE_TYPES.MemberExpression &&
-		!node.computed &&
-		node.property.type === AST_NODE_TYPES.Identifier
-	) {
-		const objectName = getNodeName(node.object);
-		return objectName === null ? null : `${objectName}.${node.property.name}`;
-	}
-
-	return null;
-}
-
-/**
- * Walks a callee chain down to the identifier it is rooted at, stepping through
- * member accesses (`it.each` -> `it`) and intervening calls
- * (`it.each(cases)()` -> `it`).
- *
- * @param node - The callee node.
- * @returns The root identifier, or `null` when the chain is not rooted at one.
- */
-function getRootIdentifier(node: TSESTree.Node): null | TSESTree.Identifier {
-	let current = node;
-	for (;;) {
-		if (current.type === AST_NODE_TYPES.Identifier) {
-			return current;
-		}
-
-		if (current.type === AST_NODE_TYPES.CallExpression) {
-			current = current.callee;
-			continue;
-		}
-
-		if (current.type === AST_NODE_TYPES.MemberExpression) {
-			current = current.object;
-			continue;
-		}
-
-		return null;
-	}
-}
-
-/**
- * Resolves the vitest name an identifier refers to. An unresolved reference is a
- * global (vitest's `globals: true` / `@vitest/globals`); a named import from
- * `"vitest"` resolves to its imported name (so aliases work); anything bound to
- * a local variable, function, or parameter resolves to `null` and is ignored.
- * Ported from eslint-plugin-flawless's `prefer-ending-with-an-expect`.
- *
- * @param sourceCode - Provides the scope used to look up the binding.
- * @param identifier - The identifier to resolve.
- * @returns The vitest name (`it`/`test`/...), or `null` when the identifier is a
- *   local binding rather than a vitest global or import.
- */
-function resolveVitestName(
-	sourceCode: Readonly<TSESLint.SourceCode>,
-	identifier: TSESTree.Identifier,
-): null | string {
-	const variable = findVariable(sourceCode.getScope(identifier), identifier);
-	if (variable === null) {
-		return identifier.name;
-	}
-
-	const definition = variable.defs.at(0);
-	if (definition === undefined) {
-		return identifier.name;
-	}
-
-	if (definition.type !== DefinitionType.ImportBinding) {
-		return null;
-	}
-
-	const importDefinition = definition;
-	const declaration = importDefinition.parent;
-	if (
-		declaration.type !== AST_NODE_TYPES.ImportDeclaration ||
-		declaration.source.value !== "vitest"
-	) {
-		return null;
-	}
-
-	const { node } = importDefinition;
-	if (
-		node.type === AST_NODE_TYPES.ImportSpecifier &&
-		node.imported.type === AST_NODE_TYPES.Identifier
-	) {
-		return node.imported.name;
-	}
-
-	return null;
-}
-
-/**
  * Determines whether a node sits directly in the argument list of an assertion
  * call (`expect(...)`, `assert(...)`, `assert.ok(...)`, `expect(x).toBe(...)`).
  * The search walks up to the nearest enclosing call and stops there, so an
@@ -227,14 +124,16 @@ function isInAssertionArgument(
 				return false;
 			}
 
-			const root = getRootIdentifier(parent.callee);
+			const root = getCalleeRootIdentifier(parent.callee);
 			if (root === null) {
 				return false;
 			}
 
 			return (
 				ASSERTION_ROOT_NAMES.has(root.name) ||
-				ASSERTION_ROOT_NAMES.has(resolveVitestName(sourceCode, root) ?? "")
+				ASSERTION_ROOT_NAMES.has(
+					resolveTestGlobalName(sourceCode, root, VITEST_SOURCES) ?? "",
+				)
 			);
 		}
 
@@ -323,8 +222,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @returns `true` when the call is rooted at a test block name.
 	 */
 	function isTestBlock(node: TSESTree.CallExpression): boolean {
-		const root = getRootIdentifier(node.callee);
-		if (root !== null && TEST_BLOCK_NAMES.has(resolveVitestName(sourceCode, root) ?? "")) {
+		const root = getCalleeRootIdentifier(node.callee);
+		if (
+			root !== null &&
+			TEST_BLOCK_NAMES.has(resolveTestGlobalName(sourceCode, root, VITEST_SOURCES) ?? "")
+		) {
 			return true;
 		}
 
