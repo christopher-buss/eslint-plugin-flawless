@@ -14,6 +14,7 @@ on:
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
+      - tsconfig.json
       - tsdown.config.ts
 
 # One run per PR; a new push cancels the in-flight run rather than racing it to

@@ -60,7 +60,7 @@ cannot run them (revisit if the tool changes):
 ## CI
 
 `.github/workflows/benchmark.yaml` runs on PRs that touch `src/`, `benchmark/`,
-the harness patch, or the build/dependency files, and `eslint-rule-benchmark`
+the harness patch, or the build/dependency/tsconfig files, and `eslint-rule-benchmark`
 posts the results as a single (auto-updated) PR comment.
 
 Only affected rules run. `affected-rules.mjs` diffs the PR against its base and

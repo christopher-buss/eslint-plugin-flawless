@@ -50,6 +50,7 @@ describe(affectedRules, () => {
 		"patches/eslint-rule-benchmark.patch",
 		".github/workflows/benchmark.yaml",
 		"pnpm-lock.yaml",
+		"tsconfig.json",
 	])("runs everything when %s changes", (file) => {
 		expect.assertions(1);
 

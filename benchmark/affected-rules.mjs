@@ -33,6 +33,7 @@ const GLOBAL = [
 	/^package\.json$/,
 	/^pnpm-lock\.yaml$/,
 	/^pnpm-workspace\.yaml$/,
+	/^tsconfig\.json$/,
 	/^tsdown\.config\.ts$/,
 ];
 
@@ -84,7 +85,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		process.exit(2);
 	}
 
-	const files = execFileSync("git", ["diff", "--name-only", base, "HEAD"], { encoding: "utf8" })
+	// --no-renames lists both sides of a move, so the old location counts too.
+	const files = execFileSync("git", ["diff", "--name-only", "--no-renames", base, "HEAD"], {
+		encoding: "utf8",
+	})
 		.split("\n")
 		.filter((file) => file !== "");
 	const affected = affectedRules(files);
