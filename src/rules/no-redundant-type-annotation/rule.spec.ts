@@ -126,6 +126,37 @@ const valid: Array<ValidTestCase> = [
 		}
 		const value: string = identity("a");
 	`,
+	// A generic tag infers from the annotation the same way a generic call does.
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray): T;
+		const value: string = tag\`\`;
+		value.toUpperCase();
+	`,
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray): Array<T>;
+		const value: Array<string> = tag\`\`;
+	`,
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray, ...values: Array<T>): Array<T>;
+		const value: Array<"a"> = tag\`\${"a"}\`;
+	`,
+	unindent`
+		interface Box<T> {
+			value: T;
+		}
+		declare function tag<T>(strings: TemplateStringsArray): Box<T>;
+		const value: Box<string> = tag\`\`;
+	`,
+	unindent`
+		declare function tag<T>(strings: TemplateStringsArray): Promise<T>;
+		async function load(): Promise<void> {
+			const value: string = await tag\`\`;
+		}
+	`,
+	unindent`
+		declare const tags: { tag<T>(strings: TemplateStringsArray): Array<T> };
+		const value: Array<string> = tags.tag\`\`;
+	`,
 	// The annotation widens away from a type parameter.
 	unindent`
 		function example<T extends string>(value: T): string {
@@ -595,6 +626,29 @@ const invalid: Array<InvalidTestCase> = [
 		output: unindent`
 			declare function pick<T = number>(): T;
 			const value = pick<string>();
+		`,
+	},
+	{
+		code: unindent`
+			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
+			const value: Array<string> = tag<string>\`\`;
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
+			const value = tag<string>\`\`;
+		`,
+	},
+	// A tag that is not generic has nothing to infer.
+	{
+		code: unindent`
+			declare function tag(strings: TemplateStringsArray): Array<string>;
+			const value: Array<string> = tag\`\`;
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function tag(strings: TemplateStringsArray): Array<string>;
+			const value = tag\`\`;
 		`,
 	},
 	// Both annotations go: the parameter's context comes from `wrap`, not from
