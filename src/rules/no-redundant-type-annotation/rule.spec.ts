@@ -416,6 +416,13 @@ const valid: Array<ValidTestCase> = [
 		declare function wrap<T>(value: T): T;
 		wrap((tick(), (s: string) => s));
 	`,
+	// After `this`, the annotation is narrower than the parameter in its
+	// position.
+	unindent`
+		interface Target {}
+		declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+		on(function (this: Target, event: string) {});
+	`,
 	// A rest parameter holds the array, not the element the signature pairs it
 	// with.
 	unindent`
@@ -894,6 +901,20 @@ const invalid: Array<InvalidTestCase> = [
 			gen(function* () {
 				yield (s) => s;
 			});
+		`,
+	},
+	// A `this` parameter does not shift the positions after it.
+	{
+		code: unindent`
+			interface Target {}
+			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+			on(function (this: Target, event: string, detail: string) {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Target {}
+			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
+			on(function (this: Target, event: string, detail) {});
 		`,
 	},
 	// The callback's return type names no type parameter, so the returned

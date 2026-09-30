@@ -417,6 +417,19 @@ function getSignatureKinds(call: CallSite["call"]): Array<SignatureKind> {
 }
 
 /**
+ * Reports whether a function declares a `this` parameter.
+ *
+ * @param node - The function to inspect.
+ * @returns True when the first parameter is `this`.
+ */
+function hasThisParameter(
+	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
+): boolean {
+	const [first] = node.params;
+	return first?.type === AST_NODE_TYPES.Identifier && first.name === "this";
+}
+
+/**
  * Reports whether a function expression reads a `this` that only its
  * contextual type gives a type.
  *
@@ -429,12 +442,7 @@ function getSignatureKinds(call: CallSite["call"]): Array<SignatureKind> {
 function usesContextualThis(
 	node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression,
 ): boolean {
-	if (node.type !== AST_NODE_TYPES.FunctionExpression) {
-		return false;
-	}
-
-	const [first] = node.params;
-	if (first?.type === AST_NODE_TYPES.Identifier && first.name === "this") {
+	if (node.type !== AST_NODE_TYPES.FunctionExpression || hasThisParameter(node)) {
 		return false;
 	}
 
@@ -984,15 +992,12 @@ function create(
 			return;
 		}
 
-		for (const [index, parameter] of node.params.entries()) {
+		// A `this` parameter has no counterpart in the contextual signature's
+		// positional list, so the positions start after it.
+		const parameters = hasThisParameter(node) ? node.params.slice(1) : node.params;
+		for (const [index, parameter] of parameters.entries()) {
 			const annotation = getParameterAnnotation(parameter);
 			if (annotation === undefined) {
-				continue;
-			}
-
-			// A `this` parameter has no counterpart in the contextual signature's
-			// positional list.
-			if (parameter.type === AST_NODE_TYPES.Identifier && parameter.name === "this") {
 				continue;
 			}
 
