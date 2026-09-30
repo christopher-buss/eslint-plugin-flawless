@@ -270,8 +270,10 @@ Inference gives the same `unique symbol` here, so the annotation does restate
 the initializer, but removing it stops the build. The check reads the option
 from the project the file belongs to and stands down on every exported variable
 while it is on, whether the export sits on the declaration or in a later
-`export { ... }` list. Variables that stay inside the module are out of the
-option's reach and are still reported.
+`export { ... }` list, and on a variable that is read anywhere outside a
+function body, since an exported declaration can mention it through `typeof`, a
+computed key, or `export default`. Variables used only inside function bodies
+are out of the option's reach and are still reported.
 
 The option reaches parameters too. When the emitter types an exported value from
 its syntax (an exported variable without an annotation, a default export, or a
@@ -308,8 +310,17 @@ export const handler: Handler = (value: string) => {
   governs excess property checking and literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
   subject.
-- A `let` whose initializer is a union of literals is skipped, because widening
-  a union is a real change rather than the widening TypeScript would apply.
+- `let` widens a literal type only when the initializer writes the literal in
+  place (`let x = "a"` is `string`, but `let x = a` keeps `a`'s `"a"`), and the
+  checker does not tell the two apart. So a `let` is compared against the
+  widened type only for a literal or enum member written right there, and is
+  skipped when any other initializer's type would widen, including a union of
+  literals.
+- A variable whose initializer reads the variable itself, or reads another
+  annotated variable from inside a nested function, is skipped. Without the
+  annotations the cycle leaves it implicitly `any`.
+- A `unique symbol` initializer is skipped: without the annotation the variable
+  widens to `symbol`.
 - A parameter whose context arrives through a position the anchor search does
   not follow, such as an assignment, a delegating `yield*`, an `await`, or an
   immediately invoked function with an untyped parameter, is not reported.

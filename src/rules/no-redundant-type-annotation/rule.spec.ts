@@ -172,6 +172,41 @@ const valid: Array<ValidTestCase> = [
 		declare const pick: (<T = number>() => T) | undefined;
 		const value: string | undefined = pick?.();
 	`,
+	// `let` widens only a literal written in place, so a literal type read from
+	// elsewhere stays narrow without the annotation.
+	unindent`
+		declare const a: "a";
+		let value: string = a;
+		value = "b";
+	`,
+	unindent`
+		let value: number = 1 as 1;
+		value = 2;
+	`,
+	// A union of fresh literals widens under `let` too.
+	unindent`
+		declare const choose: boolean;
+		let value: 1 | 2 = choose ? 1 : 2;
+	`,
+	// A template expression is a template type only under the annotation.
+	unindent`
+		declare const n: number;
+		const value: \`a\${number}\` = \`a\${n}\`;
+	`,
+	// A `unique symbol` widens to `symbol` without the annotation.
+	unindent`
+		declare const key: unique symbol;
+		const alias: typeof key = key;
+	`,
+	// Without the annotation, a variable its initializer reads is implicitly
+	// `any`.
+	unindent`
+		const count: () => number = () => count();
+	`,
+	unindent`
+		const ping: () => number = () => pong();
+		const pong: () => number = () => ping();
+	`,
 	// A class without a constructor still infers its type parameters on `new`.
 	unindent`
 		class Box<T> {
@@ -1492,6 +1527,16 @@ run({
 			code: unindent`
 				declare function getDate(): Date;
 				export const value: Date = getDate();
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			// The emitter still reads a variable an exported declaration
+			// mentions.
+			code: unindent`
+				declare function getDate(): Date;
+				const value: Date = getDate();
+				export default value;
 			`,
 			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},

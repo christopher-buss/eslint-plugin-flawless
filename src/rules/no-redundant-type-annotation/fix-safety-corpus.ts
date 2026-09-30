@@ -1362,4 +1362,911 @@ export const corpus: ReadonlyArray<CorpusCase> = [
 			f((a: string, b: number) => {});
 		`,
 	},
+
+	// --- round 6: adversarial sweep over both checks (literal widening, cycles,
+	// emitter reads, unique symbols, and every parameter anchor)
+	{
+		name: "R6 let non-fresh const",
+		code: unindent`
+			declare const a: "a"; let x: string = a; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let as const",
+		code: unindent`
+			let x: string = "a" as const; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let as literal",
+		code: unindent`
+			let x: number = 1 as 1; x = 2; export {};
+		`,
+	},
+	{
+		name: "R6 let angle literal",
+		code: unindent`
+			let x: number = <1>1; x = 2; export {};
+		`,
+	},
+	{
+		name: "R6 let fn literal ret",
+		code: unindent`
+			declare function f(): 1; let x: number = f(); x = 2; export {};
+		`,
+	},
+	{
+		name: "R6 let enum non-fresh",
+		code: unindent`
+			enum E { A, B } declare const e: E.A; let x: E = e; x = E.B; export {};
+		`,
+	},
+	{
+		name: "R6 let true non-fresh",
+		code: unindent`
+			declare const t: true; let x: boolean = t; x = false; export {};
+		`,
+	},
+	{
+		name: "R6 let readonly prop",
+		code: unindent`
+			const o = { k: "a" } as const; let x: string = o.k; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let tuple elem",
+		code: unindent`
+			declare const t: readonly ["a"]; let x: string = t[0]; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let fresh union cond",
+		code: unindent`
+			declare const c: boolean; let x: 1 | 2 = c ? 1 : 2; export { x };
+		`,
+	},
+	{
+		name: "R6 let fresh union str",
+		code: unindent`
+			declare const c: boolean; let x: "a" | "b" = c ? "a" : "b"; export { x };
+		`,
+	},
+	{
+		name: "R6 let fresh 1|undef",
+		code: unindent`
+			declare const c: boolean; let x: 1 | undefined = c ? 1 : undefined; export { x };
+		`,
+	},
+	{
+		name: "R6 let non-null lit",
+		code: unindent`
+			declare const a: "a" | undefined; let x: string = a!; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let await lit",
+		code: unindent`
+			declare const p: Promise<"a">; async function g() { let x: string = await p; x = "b"; return x; } export { g };
+		`,
+	},
+	{
+		name: "R6 let optional chain lit",
+		code: unindent`
+			declare const o: { k: "a" } | undefined; let x: string | undefined = o?.k; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let template lit",
+		code: unindent`
+			declare const n: number; let x: string = \`a\${n}\` as const; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 const template ctx",
+		code: unindent`
+			declare const n: number; const x: \`a\${number}\` = \`a\${n}\`; export { x };
+		`,
+	},
+	{
+		name: "R6 let bigint non-fresh",
+		code: unindent`
+			declare const b: 1n; let x: bigint = b; x = 2n; export {};
+		`,
+	},
+	{
+		name: "R6 const unique sym alias",
+		code: unindent`
+			declare const s: unique symbol; const a: typeof s = s; export const o = { [a]: 1 };
+		`,
+	},
+	{
+		name: "R6 let seq lit",
+		code: unindent`
+			declare const a: "a"; let x: string = (0, a); x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 fn ret fresh union",
+		code: unindent`
+			declare const c: boolean; const f: () => 1 | 2 = () => (c ? 1 : 2); export const r: 1 | 2 = f();
+		`,
+	},
+	{
+		name: "R6 fn ret fresh union block",
+		code: unindent`
+			declare const c: boolean; const f: () => "a" | "b" = () => { if (c) return "a"; return "b"; }; export const r: "a" | "b" = f();
+		`,
+	},
+	{
+		name: "R6 async fn ret fresh union",
+		code: unindent`
+			declare const c: boolean; const f: () => Promise<1 | 2> = async () => (c ? 1 : 2); export const r: Promise<1 | 2> = f();
+		`,
+	},
+	{
+		name: "R6 fn ret lit|undef",
+		code: unindent`
+			declare const c: boolean; const f: () => 1 | undefined = () => (c ? 1 : undefined); export const r: 1 | undefined = f();
+		`,
+	},
+	{
+		name: "R6 fn ret enum union",
+		code: unindent`
+			enum E { A, B, C } declare const c: boolean; const f: () => E.A | E.B = () => (c ? E.A : E.B); export const r: E.A | E.B = f();
+		`,
+	},
+	{
+		name: "R6 recursive arrow",
+		code: unindent`
+			const f: () => number = () => f(); export { f };
+		`,
+	},
+	{
+		name: "R6 recursive fib",
+		code: unindent`
+			const fib: (n: number) => number = (n: number) => (n < 2 ? n : fib(n - 1) + fib(n - 2)); export { fib };
+		`,
+	},
+	{
+		name: "R6 circular via cb",
+		code: unindent`
+			declare function g(cb: () => number): number; const x: number = g(() => x); export { x };
+		`,
+	},
+	{
+		name: "R6 circular via obj",
+		code: unindent`
+			interface Api { get(): number } declare function make(o: { get: () => Api }): Api; const o: Api = make({ get: () => o }); export { o };
+		`,
+	},
+	{
+		name: "R6 recursive fn expr",
+		code: unindent`
+			const f: (n: number) => number = function (n: number) { return n ? f(n - 1) : 0; }; export { f };
+		`,
+	},
+	{
+		name: "R6 rec block return",
+		code: unindent`
+			const f: (n: number) => number = (n: number) => { if (n) return f(n - 1); return 0; }; export { f };
+		`,
+	},
+	{
+		name: "R6 rec only self",
+		code: unindent`
+			const f: (n: number) => number = (n: number) => f(n); export { f };
+		`,
+	},
+	{
+		name: "R6 rec method obj",
+		code: unindent`
+			interface O { m(): number } declare function mk(): O; const o: O = mk(); const g: () => number = () => g2(); const g2: () => number = () => g(); export { o, g };
+		`,
+	},
+	{
+		name: "R6 rec let",
+		code: unindent`
+			let f: () => string = () => f(); export { f };
+		`,
+	},
+	{
+		name: "R6 rec fn expr named",
+		code: unindent`
+			const f: () => number = function () { return f(); }; export { f };
+		`,
+	},
+	{
+		name: "R6 rec async",
+		code: unindent`
+			const f: () => Promise<number> = async () => f(); export { f };
+		`,
+	},
+	{
+		name: "R6 circular getter",
+		code: unindent`
+			declare function lazy(cb: () => number): { value: number }; const x: { value: number } = lazy(() => x.value); export { x };
+		`,
+	},
+	{
+		name: "R6 circular class expr",
+		code: unindent`
+			const C: new () => { v: number } = class { v = new C().v; }; export { C };
+		`,
+	},
+	{
+		name: "R6 circular new",
+		code: unindent`
+			declare class L { constructor(cb: () => number); v: number } const l: L = new L(() => l.v); export { l };
+		`,
+	},
+	{
+		name: "R6 circular tagged",
+		code: unindent`
+			declare function t(s: TemplateStringsArray, f: () => number): number; const x: number = t\`\${() => x}\`; export { x };
+		`,
+	},
+	{
+		name: "R6 unique sym let",
+		code: unindent`
+			declare const s: unique symbol; let a: typeof s = s; export { a };
+		`,
+	},
+	{
+		name: "R6 unique sym Symbol()",
+		code: unindent`
+			const s: unique symbol = Symbol(); export const o = { [s]: 1 };
+		`,
+	},
+	{
+		name: "R6 template ctx cond",
+		code: unindent`
+			declare const n: number; declare const c: boolean; const x: \`a\${number}\` | "b" = c ? \`a\${n}\` : "b"; export { x };
+		`,
+	},
+	{
+		name: "R6 template ctx fn ret",
+		code: unindent`
+			declare const n: number; const f: () => \`a\${number}\` = () => \`a\${n}\`; export { f };
+		`,
+	},
+	{
+		name: "R6 template ctx upper",
+		code: unindent`
+			declare const n: Uppercase<string>; const x: Uppercase<string> = \`\${n}\`; export { x };
+		`,
+	},
+	{
+		name: "R6 template ctx arg",
+		code: unindent`
+			declare function g(s: \`a\${number}\`): \`a\${number}\`; declare const n: number; const x: \`a\${number}\` = g(\`a\${n}\`); export { x };
+		`,
+	},
+	{
+		name: "R6 param anchor union rest",
+		code: unindent`
+			declare function f(...a: [cb: (x: number) => void] | [n: number, cb: (x: string) => void]): void; f(1, (x: string) => {}); f((x: number) => {});
+		`,
+	},
+	{
+		name: "R6 param default undef",
+		code: unindent`
+			declare function f(cb: (x: number | undefined) => void): void; f((x: number | undefined = 1) => { const y: number = x; void y; });
+		`,
+	},
+	{
+		name: "R6 param optional",
+		code: unindent`
+			declare function f(cb: (x?: number) => void): void; f((x?: number) => { void x; });
+		`,
+	},
+	{
+		name: "R6 param and-left",
+		code: unindent`
+			type F = (x: number) => void; declare const g: F; const h: F = ((x: number) => {}) && g; void h;
+		`,
+	},
+	{
+		name: "R6 param or-right no ctx",
+		code: unindent`
+			declare const g: ((x: number) => void) | undefined; declare function k(f: (x: number) => void): void; k(g || ((x: number) => {}));
+		`,
+	},
+	{
+		name: "R6 param this cls",
+		code: unindent`
+			class A { on(cb: (self: this) => void) { cb(this); } m() { this.on((self: this) => { self.m(); }); } } export { A };
+		`,
+	},
+	{
+		name: "R6 param super ctor",
+		code: unindent`
+			class A { constructor(cb: (x: number) => void) { cb(1); } } class B extends A { constructor() { super((x: number) => {}); } } export { B };
+		`,
+	},
+	{
+		name: "R6 param super generic",
+		code: unindent`
+			class A<T> { constructor(cb: (x: T) => void) {} } class B extends A<number> { constructor() { super((x: number) => {}); } } export { B };
+		`,
+	},
+	{
+		name: "R6 param union callee",
+		code: unindent`
+			declare const f: ((cb: (x: number) => void) => void) | ((cb: (x: number) => void, y?: string) => void); f((x: number) => {});
+		`,
+	},
+	{
+		name: "R6 param union callee differ",
+		code: unindent`
+			declare const f: ((cb: (x: 1) => void) => void) | ((cb: (x: 2) => void) => void); f((x: never) => {});
+		`,
+	},
+	{
+		name: "R6 param intersection ctx",
+		code: unindent`
+			declare function f(cb: ((x: number) => void) & { tag?: 1 }): void; f((x: number) => {});
+		`,
+	},
+	{
+		name: "R6 param generic fn ctx",
+		code: unindent`
+			declare function f(cb: <T>(x: T) => T): void; f(<U,>(x: U) => x);
+		`,
+	},
+	{
+		name: "R6 param nested same pass",
+		code: unindent`
+			declare function f(cb: (g: (h: (x: number) => void) => void) => void): void; f((g: (h: (x: number) => void) => void) => { g((x: number) => {}); });
+		`,
+	},
+	{
+		name: "R6 param via var anchor nested",
+		code: unindent`
+			const o: { f: (g: (x: number) => void) => void } = { f: (g: (x: number) => void) => { g(1); } }; export { o };
+		`,
+	},
+	{
+		name: "R6 iso export default id",
+		code: unindent`
+			declare function f(): number; const x: number = f(); export default x;
+		`,
+	},
+	{
+		name: "R6 iso typeof ref",
+		code: unindent`
+			declare function f(): number; const x: number = f(); export const y: typeof x = x;
+		`,
+	},
+	{
+		name: "R6 iso computed key",
+		code: unindent`
+			declare const k: "a"; const key: "a" = k; export class C { [key] = 1; }
+		`,
+	},
+	{
+		name: "R6 iso ns export",
+		code: unindent`
+			declare function f(): number; export namespace N { export const x: number = f(); }
+		`,
+	},
+	{
+		name: "R6 iso export default obj param",
+		code: unindent`
+			declare function wrap<T>(x: T): T; const o = wrap({ f: (x: number) => x }); export default o;
+		`,
+	},
+	{
+		name: "R6 iso class prop typed arrow",
+		code: unindent`
+			export class C { f: (x: number) => number = (x: number) => x; }
+		`,
+	},
+	{
+		name: "R6 iso param prop default",
+		code: unindent`
+			export class C { constructor(public cb: (x: number) => void = (x: number) => {}) {} }
+		`,
+	},
+	{
+		name: "R6 iso fn default",
+		code: unindent`
+			export function f(cb: (x: number) => number = (x: number) => x): number { return cb(1); }
+		`,
+	},
+	{
+		name: "R6 iso satisfies exported",
+		code: unindent`
+			export const o = { f: (x: number) => x } satisfies { f: (x: number) => number };
+		`,
+	},
+	{
+		name: "R6 iso export as",
+		code: unindent`
+			const f = (x: number): number => x; export { f as g };
+		`,
+	},
+	{
+		name: "R6 iso typeof ref var",
+		code: unindent`
+			declare function mk(): { a: number }; const cfg: { a: number } = mk(); export type Cfg = typeof cfg;
+		`,
+	},
+	{
+		name: "R6 gen NoInfer",
+		code: unindent`
+			declare function f<T>(x: T, cb: (v: NoInfer<T>) => void): void; f(1, (v: number) => {});
+		`,
+	},
+	{
+		name: "R6 gen const tp",
+		code: unindent`
+			declare function f<const T>(x: T): T; const r: readonly [1, 2] = f([1, 2]); export { r };
+		`,
+	},
+	{
+		name: "R6 gen default ret",
+		code: unindent`
+			declare function f<T = string>(): T[]; const r: string[] = f(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen cond ret",
+		code: unindent`
+			declare function f<T extends boolean = false>(): T extends true ? 1 : 2; const r: 2 = f(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen method this",
+		code: unindent`
+			declare class B { self<T extends this>(): T } class D extends B { d = 1 } const r: D = new D().self(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen inferred ret typeof",
+		code: unindent`
+			function id<T>(): T { return null!; } const g = id; const r: number = g(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen via alias call",
+		code: unindent`
+			type Fn = <T = number>() => T; declare const f: Fn; const r: number = f(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen overload one generic",
+		code: unindent`
+			declare function f(): number; declare function f<T>(x: T): T; const r: number = f(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen class static",
+		code: unindent`
+			declare class P<T> { static of<U = string>(): P<U>; } const r: P<string> = P.of(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen optional call",
+		code: unindent`
+			declare const o: { f?: <T = number>() => T }; const r: number | undefined = o.f?.(); export { r };
+		`,
+	},
+	{
+		name: "R6 gen await call",
+		code: unindent`
+			declare function f<T = number>(): Promise<T>; async function g() { const r: number = await f(); return r; } export { g };
+		`,
+	},
+	{
+		name: "R6 gen in arg non-generic",
+		code: unindent`
+			declare function f<T = number>(): T; declare function h(x: string): string; const r: string = h(f()); export { r };
+		`,
+	},
+	{
+		name: "R6 gen tagged",
+		code: unindent`
+			declare function t<T = number>(s: TemplateStringsArray): T; const r: number = t\`\`; export { r };
+		`,
+	},
+	{
+		name: "R6 gen new default",
+		code: unindent`
+			class Box<T = number> { v!: T } const b: Box<number> = new Box(); export { b };
+		`,
+	},
+	{
+		name: "R6 gen implicit ctor",
+		code: unindent`
+			class Box<T> { v?: T } const b: Box<string> = new Box(); export { b };
+		`,
+	},
+	{
+		name: "R6 gen JSX elem",
+		code: unindent`
+			declare function C<T>(p: { v: T; f: (x: T) => void }): any; const e: any = <C v={1} f={(x: number) => {}} />; export { e };
+		`,
+		tsx: true,
+	},
+	{
+		name: "R6 jsx overloaded",
+		code: unindent`
+			declare function C(p: { f: (x: number) => void }): any; declare function C(p: { g: (x: string) => void }): any; export const e = <C f={(x: number) => {}} />;
+		`,
+		tsx: true,
+	},
+	{
+		name: "R6 jsx class comp",
+		code: unindent`
+			declare class C { constructor(p: { f: (x: number) => void }); props: { f: (x: number) => void } } export const e = <C f={(x: number) => {}} />;
+		`,
+		tsx: true,
+	},
+	{
+		name: "R6 jsx children fn",
+		code: unindent`
+			declare function C(p: { children: (x: number) => any }): any; export const e = <C>{(x: number) => null}</C>;
+		`,
+		tsx: true,
+	},
+	{
+		name: "R6 disc union param",
+		code: unindent`
+			type U = { k: "a"; f: (x: number) => void } | { k: "b"; f: (x: string) => void }; const o: U = { k: "a", f: (x: number) => {} }; export { o };
+		`,
+	},
+	{
+		name: "R6 missing-prop disc",
+		code: unindent`
+			type U = { a: (x: number) => void } | { b: (x: string) => void }; const o: U = { a: (x: number) => {} }; export { o };
+		`,
+	},
+	{
+		name: "R6 ThisType method",
+		code: unindent`
+			type O = { m(x: number): void } & ThisType<{ n: number }>; const o: O = { m(x: number) { void this.n; } }; export { o };
+		`,
+	},
+	{
+		name: "R6 mapped keyed",
+		code: unindent`
+			const o: { [K in "a" | "b"]: (x: K) => void } = { a: (x: "a") => {}, b: (x: "b") => {} }; export { o };
+		`,
+	},
+	{
+		name: "R6 index sig param",
+		code: unindent`
+			const o: Record<string, (x: number) => void> = { a: (x: number) => {} }; export { o };
+		`,
+	},
+	{
+		name: "R6 obj setter",
+		code: unindent`
+			const o: { v: number } = { set v(x: number) {}, get v() { return 1; } }; export { o };
+		`,
+	},
+	{
+		name: "R6 class field typed",
+		code: unindent`
+			class C { h: (e: { x: number }) => void = (e: { x: number }) => {}; } export { C };
+		`,
+	},
+	{
+		name: "R6 class accessor field",
+		code: unindent`
+			class C { accessor h: (x: number) => void = (x: number) => {}; } export { C };
+		`,
+	},
+	{
+		name: "R6 static block",
+		code: unindent`
+			declare function on(cb: (x: number) => void): void; class C { static { on((x: number) => {}); } } export { C };
+		`,
+	},
+	{
+		name: "R6 implements method",
+		code: unindent`
+			interface I { m(x: number): void } class C implements I { m = (x: number) => {}; } export { C };
+		`,
+	},
+	{
+		name: "R6 returned fn anchor",
+		code: unindent`
+			const mk: () => (x: number) => void = () => (x: number) => {}; export { mk };
+		`,
+	},
+	{
+		name: "R6 returned fn var+param",
+		code: unindent`
+			const mk: () => (x: number) => number = () => { return (x: number) => x; }; export { mk };
+		`,
+	},
+	{
+		name: "R6 yielded fn",
+		code: unindent`
+			const g: () => Generator<(x: number) => void> = function* () { yield (x: number) => {}; }; export { g };
+		`,
+	},
+	{
+		name: "R6 async returned fn",
+		code: unindent`
+			const g: () => Promise<(x: number) => void> = async () => (x: number) => {}; export { g };
+		`,
+	},
+	{
+		name: "R6 cond anchor",
+		code: unindent`
+			declare const c: boolean; const f: (x: number) => void = c ? (x: number) => {} : (x: number) => {}; export { f };
+		`,
+	},
+	{
+		name: "R6 seq anchor",
+		code: unindent`
+			const f: (x: number) => void = (0, (x: number) => {}); export { f };
+		`,
+	},
+	{
+		name: "R6 as anchor",
+		code: unindent`
+			export const f = ((x: number) => {}) as (x: number) => void;
+		`,
+	},
+	{
+		name: "R6 non-null anchor",
+		code: unindent`
+			const f: (x: number) => void = ((x: number) => {})!; export { f };
+		`,
+	},
+	{
+		name: "R6 spread array anchor",
+		code: unindent`
+			const fs: Array<(x: number) => void> = [...[(x: number) => {}]]; export { fs };
+		`,
+	},
+	{
+		name: "R6 tuple rest param",
+		code: unindent`
+			declare function f(cb: (...a: [number, string]) => void): void; f((...a: [number, string]) => {});
+		`,
+	},
+	{
+		name: "R6 tuple destructured rest",
+		code: unindent`
+			declare function f(cb: (...a: [1, string] | [2, number]) => void): void; f((...[k, v]: [1, string] | [2, number]) => { if (k === 1) { const s: string = v; void s; } });
+		`,
+	},
+	{
+		name: "R6 destructured param",
+		code: unindent`
+			declare function f(cb: (o: { a: number }) => void): void; f(({ a }: { a: number }) => { void a; });
+		`,
+	},
+	{
+		name: "R6 this param fn",
+		code: unindent`
+			declare function f(cb: (this: { n: number }, x: number) => void): void; f(function (this: { n: number }, x: number) { void this.n; void x; });
+		`,
+	},
+	{
+		name: "R6 extra optional param",
+		code: unindent`
+			declare function f(cb: (x: number) => void): void; f((x: number, y?: string) => { void y; });
+		`,
+	},
+	{
+		name: "R6 method sig method variance",
+		code: unindent`
+			interface I { m(cb: (x: "a") => void): void } declare const i: I; i.m((x: "a") => {});
+		`,
+	},
+	{
+		name: "R6 enum param",
+		code: unindent`
+			enum E { A, B } declare function f(cb: (e: E) => void): void; f((e: E) => {});
+		`,
+	},
+	{
+		name: "R6 catch unknown",
+		code: unindent`
+			try {} catch (e: unknown) { void e; } export {};
+		`,
+	},
+	{
+		name: "R6 catch unknown alias typeof",
+		code: unindent`
+			declare const u: unknown; try {} catch (e: typeof u) { void e; } export {};
+		`,
+	},
+	{
+		name: "R6 catch unknown union",
+		code: unindent`
+			try {} catch (e: unknown | undefined) { void e; } export {};
+		`,
+	},
+	{
+		name: "R6 for let",
+		code: unindent`
+			for (let i: number = 0; i < 3; i++) {} export {};
+		`,
+	},
+	{
+		name: "R6 rec cond",
+		code: unindent`
+			declare const c: boolean; const f: () => number = () => (c ? f() : 1); export { f };
+		`,
+	},
+	{
+		name: "R6 rec param",
+		code: unindent`
+			const f: (n: number) => number = (n: number) => f(n); export { f };
+		`,
+	},
+	{
+		name: "R6 rec void body",
+		code: unindent`
+			const f: () => void = () => { f(); }; export { f };
+		`,
+	},
+	{
+		name: "R6 rec via prop",
+		code: unindent`
+			const o: { n: number } = { n: 1 }; const f: () => number = () => o.n + f(); export { f };
+		`,
+	},
+	{
+		name: "R6 circ call method",
+		code: unindent`
+			declare const api: { run(cb: () => number): number }; const x: number = api.run(() => x); export { x };
+		`,
+	},
+	{
+		name: "R6 circ call obj arg",
+		code: unindent`
+			declare function g(o: { f: () => number }): number; const x: number = g({ f: () => x }); export { x };
+		`,
+	},
+	{
+		name: "R6 circ call arr arg",
+		code: unindent`
+			declare function g(o: Array<() => number>): number; const x: number = g([() => x]); export { x };
+		`,
+	},
+	{
+		name: "R6 circ opt chain",
+		code: unindent`
+			declare const api: { run?(cb: () => number): number }; const x: number | undefined = api.run?.(() => x ?? 0); export { x };
+		`,
+	},
+	{
+		name: "R6 circ await",
+		code: unindent`
+			declare function g(cb: () => number): Promise<number>; async function h() { const x: number = await g(() => x); return x; } export { h };
+		`,
+	},
+	{
+		name: "R6 circ cond",
+		code: unindent`
+			declare const c: boolean; declare function g(cb: () => number): number; const x: number = c ? g(() => x) : 0; export { x };
+		`,
+	},
+	{
+		name: "R6 circ fn expr arg",
+		code: unindent`
+			declare function g(cb: () => number): number; const x: number = g(function () { return x; }); export { x };
+		`,
+	},
+	{
+		name: "R6 circ new L2",
+		code: unindent`
+			declare class L { constructor(o: { f: () => L }); } const l: L = new L({ f: () => l }); export { l };
+		`,
+	},
+	{
+		name: "R6 circ fn typed ret",
+		code: unindent`
+			declare function g(cb: () => number): number; const x: number = g((): number => x); export { x };
+		`,
+	},
+	{
+		name: "R6 unique sym non-null",
+		code: unindent`
+			declare const s: unique symbol | undefined; const a: typeof s & {} = s!; export { a };
+		`,
+	},
+	{
+		name: "R6 unique sym prop",
+		code: unindent`
+			declare const o: { readonly k: unique symbol }; const a: typeof o.k = o.k; export const r = { [a]: 1 };
+		`,
+	},
+	{
+		name: "R6 let widen getter",
+		code: unindent`
+			declare const o: { get k(): "a" }; let x: string = o.k; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let widen intersection",
+		code: unindent`
+			declare const v: "a" & {}; let x: string = v; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let widen typeof",
+		code: unindent`
+			declare const v: number | string; let x: string = typeof v === "string" ? "s" : "n"; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let widen enum str",
+		code: unindent`
+			enum S { A = "a", B = "b" } declare const s: S.A; let x: S = s; x = S.B; export {};
+		`,
+	},
+	{
+		name: "R6 let widen cond non-fresh",
+		code: unindent`
+			declare const a: "a"; declare const c: boolean; let x: string = c ? a : a; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let widen logical",
+		code: unindent`
+			declare const a: "a" | undefined; let x: string = a ?? "a"; x = "b"; export {};
+		`,
+	},
+	{
+		name: "R6 let fresh union 3 enum",
+		code: unindent`
+			enum E { A, B, C } declare const c: boolean; let x: E.A | E.B = c ? E.A : E.B; export { x };
+		`,
+	},
+	{
+		name: "R6 let fresh union bool+lit",
+		code: unindent`
+			declare const c: boolean; let x: 1 | true = c ? 1 : true; export { x };
+		`,
+	},
+	{
+		name: "R6 const template in obj ret",
+		code: unindent`
+			declare const n: number; const x: \`a\${number}\` = (0, \`a\${n}\`); export { x };
+		`,
+	},
+	{
+		name: "R6 let template ctx",
+		code: unindent`
+			declare const n: number; let x: \`a\${number}\` = \`a\${n}\`; x = "a1"; export {};
+		`,
+	},
+	{
+		name: "R6 iso non-exported used by fn ret",
+		code: unindent`
+			declare function f(): number; const x: number = f(); export function g(): typeof x { return x; }
+		`,
+	},
+	{
+		name: "R6 iso export default expr",
+		code: unindent`
+			declare function f(): number; const x: number = f(); export default [x] as number[];
+		`,
+	},
+	{
+		name: "R6 iso export spec default",
+		code: unindent`
+			declare function f(): number; const x: number = f(); export { x as default };
+		`,
+	},
+	{
+		name: "R6 this type var",
+		code: unindent`
+			class A { m() { const s: this = this; return s; } } export { A };
+		`,
+	},
+	{
+		name: "R6 narrowed let",
+		code: unindent`
+			declare const v: string | number; if (typeof v === "string") { let x: string = v; x = "b"; void x; } export {};
+		`,
+	},
 ];

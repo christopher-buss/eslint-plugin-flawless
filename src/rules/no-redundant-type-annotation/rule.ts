@@ -195,21 +195,30 @@ function isWideningUnit(type: Type): boolean {
 }
 
 /**
+ * Reports whether a type, or a member of its union, has any of `flags`.
+ *
+ * @param type - The type to inspect.
+ * @param flags - The type flags to look for.
+ * @returns True when the type or a union member matches.
+ */
+function someMember(type: Type, flags: TypeFlags): boolean {
+	const members =
+		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
+	return members.some((member) => (member.flags & flags) !== 0);
+}
+
+/**
  * Reports whether a type, or a member of it, is a template literal or
  * string mapping type.
  *
  * A template expression is typed as one of these only under a context that
  * asks for it; without one it is `string`.
  *
- * @param type - The return type to inspect.
+ * @param type - The type to inspect.
  * @returns True when the type holds a template type.
  */
 function hasTemplateType(type: Type): boolean {
-	const members =
-		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
-	return members.some(
-		(member) => (member.flags & (TypeFlags.TemplateLiteral | TypeFlags.StringMapping)) !== 0,
-	);
+	return someMember(type, TypeFlags.TemplateLiteral | TypeFlags.StringMapping);
 }
 
 /**
@@ -850,9 +859,9 @@ function create(
 	 * Under `isolatedDeclarations` the emitter types an exported variable
 	 * without an annotation, or a default export, from its syntax alone, so a
 	 * function's parameters there must be annotated: `satisfies` does not
-	 * change that. A written type on the declaration, a type assertion, or a
-	 * block ends the search, since the emitter reads the written type or
-	 * nothing. A class property without an annotation is treated as emitted
+	 * change that. A written type on the declaration, a type assertion, a
+	 * function's return type, or a block ends the search, since the emitter
+	 * reads the written type or nothing. A class property without an annotation is treated as emitted
 	 * whether or not its class is exported.
 	 *
 	 * @param node - The function expression to locate.
@@ -865,6 +874,15 @@ function create(
 			if (
 				parent.type === AST_NODE_TYPES.BlockStatement ||
 				parent.type === AST_NODE_TYPES.StaticBlock
+			) {
+				return false;
+			}
+
+			// A written return type is what the emitter reads for the body.
+			if (
+				isFunctionNode(parent) &&
+				parent.body === current &&
+				parent.returnType !== undefined
 			) {
 				return false;
 			}
@@ -985,6 +1003,12 @@ function create(
 				usesContextualThis(node) ||
 				returnsContextTypedValue(node)
 			);
+		}
+
+		// A template expression is a template type only because the context
+		// asks for one.
+		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
+			return hasTemplateType(services.getTypeAtLocation(node));
 		}
 
 		if (
@@ -1185,6 +1209,127 @@ function create(
 		);
 	}
 
+	/**
+	 * Reports whether an initializer is a literal written in place, whose type
+	 * `let` widens.
+	 *
+	 * An enum member read straight off its enum counts too: `let x = E.A` is
+	 * `E`.
+	 *
+	 * @param node - The initializer to inspect.
+	 * @returns True for a fresh literal.
+	 */
+	function isFreshLiteral(node: TSESTree.Expression): boolean {
+		if (node.type === AST_NODE_TYPES.Literal) {
+			return node.value !== null && !(node.value instanceof RegExp);
+		}
+
+		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
+			return node.expressions.length === 0;
+		}
+
+		if (node.type === AST_NODE_TYPES.UnaryExpression) {
+			return (
+				(node.operator === "-" || node.operator === "+") &&
+				node.argument.type === AST_NODE_TYPES.Literal &&
+				(typeof node.argument.value === "number" || typeof node.argument.value === "bigint")
+			);
+		}
+
+		if (node.type !== AST_NODE_TYPES.MemberExpression) {
+			return false;
+		}
+
+		const symbol = checker.getSymbolAtLocation(services.esTreeNodeToTSNodeMap.get(node));
+		return symbol !== undefined && (symbol.flags & SymbolFlags.EnumMember) !== 0;
+	}
+
+	/**
+	 * Reports whether an initializer depends on the type of an annotated
+	 * variable in a way that can loop back.
+	 *
+	 * Without its annotation a variable takes its type from its initializer,
+	 * so an initializer that reads the variable itself, or that reads another
+	 * annotated variable from inside a nested function, may form a cycle once
+	 * both annotations go: the variable becomes implicitly `any`. A cycle made
+	 * only of direct reads is already a use before declaration, so every cycle
+	 * has a read from a nested function, and the variable holding it keeps
+	 * its annotation.
+	 *
+	 * @param node - The declarator to inspect.
+	 * @param init - Its initializer.
+	 * @returns True when the annotation may be what breaks a cycle.
+	 */
+	function referencesAnnotatedVariable(
+		node: TSESTree.VariableDeclarator,
+		init: TSESTree.Expression,
+	): boolean {
+		const [start, end] = init.range;
+		function isInside(child: TSESTree.Node): boolean {
+			return child.range[0] >= start && child.range[1] <= end;
+		}
+
+		const readsItself = context.sourceCode
+			.getDeclaredVariables(node)
+			.some((variable) => variable.references.some(({ identifier }) => isInside(identifier)));
+		if (readsItself) {
+			return true;
+		}
+
+		const scopes = context.sourceCode.scopeManager?.scopes ?? [];
+		return scopes.some((scope) => {
+			return (
+				isInside(scope.block) &&
+				scope.references.some(({ resolved }) => {
+					return (resolved?.defs ?? []).some(({ node: definition }) => {
+						return (
+							definition.type === AST_NODE_TYPES.VariableDeclarator &&
+							definition.id.typeAnnotation !== undefined &&
+							definition.init !== null
+						);
+					});
+				})
+			);
+		});
+	}
+
+	/**
+	 * Reports whether the declaration emitter reads a variable that the module
+	 * does not export.
+	 *
+	 * An exported declaration can still mention it, through `typeof`, a
+	 * computed key, or `export default`. Only a read inside a function body is
+	 * out of the emitter's sight, so any other read counts.
+	 *
+	 * @param node - The declarator to inspect.
+	 * @returns True when the emitter may need the variable's type.
+	 */
+	function isReadByEmitter(node: TSESTree.VariableDeclarator): boolean {
+		return context.sourceCode.getDeclaredVariables(node).some((variable) => {
+			return variable.references.some(({ identifier }) => {
+				if (identifier === node.id) {
+					return false;
+				}
+
+				let current: TSESTree.Node = identifier;
+				while (current.type !== AST_NODE_TYPES.Program) {
+					const parent: TSESTree.Node = current.parent;
+					if (
+						current.type === AST_NODE_TYPES.BlockStatement &&
+						isFunctionNode(parent) &&
+						parent.body === current
+					) {
+						return false;
+					}
+
+					current = parent;
+				}
+
+				return true;
+			});
+		});
+	}
+
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
 		if (node.params.every((parameter) => isUntypedParameter(parameter))) {
 			return;
@@ -1335,7 +1480,7 @@ function create(
 				return;
 			}
 
-			if (declarationsAreIsolated && isExported(node)) {
+			if (declarationsAreIsolated && (isExported(node) || isReadByEmitter(node))) {
 				return;
 			}
 
@@ -1360,11 +1505,24 @@ function create(
 				return;
 			}
 
-			// `let` widens a single literal type on inference, so compare against
-			// the widened form. A union is left alone: collapsing `"a" | "b"` to
-			// `string` is a real change, not widening TypeScript would do here.
-			if (kind === "let" && (inferredType.flags & TypeFlags.Union) === 0) {
-				inferredType = checker.getBaseTypeOfLiteralType(inferredType);
+			// `let` widens a literal type on inference, but only one the
+			// initializer creates fresh: `let x = "a"` is `string`, while a
+			// variable of type `"a"` stays `"a"`. The checker does not say which,
+			// so only a literal written right there is widened, and any other
+			// initializer whose type widening would change is left alone.
+			if (kind === "let") {
+				const widenedType = checker.getBaseTypeOfLiteralType(inferredType);
+				if (widenedType !== inferredType && !isFreshLiteral(node.init)) {
+					return;
+				}
+
+				inferredType = widenedType;
+			}
+
+			// A `unique symbol` survives only on a declaration initialized by
+			// `Symbol()`; anywhere else it widens to `symbol`.
+			if (someMember(inferredType, TypeFlags.UniqueESSymbol)) {
+				return;
 			}
 
 			if (containsAny(inferredType)) {
@@ -1375,9 +1533,14 @@ function create(
 				return;
 			}
 
-			// Last, as it walks the whole initializer: the parameter check owns
-			// an annotation that anchors a parameter's context.
-			if (anchorsAnnotatedParameter(node, node.init)) {
+			// Last, as these walk the whole initializer. The parameter check owns
+			// an annotation that anchors a parameter's context, and an
+			// initializer that refers back to the variable needs its annotation
+			// to break the cycle.
+			if (
+				anchorsAnnotatedParameter(node, node.init) ||
+				referencesAnnotatedVariable(node, node.init)
+			) {
 				return;
 			}
 
