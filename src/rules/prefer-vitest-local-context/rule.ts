@@ -228,7 +228,7 @@ function variableFromIdentifier(
 	identifier: TSESTree.Identifier,
 	sourceCode: Readonly<TSESLint.SourceCode>,
 ): null | ScopeVariable {
-	return findVariable(sourceCode.getScope(identifier), identifier);
+	return findVariable(sourceCode.getScope(identifier), identifier.name);
 }
 
 function isExtendedTestVariable(

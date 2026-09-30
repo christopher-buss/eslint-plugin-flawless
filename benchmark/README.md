@@ -13,11 +13,14 @@ Two passes share one `config.ts`:
   adapter can be included for identical-fixture comparisons.
 - **Every other rule** gets one coarse run — enough to catch a gross regression,
   not to attribute cost to a code path.
+- **Every rule** also gets a growth check (`scaling.ts`) that fails on
+  super-linear (e.g. O(n²)) rule time, which a fixed-size fixture cannot show.
 
 ## Running
 
 ```sh
-pnpm bench   # `prebench` builds first; see below for why that matters
+pnpm bench           # `prebench` builds first; see below for why that matters
+pnpm bench:scaling   # growth check; also builds first
 ```
 
 `pnpm bench` runs `prebench` (`nr build`) first, and that is not optional.
@@ -57,6 +60,29 @@ cannot run them (revisit if the tool changes):
   extensions are absent from the tool's `SUPPORTED_EXTENSIONS` (js/ts/jsx/tsx,
   plus astro/svelte/vue).
 
+## Growth check
+
+`scaling.ts` repeats each fixture 2 and 128 times in one file (imports hoisted
+once, so it models one module growing) and measures only the rule's own time
+via ESLint `stats`, excluding parse. It reports growth: per-copy time at x128
+over per-copy time at x2. A linear rule stays near 1 (up to ~5 from GC and
+repeated top-level bindings); an O(n²) rule approaches 64. Over 8 fails, after
+one re-measure to absorb a noisy runner. Rules on the `COARSE` manifest
+(`coarse.ts`) are checked, plus `arrow-return-style` (`useOxfmt:false`) and
+`no-floating-point-equality` on their realistic fixtures.
+
+Unlike wall-clock medians, growth is a ratio on the same machine, so runner
+speed cancels out and CI can gate on it.
+
+The usual cause is a per-node scan of something that grows with the file:
+
+- `findVariable(scope, node)` from `@typescript-eslint/utils`/eslint-utils
+  calls `getInnermostScope`, which walks every child scope linearly — module
+  scope has one per top-level function or callback. When `scope` came from
+  `sourceCode.getScope(node)` it is already innermost, so pass `node.name`.
+- Regexes over `sourceCode.text`, or walks of `ast.body` / `scope.through`,
+  per reported node. Compute once per file and cache.
+
 ## CI
 
 `.github/workflows/benchmark.yaml` runs on PRs that touch `src/`, `benchmark/`,
@@ -76,6 +102,8 @@ narrows the same way; unset runs everything. The **timings are informational** �
 runners are too noisy for absolute wall-clock times to gate a merge, so the job
 never fails on a slowdown. It does fail on the coverage gate above (a rule with
 no fixture), which is intended: that is a config error to fix, not a measurement.
+It also runs the growth check on the same affected rules, which does gate: a
+super-linear rule fails the job.
 Reading it: eyeball the comment on rule-touching PRs; for the arrow rows watch
 the `useOxfmt:true` cache-miss row and its multiple over the pure row, not the
 raw millisecond count. Posting the comment needs repo Actions settings to allow

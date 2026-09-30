@@ -48,6 +48,6 @@ function isGlobalReflect(
 		return false;
 	}
 
-	const variable = findVariable(sourceCode.getScope(expression), expression);
+	const variable = findVariable(sourceCode.getScope(expression), expression.name);
 	return variable === null || variable.defs.length === 0;
 }

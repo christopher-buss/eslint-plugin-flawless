@@ -126,6 +126,8 @@ function getIndentation(sourceCode: Readonly<TSESLint.SourceCode>, line: number)
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let sourceCode: Readonly<TSESLint.SourceCode>;
 	let sources: ReadonlySet<string>;
+	// Unresolved globals this file assigns, built on first need.
+	let writtenGlobals: ReadonlySet<string> | undefined;
 
 	/**
 	 * Finds the hoisted `vi.mock()` / `vi.hoisted()` factory a node sits in. The
@@ -207,15 +209,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		implementation: Implementation,
 		call: TSESTree.CallExpression,
 	): boolean {
-		const variable = findVariable(sourceCode.getScope(identifier), identifier);
+		const variable = findVariable(sourceCode.getScope(identifier), identifier.name);
 		if (variable === null) {
 			// An unresolved global, unless something in this file assigns it.
-			return !sourceCode
-				.getScope(sourceCode.ast)
-				.through.some(
-					(reference) =>
-						reference.identifier.name === identifier.name && reference.isWrite(),
-				);
+			writtenGlobals ??= new Set(
+				sourceCode
+					.getScope(sourceCode.ast)
+					.through.filter((reference) => reference.isWrite())
+					.map((reference) => reference.identifier.name),
+			);
+			return !writtenGlobals.has(identifier.name);
 		}
 
 		const isReassigned = variable.references.some((reference) => {
@@ -390,6 +393,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		before(): void {
 			({ sourceCode } = context);
 			sources = getTestGlobalSources(context.settings);
+			writtenGlobals = undefined;
 		},
 		CallExpression(node: TSESTree.CallExpression): void {
 			const { arguments: callArguments, callee } = node;

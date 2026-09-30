@@ -59,7 +59,7 @@ export function resolveTestGlobalName(
 	identifier: TSESTree.Identifier,
 	sources: ReadonlySet<string>,
 ): null | string {
-	const variable = findVariable(sourceCode.getScope(identifier), identifier);
+	const variable = findVariable(sourceCode.getScope(identifier), identifier.name);
 	if (variable === null) {
 		return identifier.name;
 	}
@@ -108,7 +108,7 @@ export function resolveImportedTestGlobalName(
 	identifier: TSESTree.Identifier,
 	sources: ReadonlySet<string>,
 ): null | string {
-	const variable = findVariable(sourceCode.getScope(identifier), identifier);
+	const variable = findVariable(sourceCode.getScope(identifier), identifier.name);
 	if (variable?.defs.at(0) === undefined) {
 		return null;
 	}

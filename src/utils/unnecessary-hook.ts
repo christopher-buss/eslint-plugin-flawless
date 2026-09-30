@@ -165,13 +165,32 @@ function findEnclosingEffect(node: TSESTree.Node): null | TSESTree.Node {
  * @returns A report descriptor, or `null` when the case does not apply.
  * @template MessageIds - The rule's message identifiers.
  */
+const effectHookMentions = new WeakMap<Readonly<TSESLint.SourceCode>, boolean>();
+
+/**
+ * Whether the file text mentions an effect hook, memoized per file so the
+ * full-text scan runs once rather than once per hook call.
+ *
+ * @param sourceCode - The file to scan.
+ * @returns `true` when the text contains a `use*Effect` identifier.
+ */
+function mentionsEffectHook(sourceCode: Readonly<TSESLint.SourceCode>): boolean {
+	let mentions = effectHookMentions.get(sourceCode);
+	if (mentions === undefined) {
+		mentions = /use\w*Effect/u.test(sourceCode.text);
+		effectHookMentions.set(sourceCode, mentions);
+	}
+
+	return mentions;
+}
+
 function checkForUsageInsideUseEffect<MessageIds extends string>(
 	sourceCode: Readonly<TSESLint.SourceCode>,
 	node: TSESTree.CallExpression,
 	messageId: MessageIds,
 ): HookReport<MessageIds> | null {
 	// Fast path: bail unless the file mentions an effect hook at all.
-	if (!/use\w*Effect/u.test(sourceCode.text)) {
+	if (!mentionsEffectHook(sourceCode)) {
 		return null;
 	}
 

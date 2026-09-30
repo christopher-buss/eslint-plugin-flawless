@@ -70,3 +70,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         name: Benchmark rules
         run: nr bench
+
+      # Fails on super-linear rule time (see benchmark/README.md). Unlike the
+      # timings above this gates: growth is a same-machine ratio, so runner
+      # speed cancels out.
+      - env:
+          BENCH_RULES: ${{ steps.affected.outputs.rules }}
+        name: Check rule-time growth
+        run: nr bench:scaling
