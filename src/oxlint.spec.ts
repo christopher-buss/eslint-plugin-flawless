@@ -213,6 +213,23 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.message).toContain("'shared'");
 	});
 
+	// Covers `getCommentsInside`, `getDeclaredVariables`, and reference
+	// resolution under oxlint: `error` is a stable `const`, `later` is read
+	// before its declaration, and the comment must survive the fix.
+	it("prefer-mock-throw fixes a stable thrown value and keeps comments", () => {
+		const { diagnostics, fixed } = runOxlintFix({
+			code: 'const error = new Error("boom");\nmock.mockImplementation(() => { /* why */ throw error; });\nmock.mockImplementation(() => { throw later; });\nconst later = new Error("later");\n',
+			filename: "file.ts",
+			rule: "prefer-mock-throw",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(prefer-mock-throw)");
+		expect(diagnostics[0]?.message).toContain("`mockThrow`");
+		expect(fixed).toContain("mock.mockThrow(/* why */ error);");
+		expect(fixed).toContain("mock.mockImplementation(() => { throw later; });");
+	});
+
 	it("no-shared-test-state reports shared state but not a test-local binding", () => {
 		// Leans on scope `through` references under oxlint's runtime: `shared`
 		// passes through the test's scope, `local` resolves inside it.

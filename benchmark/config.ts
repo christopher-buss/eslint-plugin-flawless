@@ -187,6 +187,7 @@ const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string
 		ruleId: "prefer-expect-assertions-count",
 		testPath: "./cases/all/prefer-expect-assertions-count.tsx",
 	},
+	{ ruleId: "prefer-mock-throw", testPath: "./cases/all/prefer-mock-throw.tsx" },
 	{
 		ruleId: "prefer-parameter-destructuring",
 		testPath: "./cases/all/prefer-parameter-destructuring.tsx",
