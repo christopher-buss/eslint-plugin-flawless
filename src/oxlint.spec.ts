@@ -330,6 +330,41 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics).toHaveLength(1);
 	});
 
+	it("no-em-dash reports prose once per sentence and skips code", () => {
+		const { diagnostics } = runOxlint({
+			code: [
+				"// One — two — three. Four — five.",
+				"/** Block — comment. */",
+				'export const s = "a — b";',
+				// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
+				"export const t = `c — ${s} d — e`;",
+				'export const el = <p title="f — g">h — i</p>;',
+				"export const pattern = /j—k/u;",
+				"",
+			].join("\n"),
+			filename: "file.tsx",
+			rule: "no-em-dash",
+		});
+
+		// Two sentences in the line comment, then one each for the block
+		// comment, string, both template quasis, JSX attribute, and JSX text.
+		expect(diagnostics).toHaveLength(8);
+		expect(diagnostics[0]?.code).toBe("flawless(no-em-dash)");
+	});
+
+	it("no-em-dash reads a CRLF template from source", () => {
+		// The raw value normalizes CRLF; a span taken from its length would
+		// end one character early per line break and miss the trailing dash.
+		const { diagnostics } = runOxlint({
+			code: "export const t = `first\r\nsecond\r\nthird —`;\r\n",
+			filename: "file.ts",
+			rule: "no-em-dash",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-em-dash)");
+	});
+
 	it("no-conditional-empty-object-spread reports a conditional empty-object spread", () => {
 		const { diagnostics } = runOxlint({
 			code: "const options = { ...(timeout !== undefined ? { timeout } : {}) };\n",

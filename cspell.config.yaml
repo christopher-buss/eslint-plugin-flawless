@@ -5,6 +5,9 @@ version: "0.2"
 language: en
 
 words:
+  - autolink
+  - autolinks
+  - commonmark
   - fixpoint
   - oxlint
   - oxlintrc

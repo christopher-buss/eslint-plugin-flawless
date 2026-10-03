@@ -24,6 +24,7 @@ export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath:
 		ruleId: "no-conditional-in-test",
 		testPath: "./cases/all/no-conditional-in-test.tsx",
 	},
+	{ ruleId: "no-em-dash", testPath: "./cases/all/no-em-dash.tsx" },
 	{ ruleId: "no-export-default-arrow", testPath: "./cases/all/no-export-default-arrow.tsx" },
 	{
 		ruleId: "no-known-value-widening",
