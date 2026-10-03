@@ -35,6 +35,7 @@ export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath:
 	{ ruleId: "no-shape-in-symbol-names", testPath: "./cases/all/no-shape-in-symbol-names.tsx" },
 	{ ruleId: "no-shared-mocks", testPath: "./cases/all/no-shared-mocks.tsx" },
 	{ ruleId: "no-shared-test-state", testPath: "./cases/all/no-shared-test-state.tsx" },
+	{ ruleId: "no-trivial-functions", testPath: "./cases/all/no-trivial-functions.tsx" },
 	{ ruleId: "no-unknown-parameters", testPath: "./cases/all/no-unknown-parameters.tsx" },
 	{
 		ruleId: "no-unnecessary-use-callback",
