@@ -1,5 +1,4 @@
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
-import path from "node:path";
 
 import { run } from "../test";
 import { noTrivialFunctions, RULE_NAME } from "./rule";
@@ -58,16 +57,6 @@ const valid: Array<ValidTestCase> = [
 	// Reassigned, so no longer provably the trivial function.
 	"let getName = (user) => user.name\ngetName = other\ngetName(a)",
 	"let getName = (user) => user.name\ngetName(a)\ngetName = other",
-	// In a script, top-level declarations are globals.
-	{
-		code: "function getName(user) { return user.name }",
-		parserOptions: {
-			ecmaVersion: "latest",
-			project: path.resolve(__dirname, "../../../fixtures/tsconfig.json"),
-			sourceType: "script",
-			tsconfigRootDir: path.resolve(__dirname, "../../../fixtures"),
-		},
-	},
 	// Non-static callee forms.
 	"const call = (value) => this.format(value)",
 	"const call = (value) => factory()(value)",
@@ -231,4 +220,14 @@ run({
 	invalid,
 	rule: noTrivialFunctions,
 	valid,
+});
+
+// In a script, top-level declarations are globals. No type info: a TS
+// project would lint the on-disk fixture instead of this code.
+run({
+	name: `${RULE_NAME} (script)`,
+	invalid: [],
+	parserOptions: { ecmaVersion: "latest", sourceType: "script" },
+	rule: noTrivialFunctions,
+	valid: [{ code: "function getName(user) { return user.name }", filename: "script.js" }],
 });
