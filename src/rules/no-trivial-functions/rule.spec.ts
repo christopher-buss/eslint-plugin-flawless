@@ -1,4 +1,5 @@
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import path from "node:path";
 
 import { run } from "../test";
 import { noTrivialFunctions, RULE_NAME } from "./rule";
@@ -60,7 +61,12 @@ const valid: Array<ValidTestCase> = [
 	// In a script, top-level declarations are globals.
 	{
 		code: "function getName(user) { return user.name }",
-		parserOptions: { ecmaVersion: "latest", sourceType: "script" },
+		parserOptions: {
+			ecmaVersion: "latest",
+			project: path.resolve(__dirname, "../../../fixtures/tsconfig.json"),
+			sourceType: "script",
+			tsconfigRootDir: path.resolve(__dirname, "../../../fixtures"),
+		},
 	},
 	// Non-static callee forms.
 	"const call = (value) => this.format(value)",
