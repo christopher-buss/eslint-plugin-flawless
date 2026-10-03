@@ -459,18 +459,20 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[2]?.message).toContain("The name alone exempts nothing");
 	});
 
-	// Counting reads `getDeclaredVariables` and each reference's
-	// `isValueReference`/`init` flags, so this covers that scope API under
-	// oxlint. The `typeof` query and the recursive call must not count.
-	it("no-trivial-functions counts only external value references", () => {
+	// Counting reads the module scope's `set` and each reference's
+	// `isValueReference`/`init`/`isWrite()`, so this covers that scope API under
+	// oxlint. The `typeof` query and the recursive call must not count. The
+	// import matters: oxlint treats a file without ESM syntax as a script, which
+	// the rule skips.
+	it("no-trivial-functions counts only external calls", () => {
 		const { diagnostics } = runOxlint({
-			code: "const forward = (value: number): number => forward(value);\ntype Forward = typeof forward;\nconst getName = (user: { name: string }) => user.name;\nfor (const user of users) {\n\tgetName(user); getName(user); getName(user); getName(user); getName(user);\n}\n",
+			code: 'import { users } from "./users";\nconst forward = (value: number): number => forward(value);\ntype Forward = typeof forward;\nconst getName = (user: { name: string }) => user.name;\nfor (const user of users) {\n\tgetName(user); getName(user); getName(user); getName(user); getName(user);\n}\n',
 			filename: "file.ts",
 			rule: "no-trivial-functions",
 		});
 
 		expect(diagnostics).toHaveLength(1);
 		expect(diagnostics[0]?.code).toBe("flawless(no-trivial-functions)");
-		expect(diagnostics[0]?.message).toContain("'forward' has 0 external reference(s)");
+		expect(diagnostics[0]?.message).toContain("'forward' has 0 external call(s)");
 	});
 });

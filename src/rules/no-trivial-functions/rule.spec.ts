@@ -31,16 +31,46 @@ const valid: Array<ValidTestCase> = [
 		const getName = user => user.name
 		getName(a); getName(b); getName(c); getName(d); getName(e)
 	`,
-	// Assertions keep a reference a value reference.
+	// Calls through assertions count towards the threshold.
 	{
 		code: unindent`
 			const getName = user => user.name
-			use(getName as unknown)
-			use(getName!)
-			use(<unknown>getName)
+			;(getName as Fn)(a)
+			getName!(b)
+			;(<Fn>getName)(c)
 		`,
 		options: [{ minimumReferences: 3 }],
 	},
+	// Passed as a value: inlining would change arity, `this`, or identity.
+	"const toInt = (value) => parseInt(value)\nvalues.map(toInt)",
+	"const getName = (user) => user.name\nuse(getName as unknown)",
+	"const getName = (user) => user.name\nuse(getName!)",
+	// Other export forms make the name public.
+	"const getName = (user) => user.name\nexport = getName",
+	"const getName = (user) => user.name\nmodule.exports = getName",
+	"const getName = (user) => user.name\nmodule.exports.getName = getName",
+	"const getName = (user) => user.name\nexports.getName = getName",
+	"const getName = (user) => user.name\nexport default getName as Fn",
+	"const getName = (user) => user.name\nexport default memo(getName)",
+	"const getName = (user) => user.name\nexport const api = { getName }",
+	"const getName = (user) => user.name\nexport const name = getName(user)",
+	// Reassigned, so no longer provably the trivial function.
+	"let getName = (user) => user.name\ngetName = other\ngetName(a)",
+	"let getName = (user) => user.name\ngetName(a)\ngetName = other",
+	// In a script, top-level declarations are globals.
+	{
+		code: "function getName(user) { return user.name }",
+		parserOptions: { ecmaVersion: "latest", sourceType: "script" },
+	},
+	// Non-static callee forms.
+	"const call = (value) => this.format(value)",
+	"const call = (value) => factory()(value)",
+	"const call = (value) => table[kind](value)",
+	"const call = (value) => table['format'](value)",
+	// Computed keys with side effects or non-parameter keys.
+	"const at = (list) => list[computeIndex(list)]",
+	"const at = (list) => list[counter++]",
+	"const at = (list) => list[key]",
 	// Transformations or added behaviour.
 	unindent`
 		const create = user => ({ name: user.name })
@@ -124,14 +154,30 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [{ data: { name: "forward", count: 0, minimum: 5 }, messageId }],
 	},
-	// `as` and non-null expressions count as value references.
+	// Calls through `as`, `!`, and angle-bracket assertions count.
 	{
 		code: unindent`
 			const getName = user => user.name
-			use(getName as unknown)
-			use(getName!)
+			;(getName as Fn)(a)
+			getName!(b)
+			;(<Fn>getName)(c)
 		`,
-		errors: [{ data: { name: "getName", count: 2, minimum: 5 }, messageId }],
+		errors: [{ data: { name: "getName", count: 3, minimum: 5 }, messageId }],
+	},
+	// The TS `this` parameter is not part of the forwarded arity.
+	{
+		code: "function read(this: Ctx, value) { return parseValue(value) }",
+		errors: [{ messageId }],
+	},
+	// A literal computed key, and a member-chain callee.
+	{
+		code: "const first = (list) => list[0]\nconst fmt = (v) => utils.text.format(v)",
+		errors: [{ messageId }, { messageId }],
+	},
+	// An unrelated `exports` identifier on the left is not an export.
+	{
+		code: "const getName = (user) => user.name\nother.exports = getName(a)",
+		errors: [{ messageId }],
 	},
 	// Rest parameters forwarded as a spread.
 	{

@@ -10,28 +10,36 @@ or read a parameter's property.
 
 A top-level function that only reads a parameter's property, or only forwards
 its parameters to another call, adds a name and an indirection without adding
-behaviour. When it is used in just a few places, inlining it is clearer. This
-rule reports such functions when they have fewer external value references than
+behaviour. When it is called in just a few places, inlining it is clearer. This
+rule reports such functions when they have fewer external calls than
 `minimumReferences` (default `5`).
 
 A function is trivial when it is not `async` or a generator, every parameter is
-a plain identifier (a rest identifier is allowed), and its body — a concise
-arrow body, or a block holding a single `return` or expression statement — is
-one of:
+a plain identifier (a rest identifier is allowed; a TypeScript `this` parameter
+is ignored), and its body — a concise arrow body, or a block holding a single
+`return` or expression statement — is one of:
 
 - a non-optional member access rooted at a non-rest parameter, such as
-  `user.profile.name` or `list[index]`;
+  `user.profile.name`, `list[0]`, or `list[index]`; a computed key must be a
+  literal or a parameter;
 - a non-optional call passing exactly the parameters in order, with a rest
-  parameter spread back out, such as `format(value, ...rest)`.
+  parameter spread back out, such as `format(value, ...rest)`; the callee must
+  be a name or a non-computed member chain rooted at a name.
 
 Only top-level function declarations and function-valued `const`/`let`/`var`
-declarators are checked. A function is never reported when its name is exported
-— directly (`export function`, `export const`), through a later
-`export { name }`, or as `export default name`. Type-only exports and re-exports
-from another module do not count as exports.
+declarators in ES modules are checked; in a script, top-level declarations are
+globals. (Under oxlint, a file with no `import` or `export` is a script.) The
+rule reports only when inlining is provably safe, so a function is skipped when:
+
+- it is exported: directly (`export function`, `export const`), or referenced
+  anywhere inside an `export` statement, `export =`, or a `module.exports` /
+  `exports.x` assignment (type-only exports and re-exports do not count);
+- it is reassigned;
+- any reference is not a direct call, such as `values.map(toInt)`, because
+  inlining would change arity, `this`, or identity.
 
 References inside the function itself (recursion) and `typeof` type queries do
-not count. Uses wrapped in `as`, `!`, or angle-bracket assertions do count.
+not count. Calls through `as`, `!`, or angle-bracket assertions do count.
 
 ## Examples
 
