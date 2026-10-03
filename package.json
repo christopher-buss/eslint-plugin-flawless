@@ -63,6 +63,7 @@
 	},
 	"devDependencies": {
 		"@antfu/ni": "catalog:cli",
+		"@eslint/markdown": "catalog:testing",
 		"@isentinel/eslint-config": "catalog:cli",
 		"@isentinel/tsconfig": "catalog:types",
 		"@types/node": "catalog:types",

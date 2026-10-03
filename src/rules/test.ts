@@ -1,3 +1,4 @@
+import markdown from "@eslint/markdown";
 import tsParser from "@typescript-eslint/parser";
 
 import type { RuleTesterInitOptions, TestCasesOptions } from "eslint-vitest-rule-tester";
@@ -27,6 +28,17 @@ export function runJsonc(options: RuleTesterInitOptions & TestCasesOptions): voi
 			parser: jsoncParser,
 		},
 		...options,
+	});
+}
+
+export function runMarkdown({
+	language = "markdown/commonmark",
+	...rest
+}: RuleTesterInitOptions & TestCasesOptions & { language?: string }): void {
+	void runInternal({
+		configs: { language, plugins: { markdown } },
+		defaultFilenames: { js: "file.md", jsx: "file.md", ts: "file.md", tsx: "file.md" },
+		...rest,
 	});
 }
 
