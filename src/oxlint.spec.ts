@@ -330,6 +330,17 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics).toHaveLength(1);
 	});
 
+	it("no-em-dash reports once per sentence", () => {
+		const { diagnostics } = runOxlint({
+			code: '// One — two — three. Four — five.\nexport const s = "a — b";\n',
+			filename: "file.ts",
+			rule: "no-em-dash",
+		});
+
+		expect(diagnostics).toHaveLength(3);
+		expect(diagnostics[0]?.code).toBe("flawless(no-em-dash)");
+	});
+
 	it("no-conditional-empty-object-spread reports a conditional empty-object spread", () => {
 		const { diagnostics } = runOxlint({
 			code: "const options = { ...(timeout !== undefined ? { timeout } : {}) };\n",
