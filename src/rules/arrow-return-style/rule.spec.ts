@@ -1053,7 +1053,7 @@ function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
 		{
 			files: ["**/*.tsx"],
 			languageOptions: {
-				parser: tsParser as unknown as Linter.Parser,
+				parser: tsParser,
 				parserOptions: {
 					ecmaFeatures: { jsx: true },
 					ecmaVersion: "latest",

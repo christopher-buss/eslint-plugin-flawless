@@ -42,7 +42,64 @@ import { reactNamespace } from "./rules/react-namespace/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
 
-export const PLUGIN_NAME = packageName.replace(/^eslint-plugin-/, "");
+export const PLUGIN_NAME: string = packageName.replace(/^eslint-plugin-/, "");
+
+/** The rule modules the plugin exposes, keyed by rule name. */
+// A type alias, not an interface: `getRules` and `satisfies` need the implicit
+// index signature that only type aliases get.
+// eslint-disable-next-line ts/consistent-type-definitions -- see above
+export type PluginRules = {
+	"arrow-return-style": typeof arrowReturnStyle;
+	"jsx-shorthand-boolean": typeof jsxShorthandBoolean;
+	"jsx-shorthand-fragment": typeof jsxShorthandFragment;
+	"max-lines-per-function": typeof maxLinesPerFunction;
+	"naming-convention": typeof namingConvention;
+	"no-conditional-empty-object-spread": typeof noConditionalEmptyObjectSpread;
+	"no-conditional-in-test": typeof noConditionalInTest;
+	"no-em-dash": typeof noEmDash;
+	"no-export-default-arrow": typeof noExportDefaultArrow;
+	"no-floating-point-equality": typeof noFloatingPointEquality;
+	"no-known-value-widening": typeof noKnownValueWidening;
+	"no-materialized-filter-map": typeof noMaterializedFilterMap;
+	"no-object-parameters": typeof noObjectParameters;
+	"no-redundant-tsconfig-options": typeof noRedundantTsconfigOptions;
+	"no-redundant-type-annotation": typeof noRedundantTypeAnnotation;
+	"no-reflect-get": typeof noReflectGet;
+	"no-reflect-set": typeof noReflectSet;
+	"no-shape-in-symbol-names": typeof noShapeInSymbolNames;
+	"no-shared-mocks": typeof noSharedMocks;
+	"no-shared-test-state": typeof noSharedTestState;
+	"no-trivial-functions": typeof noTrivialFunctions;
+	"no-unknown-parameters": typeof noUnknownParameters;
+	"no-unknown-returns": typeof noUnknownReturns;
+	"no-unnecessary-use-callback": typeof noUnnecessaryUseCallback;
+	"no-unnecessary-use-memo": typeof noUnnecessaryUseMemo;
+	"no-unsafe-dictionary-type": typeof noUnsafeDictionaryType;
+	"padding-after-expect-assertions": typeof paddingAfterExpectAssertions;
+	"prefer-destructuring-assignment": typeof preferDestructuringAssignment;
+	"prefer-ending-with-an-expect": typeof preferEndingWithAnExpect;
+	"prefer-expect-assertions-count": typeof preferExpectAssertionsCount;
+	"prefer-mock-throw": typeof preferMockThrow;
+	"prefer-parameter-destructuring": typeof preferParameterDestructuring;
+	"prefer-read-only-props": typeof preferReadOnlyProps;
+	"prefer-vitest-local-context": typeof preferVitestLocalContext;
+	"purity": typeof purity;
+	"react-namespace": typeof reactNamespace;
+	"toml-sort-keys": typeof tomlSortKeys;
+	"yaml-block-key-blank-lines": typeof yamlBlockKeyBlankLines;
+};
+
+/** The ESLint plugin object: metadata plus every rule. */
+// A type alias, not an interface: `getRules` and `satisfies` need the implicit
+// index signature that only type aliases get.
+// eslint-disable-next-line ts/consistent-type-definitions -- see above
+export type FlawlessPlugin = {
+	meta: {
+		name: string;
+		version: string;
+	};
+	rules: PluginRules;
+};
 
 /**
  * Generates a rules record where all plugin rules are set to "error".
@@ -60,7 +117,7 @@ export function getRules(
 	);
 }
 
-export const plugin = {
+export const plugin: FlawlessPlugin = {
 	meta: {
 		name: PLUGIN_NAME,
 		version: packageVersion,
@@ -107,4 +164,4 @@ export const plugin = {
 	},
 } satisfies TSESLint.FlatConfig.Plugin;
 
-export const allRules = getRules(PLUGIN_NAME, plugin.rules);
+export const allRules: Linter.RulesRecord = getRules(PLUGIN_NAME, plugin.rules);

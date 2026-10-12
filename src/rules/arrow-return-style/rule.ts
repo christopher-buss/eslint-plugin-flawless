@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSyncFn } from "synckit";
 
-import type { FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import type { FormatRequest, FormatResponse } from "./worker";
 
@@ -289,7 +289,10 @@ function collectArrows(root: TSESTree.Node): Array<TSESTree.ArrowFunctionExpress
 	return arrows.sort((a, b) => a.range[0] - b.range[0]);
 }
 
-export const arrowReturnStyle = createFlawlessRule<Options, MessageIds>({
+export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce(context: Context): FlawlessRuleListener {
 		let config: Config = DEFAULTS;

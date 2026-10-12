@@ -4,6 +4,7 @@ import type { TOMLSourceCode } from "eslint-plugin-toml";
 import type { AST } from "toml-eslint-parser";
 import { getStaticTOMLValue } from "toml-eslint-parser";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import type { TomlContext } from "../../utils/types";
 
@@ -304,7 +305,7 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 
 		context.report({
 			data: { target: path === "" ? "top-level tables" : `keys in "${path}"` },
-			fix: buildFix(entries, target),
+			fix: buildFix(entries, target) ?? null,
 			loc: outOfPlace.key.loc,
 			messageId: MESSAGE_ID,
 		});
@@ -320,7 +321,11 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 	};
 }
 
-export const tomlSortKeys = createEslintRule<Options, MessageIds, TOMLSourceCode>({
+export const tomlSortKeys: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds,
+	TOMLSourceCode
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],

@@ -1,7 +1,7 @@
 import * as core from "@eslint-react/core";
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "prefer-destructuring-assignment";
@@ -303,20 +303,21 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return listener;
 }
 
-export const preferDestructuringAssignment = createFlawlessRule<Options, MessageIds>({
-	name: RULE_NAME,
-	createOnce,
-	defaultOptions: [],
-	meta: {
-		docs: {
-			description: "Enforce destructuring assignment for component props",
-			recommended: false,
-			requiresTypeChecking: false,
+export const preferDestructuringAssignment: FlawlessRuleModule<Options, MessageIds> =
+	createFlawlessRule<Options, MessageIds>({
+		name: RULE_NAME,
+		createOnce,
+		defaultOptions: [],
+		meta: {
+			docs: {
+				description: "Enforce destructuring assignment for component props",
+				recommended: false,
+				requiresTypeChecking: false,
+			},
+			fixable: "code",
+			hasSuggestions: false,
+			messages,
+			schema: [],
+			type: "problem",
 		},
-		fixable: "code",
-		hasSuggestions: false,
-		messages,
-		schema: [],
-		type: "problem",
-	},
-});
+	});

@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { parameterAnnotation, parameterName } from "../shared/function-parameters";
 import { lookupAlias } from "../shared/type-bindings";
@@ -184,7 +184,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noObjectParameters = createFlawlessRule<Options, MessageIds>({
+export const noObjectParameters: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -194,7 +197,6 @@ export const noObjectParameters = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

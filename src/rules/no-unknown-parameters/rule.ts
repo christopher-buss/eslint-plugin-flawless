@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ASTUtils, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import {
 	containsUnknownType,
@@ -409,7 +409,10 @@ function createOnce(context: Context): FlawlessRuleListener {
 	};
 }
 
-export const noUnknownParameters = createFlawlessRule<Options, MessageIds>({
+export const noUnknownParameters: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -420,7 +423,6 @@ export const noUnknownParameters = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

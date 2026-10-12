@@ -1,6 +1,8 @@
 import type { Linter } from "eslint";
 
+import type { FlawlessConfigs } from "./configs";
 import { configs } from "./configs";
+import type { FlawlessPlugin } from "./plugin";
 import { plugin } from "./plugin";
 
 export type {
@@ -9,10 +11,12 @@ export type {
 	TypeReference,
 } from "./rules/naming-convention/utils";
 
-export default {
+const flawless: FlawlessPlugin & { configs: FlawlessConfigs } = {
 	...plugin,
 	configs,
 };
+
+export default flawless;
 
 export type RuleOptions = {
 	[K in keyof RuleDefinitions]: NonNullable<RuleDefinitions[K]["defaultOptions"]>;

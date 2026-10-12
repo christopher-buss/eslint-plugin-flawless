@@ -140,7 +140,7 @@ describe("yaml language mode (Languages API)", () => {
 		plugins: {
 			flawless: plugin,
 			yaml: yml,
-		} as unknown as Linter.Config["plugins"],
+		} as unknown as NonNullable<Linter.Config["plugins"]>,
 		rules: {
 			"flawless/yaml-block-key-blank-lines": "error",
 		},

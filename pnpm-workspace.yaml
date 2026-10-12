@@ -5,6 +5,7 @@ ignoreWorkspaceRootCheck: true
 
 minimumReleaseAgeExclude:
   - eslint-plugin-eslint-plugin@7.4.1
+  - "@isentinel/tsconfig@3.0.0"
 
 shellEmulator: true
 
@@ -61,7 +62,7 @@ catalogs:
     vitest: 4.1.9
     yaml-eslint-parser: 2.0.0
   types:
-    "@isentinel/tsconfig": 1.2.0
+    "@isentinel/tsconfig": 3.0.0
     "@types/node": 24.0.13
   utils:
     eslint-doc-generator: 3.6.0
