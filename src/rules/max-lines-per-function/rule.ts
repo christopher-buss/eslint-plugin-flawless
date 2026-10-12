@@ -5,7 +5,7 @@ import {
 	type TSESTree,
 } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import type { FunctionNode } from "./core-ast-utils";
 import { getFunctionHeadLoc, getFunctionNameWithKind, upperCaseFirst } from "./core-ast-utils";
@@ -298,7 +298,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const maxLinesPerFunction = createFlawlessRule<Options, MessageIds>({
+export const maxLinesPerFunction: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [DEFAULTS],

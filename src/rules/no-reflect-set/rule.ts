@@ -8,7 +8,7 @@ import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import type { Type } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { isGlobalReflectMethodCall } from "../shared/reflect-method";
 
@@ -127,7 +127,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noReflectSet = createFlawlessRule<Options, MessageIds>({
+export const noReflectSet: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -138,7 +141,6 @@ export const noReflectSet = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: true,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

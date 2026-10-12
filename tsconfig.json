@@ -1,4 +1,12 @@
 {
 	"extends": "@isentinel/tsconfig/typescript",
-	"exclude": ["./fixtures/**/*.*", "./_fixtures/**/*.*", "./benchmark/**/*.*"]
+	"include": ["**/*/*.*"],
+	"exclude": [
+		"./node_modules",
+		"./**/.*/",
+		"./dts-check/**/*.*",
+		"./fixtures/**/*.*",
+		"./_fixtures/**/*.*",
+		"./benchmark/**/*.*"
+	]
 }

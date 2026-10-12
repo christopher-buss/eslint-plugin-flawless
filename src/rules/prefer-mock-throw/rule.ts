@@ -7,7 +7,7 @@ import {
 } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 import { unwrapAssertedExpression } from "../shared/dictionary-types";
@@ -449,7 +449,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const preferMockThrow = createFlawlessRule<Options, MessageIds>({
+export const preferMockThrow: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],

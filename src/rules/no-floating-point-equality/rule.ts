@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { getTestGlobalSources } from "../../utils/test-globals";
 
@@ -593,7 +593,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noFloatingPointEquality = createFlawlessRule<Options, MessageIds>({
+export const noFloatingPointEquality: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -603,7 +606,6 @@ export const noFloatingPointEquality = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

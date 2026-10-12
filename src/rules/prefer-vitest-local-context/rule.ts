@@ -7,7 +7,7 @@ import {
 } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "prefer-vitest-local-context";
@@ -1537,7 +1537,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const preferVitestLocalContext = createFlawlessRule<Options, MessageIds>({
+export const preferVitestLocalContext: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [{}],

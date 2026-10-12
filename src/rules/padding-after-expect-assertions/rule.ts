@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 
@@ -184,21 +184,22 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const paddingAfterExpectAssertions = createFlawlessRule<Options, MessageIds>({
-	name: RULE_NAME,
-	createOnce,
-	defaultOptions: [],
-	meta: {
-		docs: {
-			description:
-				"Enforce a blank line after `expect.assertions` and `expect.hasAssertions`",
-			recommended: false,
-			requiresTypeChecking: false,
+export const paddingAfterExpectAssertions: FlawlessRuleModule<Options, MessageIds> =
+	createFlawlessRule<Options, MessageIds>({
+		name: RULE_NAME,
+		createOnce,
+		defaultOptions: [],
+		meta: {
+			docs: {
+				description:
+					"Enforce a blank line after `expect.assertions` and `expect.hasAssertions`",
+				recommended: false,
+				requiresTypeChecking: false,
+			},
+			fixable: "whitespace",
+			hasSuggestions: false,
+			messages,
+			schema: [],
+			type: "layout",
 		},
-		fixable: "whitespace",
-		hasSuggestions: false,
-		messages,
-		schema: [],
-		type: "layout",
-	},
-});
+	});

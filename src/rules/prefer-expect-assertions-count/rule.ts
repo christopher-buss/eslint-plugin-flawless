@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 
@@ -72,19 +72,20 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const preferExpectAssertionsCount = createFlawlessRule<Options, MessageIds>({
-	name: RULE_NAME,
-	createOnce,
-	defaultOptions: [],
-	meta: {
-		docs: {
-			description: "Prefer `expect.assertions(<count>)` over `expect.hasAssertions()`",
-			recommended: false,
-			requiresTypeChecking: false,
+export const preferExpectAssertionsCount: FlawlessRuleModule<Options, MessageIds> =
+	createFlawlessRule<Options, MessageIds>({
+		name: RULE_NAME,
+		createOnce,
+		defaultOptions: [],
+		meta: {
+			docs: {
+				description: "Prefer `expect.assertions(<count>)` over `expect.hasAssertions()`",
+				recommended: false,
+				requiresTypeChecking: false,
+			},
+			hasSuggestions: false,
+			messages,
+			schema: [],
+			type: "suggestion",
 		},
-		hasSuggestions: false,
-		messages,
-		schema: [],
-		type: "suggestion",
-	},
-});
+	});

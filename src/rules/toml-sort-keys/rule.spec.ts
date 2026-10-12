@@ -223,7 +223,7 @@ describe("toml language mode (Languages API)", () => {
 		plugins: {
 			flawless: plugin,
 			toml,
-		} as unknown as Linter.Config["plugins"],
+		} as unknown as NonNullable<Linter.Config["plugins"]>,
 		rules: {
 			"flawless/toml-sort-keys": ["error", ...options],
 		},

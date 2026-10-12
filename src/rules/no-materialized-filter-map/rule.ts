@@ -11,7 +11,7 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 import type { Program, Type, TypeChecker } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "no-materialized-filter-map";
@@ -723,7 +723,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noMaterializedFilterMap = createFlawlessRule<Options, MessageIds>({
+export const noMaterializedFilterMap: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [DEFAULTS],

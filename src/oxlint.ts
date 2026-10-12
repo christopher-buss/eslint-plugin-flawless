@@ -24,7 +24,9 @@ for (const [name, rule] of Object.entries(plugin.rules)) {
 	}
 }
 
-export default definePlugin({
+const oxlint: Plugin = definePlugin({
 	meta: { name: PLUGIN_NAME },
 	rules,
 } satisfies Plugin);
+
+export default oxlint;

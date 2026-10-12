@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "prefer-parameter-destructuring";
@@ -653,33 +653,34 @@ function createOnce(context: Context): FlawlessRuleListener {
 	};
 }
 
-export const preferParameterDestructuring = createFlawlessRule<Options, MessageIds>({
-	name: RULE_NAME,
-	createOnce,
-	defaultOptions: [{ allowSideEffectReordering: true }],
-	meta: {
+export const preferParameterDestructuring: FlawlessRuleModule<Options, MessageIds> =
+	createFlawlessRule<Options, MessageIds>({
+		name: RULE_NAME,
+		createOnce,
 		defaultOptions: [{ allowSideEffectReordering: true }],
-		docs: {
-			description: "Enforce destructuring parameters in the function signature",
-			recommended: false,
-			requiresTypeChecking: false,
-		},
-		fixable: "code",
-		hasSuggestions: false,
-		messages,
-		schema: [
-			{
-				additionalProperties: false,
-				properties: {
-					allowSideEffectReordering: {
-						description:
-							"Whether the autofix may hoist pattern defaults and computed keys past earlier statements, reordering their side effects. Set to false to withhold the fix in those cases.",
-						type: "boolean",
-					},
-				},
-				type: "object",
+		meta: {
+			defaultOptions: [{ allowSideEffectReordering: true }],
+			docs: {
+				description: "Enforce destructuring parameters in the function signature",
+				recommended: false,
+				requiresTypeChecking: false,
 			},
-		],
-		type: "suggestion",
-	},
-});
+			fixable: "code",
+			hasSuggestions: false,
+			messages,
+			schema: [
+				{
+					additionalProperties: false,
+					properties: {
+						allowSideEffectReordering: {
+							description:
+								"Whether the autofix may hoist pattern defaults and computed keys past earlier statements, reordering their side effects. Set to false to withhold the fix in those cases.",
+							type: "boolean",
+						},
+					},
+					type: "object",
+				},
+			],
+			type: "suggestion",
+		},
+	});

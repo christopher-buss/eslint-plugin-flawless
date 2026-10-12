@@ -5,6 +5,7 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type { Type, TypeNode } from "typescript";
 import { TypeFlags } from "typescript";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 
 export const RULE_NAME = "no-unknown-returns";
@@ -173,7 +174,10 @@ function create(
 	};
 }
 
-export const noUnknownReturns = createEslintRule<Options, MessageIds>({
+export const noUnknownReturns: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],
@@ -183,7 +187,6 @@ export const noUnknownReturns = createEslintRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: true,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

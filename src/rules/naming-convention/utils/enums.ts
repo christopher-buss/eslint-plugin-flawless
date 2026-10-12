@@ -129,15 +129,15 @@ export type TypeModifierType = (typeof TypeModifier)[keyof typeof TypeModifier];
 // weights for the object-form type-reference matchers in `types`; strict
 // (from + name) sorts ahead of loose (name only), and both sort ahead of the
 // built-in type modifiers above. The filter weight (1 << 30) stays highest.
-export const TYPE_REFERENCE_LOOSE_WEIGHT = 1 << 23;
-export const TYPE_REFERENCE_STRICT_WEIGHT = 1 << 24;
+export const TYPE_REFERENCE_LOOSE_WEIGHT: number = 1 << 23;
+export const TYPE_REFERENCE_STRICT_WEIGHT: number = 1 << 24;
 
 // weights for `typeArgumentOf`. A syntactic-position constraint is narrower
 // than any type match - it applies to one call site's type arguments rather
 // than to every declaration of a type - so it sorts ahead of the matchers
 // above. Strict (a `from` constraint) sorts ahead of loose (`name` only).
-export const TYPE_ARGUMENT_LOOSE_WEIGHT = 1 << 25;
-export const TYPE_ARGUMENT_STRICT_WEIGHT = 1 << 26;
+export const TYPE_ARGUMENT_LOOSE_WEIGHT: number = 1 << 25;
+export const TYPE_ARGUMENT_STRICT_WEIGHT: number = 1 << 26;
 
 export const UnderscoreOption = {
 	forbid: 1,

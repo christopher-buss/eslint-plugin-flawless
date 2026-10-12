@@ -6,6 +6,7 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import { isIdentifierPart, isIdentifierStart, ScriptTarget } from "typescript";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import { collectVariables } from "../../utils/collect-variables";
 import {
@@ -861,7 +862,10 @@ function create(
 	);
 }
 
-export const namingConvention = createEslintRule<Options, MessageIds>({
+export const namingConvention: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: camelCaseNamingConfig,
@@ -871,7 +875,6 @@ export const namingConvention = createEslintRule<Options, MessageIds>({
 			recommended: true,
 			requiresTypeChecking: true,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: SCHEMA,
