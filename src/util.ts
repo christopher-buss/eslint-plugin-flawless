@@ -9,10 +9,11 @@ export interface PluginDocumentation {
 	requiresTypeChecking: boolean;
 }
 
-const createRule = RuleCreator<PluginDocumentation>((name) => {
-	const repoUrl = repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
-	return `${repoUrl}/blob/v${version}/src/rules/${name}/documentation.md`;
-});
+const createRule: ReturnType<typeof RuleCreator<PluginDocumentation>> =
+	RuleCreator<PluginDocumentation>((name) => {
+		const repoUrl = repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+		return `${repoUrl}/blob/v${version}/src/rules/${name}/documentation.md`;
+	});
 
 /**
  * A rule context whose `sourceCode` is replaced with a custom type. YAML rules
@@ -76,6 +77,17 @@ export type FlawlessRuleModule<
 	) => FlawlessRuleListener;
 };
 
+/**
+ * An ESLint rule module created by {@link createEslintRule}.
+ *
+ * @template Options - The rule's options tuple.
+ * @template MessageIds - The rule's message identifiers.
+ */
+export type EslintRuleModule<
+	Options extends ReadonlyArray<unknown>,
+	MessageIds extends string,
+> = ReturnType<typeof createRule<Options, MessageIds>>;
+
 type BaseRule<Options extends ReadonlyArray<unknown>, MessageIds extends string> = Parameters<
 	typeof createRule<Options, MessageIds>
 >[0];
@@ -103,7 +115,7 @@ export function createEslintRule<
 			optionsWithDefault: Readonly<Options>,
 		) => TSESLint.RuleListener;
 	},
-): ReturnType<typeof createRule<Options, MessageIds>> {
+): EslintRuleModule<Options, MessageIds> {
 	return createRule(rule as BaseRule<Options, MessageIds>);
 }
 

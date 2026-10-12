@@ -34,6 +34,7 @@
 		"prebench:scaling": "nr build",
 		"bench:scaling": "tsx benchmark/scaling.ts",
 		"build": "tsdown --clean --dts",
+		"check:dts": "tsx scripts/check-dts.ts",
 		"create-rule": "tsx scripts/create-rule.ts",
 		"dev": "tsdown --stub",
 		"eslint-docs": "eslint-doc-generator",

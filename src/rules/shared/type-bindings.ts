@@ -2,7 +2,7 @@ import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
 type TypeParameterOwner = Extract<
 	TSESTree.Node,
-	{ typeParameters?: TSESTree.TSTypeParameterDeclaration }
+	{ typeParameters: TSESTree.TSTypeParameterDeclaration | undefined }
 >;
 
 /**

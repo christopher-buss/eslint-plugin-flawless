@@ -5,6 +5,7 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type { Declaration, Type } from "typescript";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import type { MutableMembers } from "./readonly-type";
 import { collectMutableProperties, isTypeFullyReadonly } from "./readonly-type";
@@ -363,7 +364,7 @@ function create(
 			context.report({
 				fix:
 					targets === undefined
-						? undefined
+						? null
 						: (fixer): Array<TSESLint.RuleFix> => {
 								return targets.map((node) =>
 									fixer.insertTextBefore(node, "readonly "),
@@ -379,7 +380,7 @@ function create(
 		context.report({
 			fix:
 				typeNode === undefined
-					? undefined
+					? null
 					: (fixer): Array<TSESLint.RuleFix> => {
 							const fixes = [
 								fixer.replaceText(
@@ -421,7 +422,10 @@ function create(
 	} satisfies TSESLint.RuleListener;
 }
 
-export const preferReadOnlyProps = createEslintRule<Options, MessageIds>({
+export const preferReadOnlyProps: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [{}],

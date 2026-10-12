@@ -1,7 +1,7 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { isGlobalReflectMethodCall } from "../shared/reflect-method";
 
@@ -55,7 +55,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noReflectGet = createFlawlessRule<Options, MessageIds>({
+export const noReflectGet: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -66,7 +69,6 @@ export const noReflectGet = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

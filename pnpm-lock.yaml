@@ -111,8 +111,8 @@ catalogs:
       version: 2.0.0
   types:
     '@isentinel/tsconfig':
-      specifier: 1.2.0
-      version: 1.2.0
+      specifier: 3.0.0
+      version: 3.0.0
     '@types/node':
       specifier: 24.0.13
       version: 24.0.13
@@ -168,7 +168,7 @@ importers:
         version: 5.2.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/estree@1.0.9)(@typescript-eslint/utils@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(@vitest/eslint-plugin@1.6.20(@typescript-eslint/eslint-plugin@8.62.1(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)(vitest@4.1.9(@types/node@24.0.13)(vite@8.1.0(@types/node@24.0.13)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))))(eslint-plugin-eslint-plugin@7.4.1(eslint@9.39.4(jiti@2.7.0)))(eslint-plugin-n@18.2.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-plugin-react-naming-convention@2.13.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       '@isentinel/tsconfig':
         specifier: catalog:types
-        version: 1.2.0(typescript@6.0.3)
+        version: 3.0.0(typescript@6.0.3)
       '@types/node':
         specifier: catalog:types
         version: 24.0.13
@@ -916,8 +916,8 @@ packages:
     resolution: {integrity: sha512-thwx7ptSzSGOZhzhxWD6cLOSYesk+5U3Ia/RzMrFc9djpv7LXe0spGCxJ/tWfYdJfg1ryU89rubdhhYxVlyMQg==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
-  '@isentinel/tsconfig@1.2.0':
-    resolution: {integrity: sha512-MTsDJjte6XV+t3UtbE93UOStGgJ6jw5XG8UoGcyuI8E9mEAOZFhqmdKT8LVXgqncM5Knbe4H/lAUVvRHO+l6tA==}
+  '@isentinel/tsconfig@3.0.0':
+    resolution: {integrity: sha512-j187ESnoLFO6wwU0PpL9b/JDtvEa6TwABaiVSOw41li3yoZyfg4ZEudRWElbxVdvp7hiBgCESTZEohkYS03bsQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       typescript: ^5.5.0
@@ -5386,7 +5386,7 @@ snapshots:
     dependencies:
       rollup: 4.62.2
 
-  '@isentinel/tsconfig@1.2.0(typescript@6.0.3)':
+  '@isentinel/tsconfig@3.0.0(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
 

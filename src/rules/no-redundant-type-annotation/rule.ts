@@ -11,6 +11,7 @@ import type {
 } from "typescript";
 import ts from "typescript";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import { pushChildNodes } from "../../utils/nested-expressions";
 import { type Candidate, verifyAnnotations } from "./verify";
@@ -1590,7 +1591,10 @@ function create(
 	};
 }
 
-export const noRedundantTypeAnnotation = createEslintRule<Options, MessageIds>({
+export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],

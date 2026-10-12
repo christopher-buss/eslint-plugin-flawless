@@ -4,6 +4,7 @@ import { getStaticJSONValue } from "jsonc-eslint-parser";
 import type { AST } from "jsonc-eslint-parser";
 import path from "node:path";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import type { JsonContext, JsonSourceCode } from "../../utils/types";
 import { buildInheritedConfig, type InheritedEntry, isRecord } from "./resolve-extends";
@@ -235,7 +236,7 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 				// Use forward slashes so the message reads the same on Windows.
 				source: relative.split(path.sep).join("/"),
 			},
-			fix: buildFix(property),
+			fix: buildFix(property) ?? null,
 			loc: property.key.loc,
 			messageId: MESSAGE_ID,
 		});
@@ -353,7 +354,11 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 	};
 }
 
-export const noRedundantTsconfigOptions = createEslintRule<Options, MessageIds, JsonSourceCode>({
+export const noRedundantTsconfigOptions: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds,
+	JsonSourceCode
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],

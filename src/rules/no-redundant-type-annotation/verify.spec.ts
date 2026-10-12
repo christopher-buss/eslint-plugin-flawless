@@ -138,7 +138,9 @@ describe("annotation verification", () => {
 
 	it("verifies an unsaved file from the parser's project service", () => {
 		const linter = new Linter({ configType: "flat" });
-		const code = "declare function read(): string; export const value: string = read();";
+		// Keep the variable local: isolatedDeclarations requires annotations
+		// on exported variables.
+		const code = "declare function read(): string; const value: string = read(); export {};";
 		const messages = linter.verify(
 			code,
 			{

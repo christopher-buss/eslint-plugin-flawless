@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "no-conditional-empty-object-spread";
@@ -43,20 +43,20 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noConditionalEmptyObjectSpread = createFlawlessRule<Options, MessageIds>({
-	name: RULE_NAME,
-	createOnce,
-	defaultOptions: [],
-	meta: {
-		docs: {
-			description: "Disallow conditional empty-object spreads",
-			recommended: false,
-			requiresTypeChecking: false,
+export const noConditionalEmptyObjectSpread: FlawlessRuleModule<Options, MessageIds> =
+	createFlawlessRule<Options, MessageIds>({
+		name: RULE_NAME,
+		createOnce,
+		defaultOptions: [],
+		meta: {
+			docs: {
+				description: "Disallow conditional empty-object spreads",
+				recommended: false,
+				requiresTypeChecking: false,
+			},
+			hasSuggestions: false,
+			messages,
+			schema: [],
+			type: "suggestion",
 		},
-		fixable: undefined,
-		hasSuggestions: false,
-		messages,
-		schema: [],
-		type: "suggestion",
-	},
-});
+	});

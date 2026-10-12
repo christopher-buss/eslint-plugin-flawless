@@ -3,6 +3,7 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { YAMLSourceCode } from "eslint-plugin-yml";
 import type { AST } from "yaml-eslint-parser";
 
+import type { EslintRuleModule } from "../../util";
 import { createEslintRule } from "../../util";
 import type { YamlContext } from "../../utils/types";
 
@@ -88,7 +89,11 @@ function create(context: Context): TSESLint.RuleListener {
 	};
 }
 
-export const yamlBlockKeyBlankLines = createEslintRule<Options, MessageIds, YAMLSourceCode>({
+export const yamlBlockKeyBlankLines: EslintRuleModule<Options, MessageIds> = createEslintRule<
+	Options,
+	MessageIds,
+	YAMLSourceCode
+>({
 	name: RULE_NAME,
 	create,
 	defaultOptions: [],

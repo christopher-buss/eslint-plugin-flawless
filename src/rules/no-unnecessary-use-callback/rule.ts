@@ -1,3 +1,4 @@
+import type { FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { createUnnecessaryHookRule } from "../../utils/unnecessary-hook";
 
@@ -25,7 +26,10 @@ const createOnce = createUnnecessaryHookRule<MessageIds>({
 	},
 });
 
-export const noUnnecessaryUseCallback = createFlawlessRule<Options, MessageIds>({
+export const noUnnecessaryUseCallback: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],

@@ -1,7 +1,7 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_TOKEN_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "no-em-dash";
@@ -554,7 +554,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noEmDash = createFlawlessRule<Options, MessageIds>({
+export const noEmDash: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -564,7 +567,6 @@ export const noEmDash = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

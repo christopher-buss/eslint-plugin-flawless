@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
 export const RULE_NAME = "no-shape-in-symbol-names";
@@ -244,7 +244,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	};
 }
 
-export const noShapeInSymbolNames = createFlawlessRule<Options, MessageIds>({
+export const noShapeInSymbolNames: FlawlessRuleModule<Options, MessageIds> = createFlawlessRule<
+	Options,
+	MessageIds
+>({
 	name: RULE_NAME,
 	createOnce,
 	defaultOptions: [],
@@ -254,7 +257,6 @@ export const noShapeInSymbolNames = createFlawlessRule<Options, MessageIds>({
 			recommended: false,
 			requiresTypeChecking: false,
 		},
-		fixable: undefined,
 		hasSuggestions: false,
 		messages,
 		schema: [],

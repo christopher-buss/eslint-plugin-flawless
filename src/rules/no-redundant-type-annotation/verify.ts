@@ -351,13 +351,18 @@ function speculativeProgram(old: ts.Program, source: ts.SourceFile, text: string
 						base.readFile(name));
 		},
 	};
-	return ts.createProgram({
+	const programOptions: ts.CreateProgramOptions = {
 		host,
 		oldProgram: old,
 		options: old.getCompilerOptions(),
-		projectReferences: old.getProjectReferences(),
 		rootNames: old.getRootFileNames(),
-	});
+	};
+	const projectReferences = old.getProjectReferences();
+	if (projectReferences !== undefined) {
+		programOptions.projectReferences = projectReferences;
+	}
+
+	return ts.createProgram(programOptions);
 }
 
 function removeRanges(text: string, ranges: ReadonlyArray<readonly [number, number]>): string {
