@@ -9,6 +9,7 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { parameterAnnotation } from "../shared/function-parameters";
 
 export const RULE_NAME = "prefer-vitest-local-context";
 
@@ -379,7 +380,7 @@ function existingContextParameter(
 			continue;
 		}
 
-		const annotation = parameter.typeAnnotation;
+		const annotation = parameterAnnotation(parameter);
 		const typeNode = annotation?.typeAnnotation;
 		if (
 			typeNode?.type === AST_NODE_TYPES.TSTypeReference &&
