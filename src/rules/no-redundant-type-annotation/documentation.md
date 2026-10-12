@@ -301,6 +301,37 @@ export const handler: Handler = (value: string) => {
 };
 ```
 
+## Verification before reporting
+
+Candidates that pass the checks above are rechecked with their annotations
+removed in a temporary TypeScript program. The program reads unchanged source
+files from the parser's program, including unsaved editor buffers. The rule
+compares declaration and expression types for each individual fix and for the
+combined ESLint fix. If combined removals depend on one another, it restores an
+annotation and checks the remaining removals again.
+
+Each single removal and the whole accepted set are checked; arbitrary subsets of
+several fixes are not exhaustively checked.
+
+Loop candidates also trigger queries in their enclosing function before type
+comparison, to expose control-flow inference cycles. Loop replay is enabled for
+TypeScript 5.9 and 6.0; other supported versions retain loop annotations because
+their checker query order has not been validated. Under `declaration` or
+`composite`, serialized inferred types are checked for references to
+inaccessible or shadowed names. These targeted checks supplement the existing
+conservative guards; they do not run complete compiler diagnostics or
+declaration emit.
+
+Assertion functions and receivers used by assertion calls keep their variable or
+parameter annotations. TypeScript requires explicitly typed call targets even
+when the inferred callable type would otherwise be identical.
+
+Verification is bounded to twelve speculative programs per lint of a file. At
+most ten candidate annotations are considered in that pass. Unverified
+annotations are left alone, including on compiler failures and when serialized
+names cannot be checked. Fix passes can reach further candidates after earlier
+fixes have been applied. Files with no candidates create no speculative program.
+
 ## Known limitations
 
 - Variable declarations are checked for `const` and `let` with a plain
@@ -330,6 +361,10 @@ export const handler: Handler = (value: string) => {
   initializer is a literal the emitter could have read on its own.
 - The fix can leave a type import with no remaining use. Pair the rule with an
   unused-import rule, or `noUnusedLocals` will fail the build.
+- Verification uses the current file's project and TypeScript version. Other
+  tsconfigs, changes to importing files, and edits made by other rules in the
+  same fix pass are outside this check. Full before-and-after compiler
+  diagnostics remain part of the rule's test suite.
 
 This rule has no options.
 

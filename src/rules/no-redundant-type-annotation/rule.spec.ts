@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { run } from "../test";
 import { checkFixes, checkRuleFixes, type FixedSnippet } from "./fix-safety";
 import { corpus } from "./fix-safety-corpus";
+import { regressions } from "./regressions";
 import { noRedundantTypeAnnotation, RULE_NAME } from "./rule";
 
 const catchMessageId = "redundantCatch";
@@ -12,6 +13,7 @@ const messageId = "redundant";
 const parameterMessageId = "redundantParameter";
 
 const valid: Array<ValidTestCase> = [
+	...regressions.map(({ code }) => code),
 	// Nothing to restate.
 	unindent`
 		declare function getString(): string;
@@ -1586,6 +1588,52 @@ run({
 // new diagnostic and no changed type. See `./fix-safety.ts`.
 const fixturesDirectory = path.resolve(__dirname, "../../../fixtures");
 
+const declarationsDirectory = path.join(
+	fixturesDirectory,
+	"no-redundant-type-annotation/declarations",
+);
+const declarationSource = `
+import type { Box, ReadonlyData } from "./component";
+import { register } from "./component";
+export const value: Box<ReadonlyData<undefined | string>> = register<undefined | string>();
+`;
+
+run({
+	name: `${RULE_NAME}/declarations`,
+	invalid: [
+		{
+			code: "declare function getDate(): Date; export const value: Date = getDate();",
+			errors: [{ messageId }],
+			filename: path.join(declarationsDirectory, "case.ts"),
+			output: "declare function getDate(): Date; export const value = getDate();",
+		},
+	],
+	parserOptions: {
+		project: path.join(declarationsDirectory, "tsconfig.json"),
+		tsconfigRootDir: declarationsDirectory,
+	},
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{ code: declarationSource, filename: path.join(declarationsDirectory, "case.ts") },
+		{
+			code: `${declarationSource.replace(
+				"export const value",
+				"const value",
+			)}export { value };`,
+			filename: path.join(declarationsDirectory, "case.ts"),
+		},
+		{
+			// A local symbol with the same spelling cannot name the library's
+			// tag.
+			code: declarationSource.replace(
+				"export const value",
+				"declare const tag: unique symbol;\nexport const value",
+			),
+			filename: path.join(declarationsDirectory, "case.ts"),
+		},
+	],
+});
+
 /**
  * Pairs each invalid case with its fixed output and the file it runs as.
  *
@@ -1608,6 +1656,18 @@ function toFixedSnippets(
 }
 
 describe(`${RULE_NAME}/fix-safety`, () => {
+	it("detects the declaration error hidden by an annotated alias", () => {
+		const failures = checkFixes([
+			{
+				code: declarationSource,
+				filename: path.join(declarationsDirectory, "case.ts"),
+				output: declarationSource.replace(": Box<ReadonlyData<undefined | string>>", ""),
+			},
+		]);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]).toContain("new TS4023");
+	});
+
 	it("keeps every type an invalid case's fix touches", () => {
 		expect.hasAssertions();
 

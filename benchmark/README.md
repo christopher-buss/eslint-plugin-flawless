@@ -23,6 +23,18 @@ pnpm bench           # `prebench` builds first; see below for why that matters
 pnpm bench:scaling   # growth check; also builds first
 ```
 
+The annotation rule needs a TypeScript program and has a separate benchmark:
+
+```sh
+pnpm exec tsx benchmark/type-annotation.ts path/to/tsconfig.json
+pnpm exec tsx benchmark/type-annotation.ts path/to/tsconfig.json path/to/baseline/rule.ts
+pnpm exec tsx benchmark/type-annotation.ts --scaling
+```
+
+This measures the complete rule through ESLint's timing API, reports slow files,
+and checks increasing candidate counts. Run comparisons sequentially in fresh
+processes; the rule uses the source implementation so rebuilding is unnecessary.
+
 `pnpm bench` runs `prebench` (`nr build`) first, and that is not optional.
 `arrow-return-style` locates its oxfmt worker relative to `import.meta.url`, and
 only the built layout resolves it to `dist/rules/arrow-return-style/worker.mjs`.
