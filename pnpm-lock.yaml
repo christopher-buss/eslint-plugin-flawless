@@ -9,25 +9,13 @@ catalogs:
     '@antfu/ni':
       specifier: 30.2.0
       version: 30.2.0
-    '@eslint-react/core':
-      specifier: 5.10.0
-      version: 5.10.0
     '@isentinel/eslint-config':
       specifier: 5.2.0
       version: 5.2.0
-    '@oxlint/plugins':
-      specifier: 1.78.0
-      version: 1.78.0
     '@typescript-eslint/eslint-plugin':
       specifier: 8.62.1
       version: 8.62.1
     '@typescript-eslint/parser':
-      specifier: 8.62.1
-      version: 8.62.1
-    '@typescript-eslint/scope-manager':
-      specifier: 8.62.1
-      version: 8.62.1
-    '@typescript-eslint/utils':
       specifier: 8.62.1
       version: 8.62.1
     bumpp:
@@ -54,9 +42,6 @@ catalogs:
     simple-git-hooks:
       specifier: 2.13.1
       version: 2.13.1
-    synckit:
-      specifier: 0.11.13
-      version: 0.11.13
     ts-api-utils:
       specifier: 2.5.0
       version: 2.5.0
@@ -69,6 +54,28 @@ catalogs:
     typescript:
       specifier: 6.0.3
       version: 6.0.3
+  runtime:
+    '@eslint-react/core':
+      specifier: ^5.10.0
+      version: 5.10.0
+    '@oxlint/plugins':
+      specifier: ^1.78.0
+      version: 1.78.0
+    '@typescript-eslint/scope-manager':
+      specifier: ^8.62.1
+      version: 8.62.1
+    '@typescript-eslint/utils':
+      specifier: ^8.62.1
+      version: 8.62.1
+    jsonc-eslint-parser:
+      specifier: ^3.1.0
+      version: 3.1.0
+    synckit:
+      specifier: ^0.11.13
+      version: 0.11.13
+    toml-eslint-parser:
+      specifier: ^1.0.3
+      version: 1.0.3
   testing:
     '@eslint/markdown':
       specifier: 8.0.3
@@ -88,18 +95,12 @@ catalogs:
     eslint-vitest-rule-tester:
       specifier: 3.1.0
       version: 3.1.0
-    jsonc-eslint-parser:
-      specifier: 3.1.0
-      version: 3.1.0
     oxlint:
       specifier: 1.78.0
       version: 1.78.0
     publint:
       specifier: 0.3.21
       version: 0.3.21
-    toml-eslint-parser:
-      specifier: 1.0.3
-      version: 1.0.3
     unplugin-unused:
       specifier: 0.5.7
       version: 0.5.7
@@ -136,25 +137,25 @@ importers:
   .:
     dependencies:
       '@eslint-react/core':
-        specifier: catalog:cli
+        specifier: catalog:runtime
         version: 5.10.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       '@oxlint/plugins':
-        specifier: catalog:cli
+        specifier: catalog:runtime
         version: 1.78.0
       '@typescript-eslint/scope-manager':
-        specifier: catalog:cli
+        specifier: catalog:runtime
         version: 8.62.1
       '@typescript-eslint/utils':
-        specifier: catalog:cli
+        specifier: catalog:runtime
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       jsonc-eslint-parser:
-        specifier: catalog:testing
+        specifier: catalog:runtime
         version: 3.1.0
       synckit:
-        specifier: catalog:cli
+        specifier: catalog:runtime
         version: 0.11.13
       toml-eslint-parser:
-        specifier: catalog:testing
+        specifier: catalog:runtime
         version: 1.0.3
     devDependencies:
       '@antfu/ni':

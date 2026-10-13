@@ -54,13 +54,13 @@
 		"*": "eslint --fix --cache"
 	},
 	"dependencies": {
-		"@eslint-react/core": "catalog:cli",
-		"@oxlint/plugins": "catalog:cli",
-		"@typescript-eslint/scope-manager": "catalog:cli",
-		"@typescript-eslint/utils": "catalog:cli",
-		"jsonc-eslint-parser": "catalog:testing",
-		"synckit": "catalog:cli",
-		"toml-eslint-parser": "catalog:testing"
+		"@eslint-react/core": "catalog:runtime",
+		"@oxlint/plugins": "catalog:runtime",
+		"@typescript-eslint/scope-manager": "catalog:runtime",
+		"@typescript-eslint/utils": "catalog:runtime",
+		"jsonc-eslint-parser": "catalog:runtime",
+		"synckit": "catalog:runtime",
+		"toml-eslint-parser": "catalog:runtime"
 	},
 	"devDependencies": {
 		"@antfu/ni": "catalog:cli",
