@@ -96,8 +96,10 @@ standalone `type-annotation.ts` runner in "Running" measures a supplied real pro
 
 The harness patch keeps both the original file path (for ESLint and TypeScript)
 and the short filename (for the report). Only `cases/typed/*.ts` loads the typed
-tsconfig; existing untyped fixtures keep their parser settings. Initialization
-uses a real fixture instead of a dummy JavaScript file. Fatal parser errors or
+tsconfig; existing untyped fixtures keep their parser settings. The typed parser
+uses a persistent project in local and CI runs. Automatic single-run inference
+is disabled so repeated parses keep the fixture's imported types. Initialization
+uses a real fixture. Fatal parser errors or
 benchmark task errors fail CI rather than silently dropping report rows.
 
 Before timing, `config.ts` checks expected report counts and ensures all fixes

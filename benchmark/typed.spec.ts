@@ -18,6 +18,7 @@ describe("typed benchmark harness", () => {
 		const outputPath = path.join(reportDirectory, "report.json");
 		const exitCode = process.exitCode;
 		vi.stubEnv("GITHUB_EVENT_NAME", "");
+		vi.stubEnv("CI", "true");
 		try {
 			await runBenchmarksFromConfig({
 				configDirectory: directory,
@@ -36,8 +37,8 @@ describe("typed benchmark harness", () => {
 					})),
 				},
 			});
-			const report = JSON.parse(readFileSync(outputPath, "utf8"));
 			expect(process.exitCode).toBe(exitCode);
+			const report = JSON.parse(readFileSync(outputPath, "utf8"));
 			expect(report.testSpecifications.map(({ name }) => name)).toStrictEqual([
 				"typed detection",
 				"typed autofix",
