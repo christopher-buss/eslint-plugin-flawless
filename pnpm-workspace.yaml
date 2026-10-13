@@ -21,7 +21,7 @@ allowBuilds:
   simple-git-hooks: true
 
 patchedDependencies:
-  eslint-rule-benchmark: patches/eslint-rule-benchmark.patch
+  eslint-rule-benchmark@0.8.0: patches/eslint-rule-benchmark.patch
 
 catalogs:
   cli:

@@ -7,8 +7,8 @@ import ts from "typescript";
 
 import { noRedundantTypeAnnotation } from "../src/rules/no-redundant-type-annotation/rule";
 
-// The coarse benchmark has no checker. This exercises the complete typed
-// rule, including speculative programs, using ESLint's rule-only timings.
+// Real-project profiling complements the synthetic typed fixtures in config.ts.
+// This measures the complete rule using ESLint's rule-only timings.
 // Usage: tsx benchmark/type-annotation.ts <tsconfig> [baseline-rule.ts]
 //        tsx benchmark/type-annotation.ts --scaling
 const [projectPath, baselinePath] = process.argv.slice(2);

@@ -5,9 +5,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 import builtPlugin from "../dist/index.mjs";
 import { COARSE } from "./coarse";
+import { typedParserOptions } from "./eslint.config.mjs";
 
 // Growth check: catches rules whose cost grows super-linearly with file size.
 // config.ts times each rule on one fixed-size fixture, so an O(n²) rule looks
@@ -41,6 +43,10 @@ const SUBJECTS = [
 		testPath: "./cases/realistic.ts",
 	},
 	{ ruleId: "no-floating-point-equality", testPath: "./cases/floating-realistic.ts" },
+	{
+		ruleId: "no-redundant-type-annotation",
+		testPath: "./cases/typed/annotation-removals.ts",
+	},
 ];
 
 const IMPORT_LINE = /^import\s/;
@@ -59,17 +65,45 @@ function build(source: string, copies: number): string {
 	return [...imports, ...Array.from({ length: copies }, () => body)].join("\n");
 }
 
+/** A compiler program over the expanded typed fixture, preserving its imports. */
+function typedProgram(filename: string, code: string): ts.Program {
+	const parsed = ts.getParsedCommandLineOfConfigFile(
+		path.resolve(typedParserOptions.tsconfigRootDir, typedParserOptions.project),
+		{},
+		{
+			...ts.sys,
+			onUnRecoverableConfigFileDiagnostic(diagnostic) {
+				throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
+			},
+		},
+	);
+	if (parsed === undefined) {
+		throw new Error("Cannot read the typed benchmark project");
+	}
+	const host = ts.createCompilerHost(parsed.options, true);
+	const readSource = host.getSourceFile;
+	host.getSourceFile = (name, languageVersion, onError, shouldCreate) =>
+		path.resolve(name) === filename
+			? ts.createSourceFile(name, code, languageVersion, true)
+			: readSource(name, languageVersion, onError, shouldCreate);
+	return ts.createProgram([filename], parsed.options, host);
+}
+
 /** Median rule-only time (ms) to lint `copies` repetitions of the fixture. */
 function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 	const absolutePath = path.resolve(HERE, subject.testPath);
 	const extension = path.extname(absolutePath);
 	const code = build(readFileSync(absolutePath, "utf8"), copies);
 	const ruleKey = `flawless/${subject.ruleId}`;
+	const programs =
+		subject.ruleId === "no-redundant-type-annotation"
+			? [typedProgram(absolutePath, code)]
+			: undefined;
 	const config: Linter.Config = {
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: {
 			parser: tsParser,
-			parserOptions: { ecmaFeatures: { jsx: extension === ".tsx" } },
+			parserOptions: { ecmaFeatures: { jsx: extension === ".tsx" }, programs },
 		},
 		plugins: { flawless: builtPlugin },
 		rules: { [ruleKey]: ["error", ...(subject.options ?? [])] },
@@ -80,13 +114,19 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 	const times: Array<number> = [];
 	for (let index = 0; index < warmup + iterations; index++) {
 		const { messages } = linter.verifyAndFix(code, config, {
-			filename: `scaling${extension}`,
+			filename: absolutePath,
 			fix: false,
 			stats: true,
 		});
 		const fatal = messages.find((message) => message.fatal === true);
 		if (fatal !== undefined) {
 			throw new Error(`${subject.ruleId} x${copies}: ${fatal.message}`);
+		}
+		if (
+			programs !== undefined &&
+			messages.filter((message) => message.ruleId === ruleKey).length !== 10
+		) {
+			throw new Error(`${subject.ruleId} x${copies}: expected 10 verified removals`);
 		}
 
 		if (index >= warmup) {

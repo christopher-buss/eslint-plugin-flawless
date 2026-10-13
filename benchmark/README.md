@@ -2,7 +2,7 @@
 
 Wall-clock benchmarks for the plugin's rules, driven by
 [`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark).
-Two passes share one `config.ts`:
+All fixtures share one `config.ts`:
 
 - **`arrow-return-style`** gets a detailed, multi-case profile. Its predecessor
   (`eslint-plugin-arrow-return-style-x`) had pathological performance from
@@ -11,9 +11,11 @@ Two passes share one `config.ts`:
 - **`no-floating-point-equality`** gets generated hot-path fixtures, each run
   against the rule and an empty-rule parser baseline. A pinned Sonar S1244
   adapter can be included for identical-fixture comparisons.
+- **`no-redundant-type-annotation`** gets typed detection, parser-baseline, and
+  autofix timings. It also participates in the rule-time growth check.
 - **Every other rule** gets one coarse run — enough to catch a gross regression,
   not to attribute cost to a code path.
-- **Every rule** also gets a growth check (`scaling.ts`) that fails on
+- **Benchmarked rules** also get a growth check (`scaling.ts`) that fails on
   super-linear (e.g. O(n²)) rule time, which a fixed-size fixture cannot show.
 
 ## Running
@@ -23,7 +25,7 @@ pnpm bench           # `prebench` builds first; see below for why that matters
 pnpm bench:scaling   # growth check; also builds first
 ```
 
-The annotation rule needs a TypeScript program and has a separate benchmark:
+For annotation timings over a real project, a separate runner is available:
 
 ```sh
 pnpm exec tsx benchmark/type-annotation.ts path/to/tsconfig.json
@@ -62,15 +64,50 @@ non-zero exit — so a new rule cannot silently skip benchmarking. It flags rath
 than throws, so the benchmarks that _can_ run still produce numbers; only the
 exit code (and CI status) goes red.
 
-Three rules sit in `UNSUPPORTED` because `eslint-rule-benchmark` structurally
-cannot run them (revisit if the tool changes):
+The remaining `UNSUPPORTED` exemptions are:
 
-- `prefer-read-only-props` needs type information, but the harness lints each
-  fixture by bare basename — a path no tsconfig can include — so a typed program
-  is impossible and the rule reports nothing.
+- `prefer-read-only-props`, `no-materialized-filter-map`, and `no-unknown-returns`
+  still need dedicated typed fixtures. The harness now supports real paths and
+  typed projects; these rules have not yet been added to the typed manifest.
 - `toml-sort-keys` and `yaml-block-key-blank-lines` lint TOML/YAML, whose
   extensions are absent from the tool's `SUPPORTED_EXTENSIONS` (js/ts/jsx/tsx,
   plus astro/svelte/vue).
+- `no-redundant-tsconfig-options` lints JSON, also outside those extensions.
+
+## Typed annotation benchmarks
+
+`no-redundant-type-annotation` appears in the same bot report as the other rules.
+Its five generated fixtures cover files without annotations, 10 safe variable
+removals, 40 candidates exceeding the per-pass verification budget, contextual
+parameter removals, and loop annotations that must be retained. Regenerate with
+`node benchmark/generate-type-annotation-cases.mjs`.
+
+Each fixture has a **flawless, detection** row and a **typed parser baseline**
+row over identical text and compiler options. Their medians measure total warm
+lint cost per file; subtract the baseline median to estimate the rule's added
+cost. Small differences within the reported deviation are noise. **Flawless,
+autofix** rows measure the entire fix loop, including re-parsing and re-checking
+after edits. The dense fixture needs multiple passes because verification accepts
+at most 10 candidates per pass.
+
+Program setup occurs before timed iterations. These are steady-state editor/CI
+timings, not cold project startup or a prediction for an arbitrary project. The
+standalone `type-annotation.ts` runner in "Running" measures a supplied real project.
+
+The harness patch keeps both the original file path (for ESLint and TypeScript)
+and the short filename (for the report). Only `cases/typed/*.ts` loads the typed
+tsconfig; existing untyped fixtures keep their parser settings. Initialization
+uses a real fixture instead of a dummy JavaScript file. Fatal parser errors or
+benchmark task errors fail CI rather than silently dropping report rows.
+
+Before timing, `config.ts` checks expected report counts and ensures all fixes
+settle. The growth check uses an expanded in-memory typed program and measures
+only the rule's time via ESLint stats, excluding parser time.
+
+```sh
+BENCH_RULES=no-redundant-type-annotation pnpm bench
+BENCH_RULES=no-redundant-type-annotation pnpm bench:scaling
+```
 
 ## Growth check
 
@@ -81,7 +118,8 @@ over per-copy time at x2. A linear rule stays near 1 (up to ~5 from GC and
 repeated top-level bindings); an O(n²) rule approaches 64. Over 8 fails, after
 one re-measure to absorb a noisy runner. Rules on the `COARSE` manifest
 (`coarse.ts`) are checked, plus `arrow-return-style` (`useOxfmt:false`) and
-`no-floating-point-equality` on their realistic fixtures.
+`no-floating-point-equality` on their realistic fixtures, and the typed
+`no-redundant-type-annotation` removal fixture.
 
 Unlike wall-clock medians, growth is a ratio on the same machine, so runner
 speed cancels out and CI can gate on it.
