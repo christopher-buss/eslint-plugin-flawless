@@ -1683,24 +1683,29 @@ describe(`${RULE_NAME}/fix-safety`, () => {
 
 	// The corpus makes no claim about what is reported, only that whatever is
 	// fixed keeps every type, under each project the rule reads options from.
+	// Full compiler checks over the corpus can exceed the default timeout on CI.
 	it.each([
 		["strict", fixturesDirectory],
 		["isolated-declarations", isolatedDeclarationsDirectory],
 		["loose-catch", looseCatchDirectory],
-	])("keeps every type the corpus fix touches under %s", (_, directory) => {
-		expect.hasAssertions();
+	])(
+		"keeps every type the corpus fix touches under %s",
+		(_, directory) => {
+			expect.hasAssertions();
 
-		const failures = checkRuleFixes(
-			noRedundantTypeAnnotation,
-			corpus.map(({ name, code, tsx }) => {
-				return {
-					name,
-					code,
-					filename: path.join(directory, tsx === true ? "case.tsx" : "case.ts"),
-				};
-			}),
-		);
+			const failures = checkRuleFixes(
+				noRedundantTypeAnnotation,
+				corpus.map(({ name, code, tsx }) => {
+					return {
+						name,
+						code,
+						filename: path.join(directory, tsx === true ? "case.tsx" : "case.ts"),
+					};
+				}),
+			);
 
-		expect(failures).toStrictEqual([]);
-	});
+			expect(failures).toStrictEqual([]);
+		},
+		30_000,
+	);
 });
