@@ -330,6 +330,28 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics).toHaveLength(1);
 	});
 
+	it("prefer-vitest-local-context ignores an unannotated context parameter", () => {
+		// Oxlint spells the missing annotation `null`; the helper's own
+		// `context` must not be mistaken for a Vitest test context.
+		const { diagnostics } = runOxlint({
+			code: [
+				'import { expect, it } from "vitest";',
+				"function transformer(context) {",
+				"\treturn context.factory;",
+				"}",
+				'it("transforms", () => {',
+				"\texpect(transformer({ factory: 1 })).toBe(1);",
+				"});",
+				"",
+			].join("\n"),
+			filename: "file.test.ts",
+			rule: "prefer-vitest-local-context",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(prefer-vitest-local-context)");
+	});
+
 	it("no-em-dash reports prose once per sentence and skips code", () => {
 		const { diagnostics } = runOxlint({
 			code: [
