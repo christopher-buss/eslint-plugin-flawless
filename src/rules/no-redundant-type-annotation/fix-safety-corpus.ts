@@ -1,5 +1,7 @@
 import { unindent } from "eslint-vitest-rule-tester";
 
+import { regressions } from "./regressions";
+
 /** A snippet the fix-safety oracle lints and fixes, with no expectation on what is reported. */
 export interface CorpusCase {
 	readonly name: string;
@@ -12,6 +14,7 @@ export interface CorpusCase {
 // passes that remove an annotation and the context it anchors, and
 // config-sensitive cases. Ported from the probe behind #56, #59, #60, and #61.
 export const corpus: ReadonlyArray<CorpusCase> = [
+	...regressions,
 	{
 		name: "issue: arrow body fn",
 		code: unindent`

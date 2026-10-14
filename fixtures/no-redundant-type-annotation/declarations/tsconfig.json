@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"paths": { "tagger": ["./library/index.d.ts"] },
+		"skipLibCheck": true,
+		"strict": true,
+		"target": "ES2022"
+	},
+	"include": ["**/*.ts"]
+}

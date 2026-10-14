@@ -9,19 +9,23 @@ import type {
 	TypeReference,
 	UnionOrIntersectionType,
 } from "typescript";
-import {
+import ts from "typescript";
+
+import type { EslintRuleModule } from "../../util";
+import { createEslintRule } from "../../util";
+import { pushChildNodes } from "../../utils/nested-expressions";
+import { type Candidate, verifyAnnotations } from "./verify";
+
+const {
 	isParameter,
 	isTypeReferenceNode,
+	isVariableDeclaration,
 	ObjectFlags,
 	SignatureKind,
 	SymbolFlags,
 	TypeFlags,
 	TypeFormatFlags,
-} from "typescript";
-
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import { pushChildNodes } from "../../utils/nested-expressions";
+} = ts;
 
 export const RULE_NAME = "no-redundant-type-annotation";
 
@@ -202,7 +206,7 @@ function isWideningUnit(type: Type): boolean {
  * @param flags - The type flags to look for.
  * @returns True when the type or a union member matches.
  */
-function someMember(type: Type, flags: TypeFlags): boolean {
+function someMember(type: Type, flags: ts.TypeFlags): boolean {
 	const members =
 		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
 	return members.some((member) => (member.flags & flags) !== 0);
@@ -533,7 +537,7 @@ function getCallee(call: CallLike): TSESTree.Node {
  * @param call - The call to read.
  * @returns The signature kinds to look up on the callee.
  */
-function getSignatureKinds(call: CallLike): Array<SignatureKind> {
+function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
 	if (
 		call.type === AST_NODE_TYPES.NewExpression ||
 		(call.type === AST_NODE_TYPES.CallExpression && call.callee.type === AST_NODE_TYPES.Super)
@@ -608,6 +612,56 @@ function create(
 	const declarationsAreIsolated = compilerOptions.isolatedDeclarations ?? false;
 	let exportedNames: Set<string> | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
+	const candidates: Array<
+		Candidate & {
+			readonly annotation: TSESTree.TSTypeAnnotation;
+			readonly messageId: MessageIds;
+			readonly type: Type;
+		}
+	> = [];
+
+	/**
+	 * Save a potential removal for verification after visiting the file.
+	 * @param annotation - The annotation to remove if verification succeeds.
+	 * @param messageId - The report's message identifier.
+	 * @param type - The annotated type to show in the report.
+	 */
+	function collect(
+		annotation: TSESTree.TSTypeAnnotation,
+		messageId: MessageIds,
+		type: Type,
+	): void {
+		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
+		if (isVariableDeclaration(owner) || isParameter(owner)) {
+			candidates.push({ annotation, messageId, owner, range: annotation.range, type });
+			return;
+		}
+
+		// The verifier cannot model this owner. Report without a fix rather
+		// than dropping the report.
+		report(annotation, messageId, type, false);
+	}
+
+	/**
+	 * Reports a redundant annotation.
+	 * @param annotation - The annotation to report.
+	 * @param messageId - The report's message identifier.
+	 * @param type - The annotated type to show in the report.
+	 * @param fixable - Whether the removal was verified and may be autofixed.
+	 */
+	function report(
+		annotation: TSESTree.TSTypeAnnotation,
+		messageId: MessageIds,
+		type: Type,
+		fixable: boolean,
+	): void {
+		context.report({
+			data: { typeName: display(type) },
+			fix: fixable ? (fixer) => fixer.remove(annotation) : null,
+			messageId,
+			node: annotation,
+		});
+	}
 
 	/**
 	 * Renders a type the way TypeScript would print it, without truncation.
@@ -1422,18 +1476,13 @@ function create(
 				continue;
 			}
 
-			context.report({
-				data: { typeName: display(annotationType) },
-				fix: (fixer) => fixer.remove(annotation),
-				messageId: PARAMETER_MESSAGE_ID,
-				node: annotation,
-			});
+			collect(annotation, PARAMETER_MESSAGE_ID, annotationType);
 		}
 	}
 
 	return {
-		ArrowFunctionExpression: checkFunctionParameters,
-		CatchClause({ param }: TSESTree.CatchClause): void {
+		"ArrowFunctionExpression": checkFunctionParameters,
+		"CatchClause": function ({ param }: TSESTree.CatchClause): void {
 			if (!catchVariablesAreUnknown) {
 				return;
 			}
@@ -1465,8 +1514,27 @@ function create(
 				node: annotation,
 			});
 		},
-		FunctionExpression: checkFunctionParameters,
-		VariableDeclarator(node: TSESTree.VariableDeclarator): void {
+		"FunctionExpression": checkFunctionParameters,
+		"Program:exit": function (node: TSESTree.Program): void {
+			const source = services.esTreeNodeToTSNodeMap.get(node);
+			const { accepted, unverified } = verifyAnnotations(
+				services.program,
+				source,
+				candidates,
+			);
+			for (const { annotation, messageId, type } of accepted) {
+				report(annotation, messageId, type, true);
+			}
+
+			// Unverified is not proven unsafe. Keep the report visible, but
+			// never autofix it.
+			for (const {
+				candidate: { annotation, messageId, type },
+			} of unverified) {
+				report(annotation, messageId, type, false);
+			}
+		},
+		"VariableDeclarator": function (node: TSESTree.VariableDeclarator): void {
 			const { kind } = node.parent;
 			if (kind !== "const" && kind !== "let") {
 				return;
@@ -1545,12 +1613,7 @@ function create(
 				return;
 			}
 
-			context.report({
-				data: { typeName: display(annotationType) },
-				fix: (fixer) => fixer.remove(annotation),
-				messageId: MESSAGE_ID,
-				node: annotation,
-			});
+			collect(annotation, MESSAGE_ID, annotationType);
 		},
 	};
 }

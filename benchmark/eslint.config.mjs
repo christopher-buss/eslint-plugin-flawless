@@ -3,12 +3,19 @@
 // whose parserOptions merge into the benchmark config and dominate the timings;
 // the rule under test is injected by the harness itself.
 //
-// Deliberately empty of parser/parserOptions. eslint-rule-benchmark picks the
-// parser from each fixture's extension (.ts/.tsx → @typescript-eslint/parser,
-// with jsx enabled for .tsx) and lints every fixture by BARE BASENAME. That last
-// detail rules out typed linting here: a basename can never be inside any
-// tsconfig, so setting parserOptions.project only makes typescript-eslint fatally
-// error ("that TSConfig does not include this file") on every file. Rules that
-// require type information (e.g. prefer-read-only-props) therefore cannot be
-// benchmarked with this tool — see config.ts's UNSUPPORTED list.
-export default [{}];
+// Our harness patch preserves real fixture paths for TypeScript projects.
+// Only typed fixtures load a project; other benchmarks keep their usual parser.
+export const typedParserOptions = {
+	// Benchmarks re-lint the same files. CI's single-run heuristic treats these
+	// iterations as fixes and drops imported types from an isolated program.
+	disallowAutomaticSingleRunInference: true,
+	project: "./cases/typed/tsconfig.json",
+	tsconfigRootDir: import.meta.dirname,
+};
+
+export default [
+	{
+		files: ["**/benchmark/cases/typed/**/*.ts"],
+		languageOptions: { parserOptions: typedParserOptions },
+	},
+];
