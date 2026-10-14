@@ -124,7 +124,8 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 		}
 		if (
 			programs !== undefined &&
-			messages.filter((message) => message.ruleId === ruleKey).length !== 10
+			messages.filter((message) => message.ruleId === ruleKey && message.fix !== undefined)
+				.length !== 10
 		) {
 			throw new Error(`${subject.ruleId} x${copies}: expected 10 verified removals`);
 		}
