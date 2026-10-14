@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { regressions } from "./regressions";
 import { noRedundantTypeAnnotation } from "./rule";
-import { type Candidate, verifyAnnotations } from "./verify";
+import { type Candidate, COMPILER_FAILURE, verifyAnnotations } from "./verify";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
@@ -100,6 +100,11 @@ describe("annotation verification", () => {
 		const { candidates, program, source } = project(code);
 		const verification = verifyAnnotations(program, source, candidates);
 		expect(verification.rejected.length).toBeGreaterThan(0);
+		// A compiler failure also rejects every candidate. Keep that from
+		// passing as a successful rejection on any supported TypeScript.
+		expect(verification.rejected.map(({ reason }) => reason)).not.toContainEqual(
+			expect.stringContaining(COMPILER_FAILURE),
+		);
 		expect(compilerProblems(code, verification.accepted)).toStrictEqual([]);
 		for (const candidate of verification.accepted) {
 			expect(compilerProblems(code, [candidate])).toStrictEqual([]);
@@ -159,16 +164,79 @@ describe("annotation verification", () => {
 		expect(messages[0]?.fix).toBeDefined();
 	});
 
+	it("reports candidates past the work limit without a fix", () => {
+		const linter = new Linter({ configType: "flat" });
+		// Keep the variables local: isolatedDeclarations requires annotations
+		// on exported variables.
+		const code = `declare function read(): string;\n${Array.from(
+			{ length: 15 },
+			(_, index) => `const value${index}: string = read();`,
+		).join("\n")}\nexport {};`;
+		const messages = linter.verify(
+			code,
+			{
+				files: ["**/*.ts"],
+				languageOptions: {
+					parser,
+					parserOptions: { projectService: true, tsconfigRootDir: directory },
+				},
+				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
+				rules: { "flawless/redundant": "error" },
+			},
+			path.join(directory, "file.ts"),
+		);
+		expect(messages).toHaveLength(15);
+		expect(messages.filter(({ fix }) => fix !== undefined)).toHaveLength(10);
+	});
+
+	it("distinguishes types that print the same name", () => {
+		const code = `
+interface Options { a: string }
+declare function make(): Options;
+function local(): void {
+	interface Options { a: string }
+	const value: Options = make();
+}`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted).toStrictEqual([]);
+		expect(rejected[0]?.reason).toContain("changes an observed type");
+	});
+
+	it("skips the declaration naming check inside function bodies", () => {
+		const dependency = path.join(directory, "dependency.ts");
+		const extra = new Map([
+			[
+				dependency,
+				"export interface Hidden { a: string }\nexport declare function make(): Hidden;",
+			],
+		]);
+		const code = `import { make } from "./dependency.js";
+export const outer: ReturnType<typeof make> = make();
+export function inner(): void {
+	const value: ReturnType<typeof make> = make();
+	void value;
+}`;
+		const { candidates, program, source } = project(code, extra, { declaration: true });
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted.map(({ owner }) => owner.name.getText(source))).toStrictEqual(["value"]);
+		expect(rejected.map(({ candidate }) => candidate.owner.name.getText(source))).toStrictEqual(
+			["outer"],
+		);
+	});
+
 	it("leaves annotations alone when the edit cannot be verified", () => {
 		const { candidates, program, source } = project(
 			"declare function read(): string; const value: string = read();",
 		);
 		const candidate = candidates[0]!;
-		const { accepted, rejected } = verifyAnnotations(program, source, [
+		const { accepted, rejected, unverified } = verifyAnnotations(program, source, [
 			{ ...candidate, range: [source.text.length, source.text.length + 1] },
 		]);
 		expect(accepted).toStrictEqual([]);
+		expect(unverified).toStrictEqual([]);
 		expect(rejected).toHaveLength(1);
+		expect(rejected[0]!.reason).toBe(`${COMPILER_FAILURE}: Invalid annotation range`);
 	});
 
 	it("preserves overload order when it changes inference", () => {
@@ -201,10 +269,11 @@ const value: { (x: string): number; (x: number): string } = read();`;
 			(_, index) => `const value${index}: string = read();`,
 		).join("\n")}`;
 		const { candidates, program, source } = project(code);
-		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		const { accepted, rejected, unverified } = verifyAnnotations(program, source, candidates);
 		expect(accepted.length).toBeGreaterThan(0);
-		expect(accepted.length).toBeLessThan(candidates.length);
-		expect(rejected.every(({ reason }) => reason.includes("work limit"))).toBe(true);
+		expect(rejected).toStrictEqual([]);
+		expect(accepted.length + unverified.length).toBe(candidates.length);
+		expect(unverified.every(({ reason }) => reason.includes("work limit"))).toBe(true);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 });

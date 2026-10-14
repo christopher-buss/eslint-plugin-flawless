@@ -616,7 +616,7 @@ function create(
 		Candidate & {
 			readonly annotation: TSESTree.TSTypeAnnotation;
 			readonly messageId: MessageIds;
-			readonly typeName: string;
+			readonly type: Type;
 		}
 	> = [];
 
@@ -633,14 +633,34 @@ function create(
 	): void {
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (isVariableDeclaration(owner) || isParameter(owner)) {
-			candidates.push({
-				annotation,
-				messageId,
-				owner,
-				range: annotation.range,
-				typeName: display(type),
-			});
+			candidates.push({ annotation, messageId, owner, range: annotation.range, type });
+			return;
 		}
+
+		// The verifier cannot model this owner. Report without a fix rather
+		// than dropping the report.
+		report(annotation, messageId, type, false);
+	}
+
+	/**
+	 * Reports a redundant annotation.
+	 * @param annotation - The annotation to report.
+	 * @param messageId - The report's message identifier.
+	 * @param type - The annotated type to show in the report.
+	 * @param fixable - Whether the removal was verified and may be autofixed.
+	 */
+	function report(
+		annotation: TSESTree.TSTypeAnnotation,
+		messageId: MessageIds,
+		type: Type,
+		fixable: boolean,
+	): void {
+		context.report({
+			data: { typeName: display(type) },
+			fix: fixable ? (fixer) => fixer.remove(annotation) : null,
+			messageId,
+			node: annotation,
+		});
 	}
 
 	/**
@@ -1497,14 +1517,21 @@ function create(
 		"FunctionExpression": checkFunctionParameters,
 		"Program:exit": function (node: TSESTree.Program): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
-			const { accepted } = verifyAnnotations(services.program, source, candidates);
-			for (const { annotation, messageId, typeName } of accepted) {
-				context.report({
-					data: { typeName },
-					fix: (fixer) => fixer.remove(annotation),
-					messageId,
-					node: annotation,
-				});
+			const { accepted, unverified } = verifyAnnotations(
+				services.program,
+				source,
+				candidates,
+			);
+			for (const { annotation, messageId, type } of accepted) {
+				report(annotation, messageId, type, true);
+			}
+
+			// Unverified is not proven unsafe. Keep the report visible, but
+			// never autofix it.
+			for (const {
+				candidate: { annotation, messageId, type },
+			} of unverified) {
+				report(annotation, messageId, type, false);
 			}
 		},
 		"VariableDeclarator": function (node: TSESTree.VariableDeclarator): void {

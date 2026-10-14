@@ -306,31 +306,34 @@ export const handler: Handler = (value: string) => {
 Candidates that pass the checks above are rechecked with their annotations
 removed in a temporary TypeScript program. The program reads unchanged source
 files from the parser's program, including unsaved editor buffers. The rule
-compares declaration and expression types for each individual fix and for the
-combined ESLint fix. If combined removals depend on one another, it restores an
-annotation and checks the remaining removals again.
+compares declaration, expression, and use-site types for each individual fix and
+for the combined ESLint fix. Types that print the same but name different
+declarations, such as a shadowed interface, compare as different. If combined
+removals depend on one another, it restores an annotation and checks the
+remaining removals again.
 
 Each single removal and the whole accepted set are checked; arbitrary subsets of
 several fixes are not exhaustively checked.
 
-Loop candidates also trigger queries in their enclosing function before type
-comparison, to expose control-flow inference cycles. Loop replay is enabled for
-TypeScript 5.9 and 6.0; other supported versions retain loop annotations because
-their checker query order has not been validated. Under `declaration` or
-`composite`, serialized inferred types are checked for references to
-inaccessible or shadowed names. These targeted checks supplement the existing
-conservative guards; they do not run complete compiler diagnostics or
-declaration emit.
+Loop candidates also trigger queries in the function, or file, that contains
+their outermost loop before type comparison, to expose control-flow inference
+cycles. Loop replay is enabled for TypeScript 5.9 and 6.0; other supported
+versions retain loop annotations because their checker query order has not been
+validated. Under `declaration` or `composite`, serialized inferred types outside
+function bodies are checked for references to inaccessible or shadowed names.
+These targeted checks supplement the existing conservative guards; they do not
+run complete compiler diagnostics or declaration emit.
 
 Assertion functions and receivers used by assertion calls keep their variable or
 parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
 
 Verification is bounded to twelve speculative programs per lint of a file. At
-most ten candidate annotations are considered in that pass. Unverified
-annotations are left alone, including on compiler failures and when serialized
-names cannot be checked. Fix passes can reach further candidates after earlier
-fixes have been applied. Files with no candidates create no speculative program.
+most ten candidate annotations are verified in that pass. Candidates past that
+limit are still reported but carry no fix; `eslint --fix` repeats its fix
+passes, and each pass verifies further candidates after earlier fixes have been
+applied. If the compiler fails during verification, the annotations are left
+alone and not reported. Files with no candidates create no speculative program.
 
 ## Known limitations
 

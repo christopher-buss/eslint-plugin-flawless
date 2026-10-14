@@ -10,9 +10,19 @@ export interface Candidate {
 }
 
 export interface Verification<C extends Candidate> {
+	/** Removals proven safe; these may be autofixed. */
 	readonly accepted: ReadonlyArray<C>;
+	/** Removals that change a type or need their annotation; not reported. */
 	readonly rejected: ReadonlyArray<{ readonly candidate: C; readonly reason: string }>;
+	/**
+	 * Removals left unchecked by the work limit. These may be reported, but
+	 * never autofixed; a later fix pass verifies them.
+	 */
+	readonly unverified: ReadonlyArray<{ readonly candidate: C; readonly reason: string }>;
 }
+
+/** The rejection reason prefix when the compiler fails during verification. */
+export const COMPILER_FAILURE = "The compiler could not verify this removal";
 
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
@@ -37,7 +47,7 @@ const EMIT_FLAGS =
  * @param program - The parser's program, including unsaved source buffers.
  * @param source - The source file whose annotations may be removed.
  * @param candidates - Removals that passed the rule's existing guards.
- * @returns Verified removals and reasons for retaining the other annotations.
+ * @returns Verified, rejected, and unchecked removals.
  */
 export function verifyAnnotations<C extends Candidate>(
 	program: ts.Program,
@@ -45,16 +55,20 @@ export function verifyAnnotations<C extends Candidate>(
 	candidates: ReadonlyArray<C>,
 ): Verification<C> {
 	const rejected: Array<{ candidate: C; reason: string }> = [];
+	const unverified: Array<{ candidate: C; reason: string }> = [];
 	function recordRejection(candidate: C, reason: string): void {
 		rejected.push({ candidate, reason });
 	}
 
 	if (candidates.length === 0) {
-		return { accepted: [], rejected };
+		return { accepted: [], rejected, unverified };
 	}
 
 	try {
 		const checker = program.getTypeChecker();
+		const options = program.getCompilerOptions();
+		const emitsDeclarations = options.declaration === true || options.composite === true;
+		const speculate = speculativeProgramFactory(program, source);
 		const print = createTypePrinter();
 		const assertionTargets = requiredAssertionTargets(checker, source, candidates);
 		const eligible = candidates.filter((candidate) => {
@@ -74,11 +88,14 @@ export function verifyAnnotations<C extends Candidate>(
 			return true;
 		});
 		const selected = eligible.slice(0, MAX_PROGRAMS - 2);
+		const references = referencesByOwner(checker, source, selected);
 		const snapshots = new Map(
 			selected.map((candidate) => {
 				return [
 					candidate,
-					observedNodes(candidate).map((node) => ({ node, type: print(checker, node) })),
+					observedNodes(candidate, references.get(candidate.owner) ?? []).map((node) => {
+						return { node, type: print(checker, node, declarationKey) };
+					}),
 				];
 			}),
 		);
@@ -86,7 +103,7 @@ export function verifyAnnotations<C extends Candidate>(
 		function check(group: ReadonlyArray<C>): Map<C, string> {
 			programs += 1;
 			const ranges = group.map(({ range }) => range).sort((a, b) => a[0] - b[0]);
-			const modified = speculativeProgram(program, source, removeRanges(source.text, ranges));
+			const modified = speculate(removeRanges(source.text, ranges));
 			const after = modified.getSourceFile(source.fileName);
 			if (after === undefined) {
 				throw new Error("The speculative program lost the source file");
@@ -94,6 +111,18 @@ export function verifyAnnotations<C extends Candidate>(
 
 			const fresh = modified.getTypeChecker();
 			const index = indexNodes(after);
+			/**
+			 * Keys declarations in the edited file by their original position,
+			 * so a shadowing declaration never matches the one it shadows.
+			 * @param declaration - A declaration in the speculative program.
+			 * @returns The key of the same declaration in the original program.
+			 */
+			function originalKey(declaration: ts.Node): string {
+				return declarationKey(declaration, (position, file) => {
+					return file === after ? unmapPosition(position, ranges) : position;
+				});
+			}
+
 			function mapped(node: ts.Node): ts.Node | undefined {
 				return index.get(
 					nodeKey(
@@ -109,7 +138,7 @@ export function verifyAnnotations<C extends Candidate>(
 			const replayed = new Set<ts.Node>();
 			for (const candidate of group) {
 				if (insideLoop(candidate.owner)) {
-					const root = enclosingFunction(candidate.owner);
+					const root = loopScope(candidate.owner);
 					const replacement = ts.isSourceFile(root) ? after : mapped(root);
 					if (replacement === undefined) {
 						throw new Error("Cannot locate the affected function");
@@ -127,7 +156,9 @@ export function verifyAnnotations<C extends Candidate>(
 				for (const { node, type } of snapshots.get(candidate) ?? []) {
 					const replacement = mapped(node);
 					const inferred =
-						replacement === undefined ? undefined : print(fresh, replacement);
+						replacement === undefined
+							? undefined
+							: print(fresh, replacement, originalKey);
 					if (inferred !== type) {
 						problems.set(
 							candidate,
@@ -137,10 +168,10 @@ export function verifyAnnotations<C extends Candidate>(
 					}
 				}
 
-				const options = program.getCompilerOptions();
 				if (
 					!problems.has(candidate) &&
-					(options.declaration === true || options.composite === true)
+					emitsDeclarations &&
+					affectsDeclarationEmit(candidate.owner)
 				) {
 					const owner = mapped(candidate.owner);
 					if (owner === undefined || !canNameType(fresh, owner)) {
@@ -156,10 +187,11 @@ export function verifyAnnotations<C extends Candidate>(
 		}
 
 		// Bound speculative work independently of the number of annotations in
-		// the file. Additional candidates can be revisited on a later fix pass.
+		// the file. Additional candidates are reported without a fix; a later
+		// fix pass verifies them once earlier fixes are applied.
 		let accepted = selected;
 		for (const candidate of eligible.slice(MAX_PROGRAMS - 2)) {
-			recordRejection(candidate, "The verification work limit was reached");
+			unverified.push({ candidate, reason: "The verification work limit was reached" });
 		}
 
 		if (accepted.length > 1) {
@@ -177,7 +209,7 @@ export function verifyAnnotations<C extends Candidate>(
 		while (accepted.length > 0 && programs < MAX_PROGRAMS) {
 			const problems = check(accepted);
 			if (problems.size === 0) {
-				return { accepted, rejected };
+				return { accepted, rejected, unverified };
 			}
 
 			// Restore one annotation first: restoring a context provider can
@@ -198,20 +230,22 @@ export function verifyAnnotations<C extends Candidate>(
 		}
 
 		for (const candidate of accepted) {
-			recordRejection(candidate, "The verification work limit was reached");
+			unverified.push({ candidate, reason: "The verification work limit was reached" });
 		}
-	} catch {
+	} catch (err) {
 		// A host/API mismatch or an unsupported compiler must never turn an
-		// unverified removal into an autofix.
-		const recorded = new Set(rejected.map(({ candidate }) => candidate));
+		// unverified removal into an autofix or into a report the user cannot
+		// act on. The compatibility CI job keeps this path from going unseen.
+		const reason = `${COMPILER_FAILURE}: ${err instanceof Error ? err.message : String(err)}`;
+		const recorded = new Set([...rejected, ...unverified].map(({ candidate }) => candidate));
 		for (const candidate of candidates) {
 			if (!recorded.has(candidate)) {
-				recordRejection(candidate, "The compiler could not verify this removal");
+				recordRejection(candidate, reason);
 			}
 		}
 	}
 
-	return { accepted: [], rejected };
+	return { accepted: [], rejected, unverified };
 }
 
 /**
@@ -311,10 +345,24 @@ function fileKey(name: string): string {
 	return ts.sys.useCaseSensitiveFileNames ? resolved : resolved.toLowerCase();
 }
 
-function speculativeProgram(old: ts.Program, source: ts.SourceFile, text: string): ts.Program {
-	const base = ts.createCompilerHost(old.getCompilerOptions(), true);
+/**
+ * Builds programs that differ from `old` only in the text of `source`. The
+ * file map and the base host are built once and shared by every program.
+ * @param old - The parser's program.
+ * @param source - The file whose text each program replaces.
+ * @returns A function that creates a program for a replacement text.
+ */
+function speculativeProgramFactory(
+	old: ts.Program,
+	source: ts.SourceFile,
+): (text: string) => ts.Program {
+	const options = old.getCompilerOptions();
+	const base = ts.createCompilerHost(options, true);
 	const files = new Map(old.getSourceFiles().map((file) => [fileKey(file.fileName), file]));
 	const target = fileKey(source.fileName);
+	const projectReferences = old.getProjectReferences();
+	const rootNames = old.getRootFileNames();
+	let { text } = source;
 	const host: ts.CompilerHost = {
 		...base,
 		fileExists: (name) => {
@@ -351,18 +399,17 @@ function speculativeProgram(old: ts.Program, source: ts.SourceFile, text: string
 						base.readFile(name));
 		},
 	};
-	const programOptions: ts.CreateProgramOptions = {
-		host,
-		oldProgram: old,
-		options: old.getCompilerOptions(),
-		rootNames: old.getRootFileNames(),
-	};
-	const projectReferences = old.getProjectReferences();
+	const programOptions: ts.CreateProgramOptions = { host, oldProgram: old, options, rootNames };
 	if (projectReferences !== undefined) {
 		programOptions.projectReferences = projectReferences;
 	}
 
-	return ts.createProgram(programOptions);
+	return (replacement) => {
+		// createProgram reads every file synchronously, so the shared host
+		// never serves two texts to one program.
+		text = replacement;
+		return ts.createProgram(programOptions);
+	};
 }
 
 function removeRanges(text: string, ranges: ReadonlyArray<readonly [number, number]>): string {
@@ -391,6 +438,39 @@ function mapPosition(position: number, ranges: ReadonlyArray<readonly [number, n
 	return position - shift;
 }
 
+/**
+ * Maps a position in the edited text back to the original text.
+ * @param position - A position in the edited text.
+ * @param ranges - The removed ranges, sorted, in original positions.
+ * @returns The original position of the same character.
+ */
+function unmapPosition(position: number, ranges: ReadonlyArray<readonly [number, number]>): number {
+	let shift = 0;
+	for (const [start, end] of ranges) {
+		if (position + shift < start) {
+			break;
+		}
+
+		shift += end - start;
+	}
+
+	return position + shift;
+}
+
+/**
+ * Identifies a declaration by file and start, the same across programs.
+ * @param declaration - A node that declares a symbol named in a type.
+ * @param translate - Maps a start in the declaring file to an original start.
+ * @returns A key equal for the same declaration in either program.
+ */
+function declarationKey(
+	declaration: ts.Node,
+	translate: (position: number, file: ts.SourceFile) => number = (position) => position,
+): string {
+	const file = declaration.getSourceFile();
+	return `${fileKey(file.fileName)}:${translate(declaration.getStart(file), file)}`;
+}
+
 function nodeKey(kind: ts.SyntaxKind, start: number, end: number): string {
 	return `${kind}:${start}:${end}`;
 }
@@ -416,15 +496,95 @@ function insideLoop(node: ts.Node): boolean {
 	return false;
 }
 
-function enclosingFunction(node: ts.Node): ts.Node {
-	let root: ts.Node = node.getSourceFile();
+/**
+ * The scope to replay for a candidate in a loop: the nearest function, or the
+ * file, that contains the candidate's outermost loop.
+ * @param node - A candidate inside a loop.
+ * @returns The function-like node or source file to replay.
+ */
+function loopScope(node: ts.Node): ts.Node {
+	let loop: ts.Node | undefined;
 	for (let { parent } = node; !ts.isSourceFile(parent); { parent } = parent) {
-		if (ts.isFunctionLike(parent)) {
-			root = parent;
+		if (ts.isIterationStatement(parent, false)) {
+			loop = parent;
 		}
 	}
 
-	return root;
+	for (let current = loop?.parent; current !== undefined; current = current.parent) {
+		if (ts.isFunctionLike(current) || ts.isSourceFile(current)) {
+			return current;
+		}
+	}
+
+	return node.getSourceFile();
+}
+
+/**
+ * Whether declaration emit can print the candidate's type. Declarations in a
+ * function body, and parameters of functions there, never reach a `.d.ts`.
+ * @param owner - The candidate's declaration.
+ * @returns False when the owner is inside a function body.
+ */
+function affectsDeclarationEmit(owner: Candidate["owner"]): boolean {
+	for (let node: ts.Node = owner; !ts.isSourceFile(node.parent); node = node.parent) {
+		const { parent } = node;
+		if (ts.isFunctionLike(parent) && "body" in parent && parent.body === node) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Finds uses of each candidate's binding in the file. Removing an annotation
+ * can change a use site's contextual type or overload choice.
+ * @param checker - The original checker.
+ * @param source - The file to search.
+ * @param candidates - The candidates whose bindings are searched for.
+ * @returns The referencing identifiers of each candidate owner.
+ */
+function referencesByOwner(
+	checker: ts.TypeChecker,
+	source: ts.SourceFile,
+	candidates: ReadonlyArray<Candidate>,
+): Map<ts.Node, Array<ts.Identifier>> {
+	const owners = new Map<ts.Symbol, Candidate["owner"]>();
+	const names = new Set<string>();
+	for (const { owner } of candidates) {
+		const symbol = ts.isIdentifier(owner.name)
+			? checker.getSymbolAtLocation(owner.name)
+			: undefined;
+		if (symbol !== undefined) {
+			owners.set(symbol, owner);
+			names.add(symbol.name);
+		}
+	}
+
+	const references = new Map<ts.Node, Array<ts.Identifier>>();
+	function visit(node: ts.Node): void {
+		if (ts.isTypeNode(node)) {
+			return;
+		}
+
+		if (ts.isIdentifier(node) && names.has(node.text)) {
+			const symbol = checker.getSymbolAtLocation(node);
+			const owner = symbol === undefined ? undefined : owners.get(symbol);
+			if (owner !== undefined && owner.name !== node) {
+				const list = references.get(owner) ?? [];
+				list.push(node);
+				references.set(owner, list);
+			}
+		}
+
+		ts.forEachChild(node, visit);
+	}
+
+	if (owners.size > 0) {
+		visit(source);
+	}
+
+	return references;
 }
 
 function replay(checker: ts.TypeChecker, root: ts.Node): void {
@@ -441,10 +601,19 @@ function replay(checker: ts.TypeChecker, root: ts.Node): void {
 	visit(root);
 }
 
-function observedNodes(candidate: Candidate): Array<ts.Node> {
+function observedNodes(
+	candidate: Candidate,
+	references: ReadonlyArray<ts.Identifier>,
+): Array<ts.Node> {
 	const nodes: Array<ts.Node> = [candidate.owner];
 	if (ts.isParameter(candidate.owner)) {
 		nodes.push(candidate.owner.parent);
+	}
+
+	// A use site's parent observes its contextual typing and overload choice,
+	// as in `register(handler)` or `handler = (event) => event.detail`.
+	for (const reference of references) {
+		nodes.push(reference, reference.parent);
 	}
 
 	const root = candidate.owner.initializer;
@@ -478,21 +647,62 @@ function observedNodes(candidate: Candidate): Array<ts.Node> {
 
 /**
  * Normalize property ordering, preserving every overload and intersection.
+ * Names are qualified with their declarations, so two types that print the
+ * same, such as a shadowed `Options`, compare as different.
  * @returns A type printer with a cache scoped to this verification run.
  */
-function createTypePrinter(): (checker: ts.TypeChecker, node: ts.Node) => string {
+function createTypePrinter(): (
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	locate: (declaration: ts.Node) => string,
+) => string {
 	const cache = new Map<string, string>();
 	const printer = ts.createPrinter({ removeComments: true });
-	return (checker, node) => {
+	function declarations(
+		checker: ts.TypeChecker,
+		type: ts.Type,
+		locate: (declaration: ts.Node) => string,
+	): string {
+		const keys = new Set<string>();
+		function add(name: ts.EntityName): void {
+			const identifier = ts.isQualifiedName(name) ? name.right : name;
+			// The node builder attaches the symbol each emitted name denotes.
+			const { symbol } = identifier as ts.Node & { symbol?: ts.Symbol };
+			const declaration = symbol?.declarations?.[0];
+			if (declaration !== undefined) {
+				keys.add(`${identifier.text}@${locate(declaration)}`);
+			}
+		}
+
+		function visit(current: ts.Node): void {
+			if (ts.isTypeReferenceNode(current)) {
+				add(current.typeName);
+			} else if (ts.isTypeQueryNode(current)) {
+				add(current.exprName);
+			}
+
+			ts.forEachChild(current, visit);
+		}
+
+		const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
+		if (node !== undefined) {
+			visit(node);
+		}
+
+		return [...keys].sort().join(", ");
+	}
+
+	return (checker, node, locate) => {
 		const target =
 			ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
 				? node.name
 				: node;
 		const type = checker.getTypeAtLocation(target);
 		const text = checker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation);
+		const suffix = ` [${declarations(checker, type, locate)}]`;
 		const cached = cache.get(text);
 		if (cached !== undefined) {
-			return cached;
+			return cached + suffix;
 		}
 
 		const source = ts.createSourceFile(
@@ -538,7 +748,7 @@ function createTypePrinter(): (checker: ts.TypeChecker, node: ts.Node) => string
 
 			const result = printer.printFile(resultFile).trim();
 			cache.set(text, result);
-			return result;
+			return result + suffix;
 		} finally {
 			transformed.dispose();
 		}
