@@ -11,7 +11,7 @@ export const TYPE_ANNOTATION_CASES = [
 		testPath: "./cases/typed/annotation-removals.ts",
 	},
 	{
-		expectedIssues: 10,
+		expectedIssues: 40,
 		name: "40 candidates, bounded verification",
 		testPath: "./cases/typed/annotation-dense.ts",
 	},

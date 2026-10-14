@@ -87,8 +87,9 @@ row over identical text and compiler options. Their medians measure total warm
 lint cost per file; subtract the baseline median to estimate the rule's added
 cost. Small differences within the reported deviation are noise. **Flawless,
 autofix** rows measure the entire fix loop, including re-parsing and re-checking
-after edits. The dense fixture needs multiple passes because verification accepts
-at most 10 candidates per pass.
+after edits. The dense fixture reports all 40 candidates, but only 10 carry a fix,
+because verification accepts at most 10 candidates per pass; the fix loop needs
+multiple passes.
 
 Program setup occurs before timed iterations. These are steady-state editor/CI
 timings, not cold project startup or a prediction for an arbitrary project. The
