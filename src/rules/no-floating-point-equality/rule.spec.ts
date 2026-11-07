@@ -88,16 +88,9 @@ const valid: Array<ValidTestCase> = [
 		expect(serviceFee(2)).toBeCloseTo(0.3)
 	`,
 	unindent`
-		import { expect } from "vitest"
-		expect(serviceFee(2)).toEqual(0.3)
-	`,
-	unindent`
 		function expect(value: unknown) {
 			return { toBe(expected: unknown) {} }
 		}
-		expect(0.1 + 0.2).toBe(0.3)
-	`,
-	unindent`
 		expect(0.1 + 0.2).toBe(0.3)
 	`,
 	unindent`
@@ -141,6 +134,65 @@ const valid: Array<ValidTestCase> = [
 		`,
 		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
+	unindent`
+		function expect(value: unknown) {
+			return { toEqual(expected: unknown) {} }
+		}
+		expect(actual).toEqual(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).toEqual({ total: 0.3 })
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).toEqual(0.5)
+	`,
+	"expect(actual).toBeCloseTo(0.3)",
+	unindent`
+		import assert from "node:assert"
+		function check(assert: { deepStrictEqual(a: unknown, b: unknown): void }) {
+			assert.deepStrictEqual(actual, 0.3)
+		}
+	`,
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(actual).toEqual(0.3)
+		`,
+		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
+	unindent`
+		import { expect } from "vitest"
+		const total = 0.1 + 0.2
+		expect(total).toEqual(expect.closeTo(0.3, 5))
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(0.1 + 0.2).toStrictEqual(expect.any(Number))
+	`,
+	unindent`
+		function expect(value: unknown) {
+			return { resolves: { toBe(_: unknown) {} } }
+		}
+		expect(actual).resolves.toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).foo.toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect.soft(actual).toBeCloseTo(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect.foo(actual).toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).resolves.toEqual(expect.any(Number))
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -291,6 +343,133 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			import { notStrictEqual as differs } from "node:assert/strict"
 			differs(actual, 0.3, "message")
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(serviceFee(2)).toEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{ code: "expect(0.1 + 0.2).toBe(0.3)", errors: [error] },
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(actual).toStrictEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "@jest/globals"
+			expect(actual).not.toEqual(0.1 + 0.2)
+		`,
+		errors: [error],
+	},
+	{ code: "expect(actual).toEqual(0.3)", errors: [error] },
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).resolves.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).rejects.toEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).resolves.not.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).rejects.not.toEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).not.resolves.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.soft(actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.soft(actual).not.toStrictEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.poll(() => actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect["soft"](actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{ code: "expect.soft(actual).toBe(0.3)", errors: [error] },
+	{
+		code: unindent`
+			import assert from "node:assert/strict"
+			assert.deepStrictEqual(actual, 0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import * as assert from "node:assert"
+			assert.notDeepEqual(actual, 0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { deepStrictEqual as same } from "assert"
+			same(actual, 0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			const expected = 0.1 + 0.2
+			function outer() {
+				return () => actual === expected
+			}
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			const ratio = 0.1 + 0.2
+			function f() {
+				type ratio = number
+				return actual === ratio
+			}
 		`,
 		errors: [error],
 	},

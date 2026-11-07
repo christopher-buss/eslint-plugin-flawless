@@ -2,7 +2,7 @@ import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/util
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources } from "../../utils/test-globals";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 
 export const RULE_NAME = "no-floating-point-equality";
 
@@ -12,10 +12,22 @@ export type MessageIds = typeof MESSAGE_ID;
 export type Options = [];
 
 const ASSERT_SOURCES = new Set(["assert", "assert/strict", "node:assert", "node:assert/strict"]);
-const ASSERT_METHODS = new Set(["notStrictEqual", "strictEqual"]);
+const ASSERT_METHODS = new Set([
+	"deepEqual",
+	"deepStrictEqual",
+	"notDeepEqual",
+	"notDeepStrictEqual",
+	"notStrictEqual",
+	"strictEqual",
+]);
+const EXPECT_MATCHERS = new Set(["toBe", "toEqual", "toStrictEqual"]);
+const EXPECT_MODIFIERS = new Set(["rejects", "resolves"]);
+const EXPECT_VARIANTS = new Set(["poll", "soft"]);
 const EQUALITY_OPERATORS = new Set(["!=", "!==", "==", "==="]);
 const CONSTANT_OPERATORS = new Set(["%", "*", "**", "+", "-", "/"]);
 const PROPAGATING_OPERATORS = new Set(["%", "*", "**", "+", "-"]);
+const INCLUSIVE_OPERATORS = new Set(["<=", ">="]);
+const EXCLUSIVE_OPERATORS = new Set(["<", ">"]);
 const DECIMAL_PATTERN = /^(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/u;
 
 const messages = {
@@ -176,7 +188,6 @@ function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let sourceCode: Readonly<TSESLint.SourceCode>;
-	let expectVariables: Set<TSESLint.Scope.Variable>;
 	let assertObjectVariables: Set<TSESLint.Scope.Variable>;
 	let assertFunctionVariables: Set<TSESLint.Scope.Variable>;
 	let resolvedVariables: WeakMap<TSESTree.Identifier, null | TSESLint.Scope.Variable>;
@@ -184,7 +195,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sensitiveExpressions: WeakMap<TSESTree.Node, boolean>;
 	let literalSensitivity: Map<string, boolean>;
 	let constStates: Map<TSESLint.Scope.Variable, ConstState>;
-	let constNames: Set<string>;
 	let tokenSequences: WeakMap<TSESTree.Node, ReadonlyArray<string>>;
 	let expectSources: ReadonlySet<string>;
 
@@ -194,17 +204,13 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return cached;
 		}
 
-		if (!constNames.has(identifier.name)) {
-			resolvedVariables.set(identifier, null);
-			return null;
-		}
-
 		let scope: null | TSESLint.Scope.Scope = sourceCode.getScope(identifier);
 		while (scope !== null) {
-			const variable = scope.variables.find(
-				(candidate) => candidate.name === identifier.name,
-			);
-			if (variable !== undefined) {
+			const variable = scope.set.get(identifier.name);
+			if (
+				variable !== undefined &&
+				(variable as { isValueVariable?: boolean }).isValueVariable !== false
+			) {
 				resolvedVariables.set(identifier, variable);
 				return variable;
 			}
@@ -243,24 +249,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 	}
 
-	function indexConstBindings(): void {
-		for (const scope of sourceCode.scopeManager?.scopes ?? []) {
-			for (const variable of scope.variables) {
-				const definition = variable.defs[0];
-				if (
-					variable.defs.length === 1 &&
-					definition?.type === TSESLint.Scope.DefinitionType.Variable &&
-					definition.parent.kind === "const" &&
-					definition.node.id.type === AST_NODE_TYPES.Identifier &&
-					definition.node.init !== null
-				) {
-					constNames.add(variable.name);
-					indexReferences(variable);
-				}
-			}
-		}
-	}
-
 	function scanAssertionImports(program: TSESTree.Program): void {
 		for (const statement of program.body) {
 			if (
@@ -281,12 +269,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 
 				if (
-					expectSources.has(source) &&
-					specifier.type === AST_NODE_TYPES.ImportSpecifier &&
-					importName(specifier) === "expect"
-				) {
-					addDeclaredVariable(specifier, expectVariables);
-				} else if (
 					ASSERT_SOURCES.has(source) &&
 					(specifier.type === AST_NODE_TYPES.ImportDefaultSpecifier ||
 						specifier.type === AST_NODE_TYPES.ImportNamespaceSpecifier)
@@ -327,7 +309,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	function isFloatingPointLiteral(node: TSESTree.NumberLiteral): boolean {
-		const raw = sourceCode.getText(node).replaceAll("_", "").toLowerCase();
+		const raw = node.raw.replaceAll("_", "").toLowerCase();
 		const cached = literalSensitivity.get(raw);
 		if (cached !== undefined) {
 			return cached;
@@ -443,11 +425,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	function isIndirectExactComparison(node: TSESTree.LogicalExpression): boolean {
-		let accepted: null | Set<string> = null;
+		let accepted: null | ReadonlySet<string> = null;
 		if (node.operator === "&&") {
-			accepted = new Set(["<=", ">="]);
+			accepted = INCLUSIVE_OPERATORS;
 		} else if (node.operator === "||") {
-			accepted = new Set(["<", ">"]);
+			accepted = EXCLUSIVE_OPERATORS;
 		}
 
 		if (
@@ -477,26 +459,58 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		return false;
 	}
 
+	function isAsymmetricMatcher(node: TSESTree.Expression): boolean {
+		return (
+			node.type === AST_NODE_TYPES.CallExpression &&
+			node.callee.type === AST_NODE_TYPES.MemberExpression &&
+			node.callee.object.type === AST_NODE_TYPES.Identifier &&
+			resolveTestGlobalName(sourceCode, node.callee.object, expectSources) === "expect"
+		);
+	}
+
+	function isExpectCallee(callee: TSESTree.Expression): boolean {
+		if (callee.type === AST_NODE_TYPES.Identifier) {
+			return resolveTestGlobalName(sourceCode, callee, expectSources) === "expect";
+		}
+
+		return (
+			callee.type === AST_NODE_TYPES.MemberExpression &&
+			callee.object.type === AST_NODE_TYPES.Identifier &&
+			EXPECT_VARIANTS.has(propertyName(callee) ?? "") &&
+			resolveTestGlobalName(sourceCode, callee.object, expectSources) === "expect"
+		);
+	}
+
 	function expectArguments(node: TSESTree.CallExpression): null | ReadonlyArray<TSESTree.Node> {
 		const member = node.callee;
 		if (
 			member.type !== AST_NODE_TYPES.MemberExpression ||
-			propertyName(member) !== "toBe" ||
+			!EXPECT_MATCHERS.has(propertyName(member) ?? "") ||
 			node.arguments.length === 0
 		) {
 			return null;
 		}
 
 		let received = member.object;
-		if (received.type === AST_NODE_TYPES.MemberExpression && propertyName(received) === "not") {
+		let hasNot = false;
+		let hasModifier = false;
+		while (received.type === AST_NODE_TYPES.MemberExpression) {
+			const name = propertyName(received) ?? "";
+			if (name === "not" && !hasNot) {
+				hasNot = true;
+			} else if (EXPECT_MODIFIERS.has(name) && !hasModifier) {
+				hasModifier = true;
+			} else {
+				return null;
+			}
+
 			received = received.object;
 		}
 
 		if (
 			received.type !== AST_NODE_TYPES.CallExpression ||
-			received.callee.type !== AST_NODE_TYPES.Identifier ||
 			received.arguments.length === 0 ||
-			!isImportedBinding(received.callee, expectVariables)
+			!isExpectCallee(received.callee)
 		) {
 			return null;
 		}
@@ -507,7 +521,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			actual === undefined ||
 			expected === undefined ||
 			actual.type === AST_NODE_TYPES.SpreadElement ||
-			expected.type === AST_NODE_TYPES.SpreadElement
+			expected.type === AST_NODE_TYPES.SpreadElement ||
+			isAsymmetricMatcher(expected)
 		) {
 			return null;
 		}
@@ -522,12 +537,20 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 		let recognized = false;
 		if (node.callee.type === AST_NODE_TYPES.Identifier) {
+			if (assertFunctionVariables.size === 0) {
+				return null;
+			}
+
 			recognized = isImportedBinding(node.callee, assertFunctionVariables);
 		} else if (
 			node.callee.type === AST_NODE_TYPES.MemberExpression &&
 			ASSERT_METHODS.has(propertyName(node.callee) ?? "") &&
 			node.callee.object.type === AST_NODE_TYPES.Identifier
 		) {
+			if (assertObjectVariables.size === 0) {
+				return null;
+			}
+
 			recognized = isImportedBinding(node.callee.object, assertObjectVariables);
 		}
 
@@ -552,7 +575,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		before(): void {
 			({ sourceCode } = context);
-			expectVariables = new Set();
 			assertObjectVariables = new Set();
 			assertFunctionVariables = new Set();
 			resolvedVariables = new WeakMap();
@@ -560,10 +582,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			sensitiveExpressions = new WeakMap();
 			literalSensitivity = new Map();
 			constStates = new Map();
-			constNames = new Set();
 			tokenSequences = new WeakMap();
 			expectSources = getTestGlobalSources(context.settings);
-			indexConstBindings();
 			scanAssertionImports(sourceCode.ast);
 		},
 		BinaryExpression(node: TSESTree.BinaryExpression): void {

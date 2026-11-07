@@ -75,7 +75,7 @@ const FLOATING_CASES = [
 		name: "matching and near-miss indirect comparisons",
 		testPath: "./cases/floating-indirect-long.ts",
 	},
-	{ expectedIssues: 300, name: "assertion-heavy", testPath: "./cases/floating-assertions.ts" },
+	{ expectedIssues: 500, name: "assertion-heavy", testPath: "./cases/floating-assertions.ts" },
 	{ expectedIssues: 200, name: "switch-heavy", testPath: "./cases/floating-switches.ts" },
 	{ expectedIssues: 180, name: "realistic mixed", testPath: "./cases/floating-realistic.ts" },
 ] as const;

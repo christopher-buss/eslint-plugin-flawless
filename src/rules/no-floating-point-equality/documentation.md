@@ -19,13 +19,17 @@ The rule reports:
 - Indirect exact checks such as `value <= 0.3 && value >= 0.3` and
   `value < 0.3 || value > 0.3`.
 - Floating-point-sensitive `switch` case labels.
-- `toBe` assertions made through an explicitly imported `expect` from `vitest`,
-  `@jest/globals`, or `bun:test`, including `.not.toBe`. A project that imports
-  the test globals from a re-export names that package with
+- `toBe`, `toEqual`, and `toStrictEqual` assertions, including their `.not`,
+  `.resolves`, and `.rejects` forms and the `expect.soft` and `expect.poll`
+  variants, made through the global `expect` (Vitest `globals: true` or Jest
+  injected globals) or an `expect` imported from `vitest`, `@jest/globals`, or
+  `bun:test`. A local `expect` binding is ignored. A project that imports the
+  test globals from a re-export names that package with
   `settings.jest.globalPackage` (the same setting `eslint-plugin-jest` reads,
   e.g. `{ jest: { globalPackage: "@rbxts/jest-globals" } }`). The setting takes
   a single package name and _replaces_ the three built-in sources.
-- Node `strictEqual` and `notStrictEqual` assertions imported from `assert`,
+- Node `strictEqual`, `notStrictEqual`, `deepStrictEqual`, `notDeepStrictEqual`,
+  `deepEqual`, and `notDeepEqual` assertions imported from `assert`,
   `assert/strict`, `node:assert`, or `node:assert/strict`. Default, namespace,
   named, and aliased imports are supported.
 
@@ -67,6 +71,5 @@ This rule does not use TypeScript type information and does not infer whether an
 arbitrary variable contains a floating-point value. Mutable variables,
 parameters, imported values, and destructured bindings are not followed.
 
-Only the explicitly imported assertion APIs listed above are recognized.
-Unimported global `expect` calls and Chai, Cypress, Playwright, or other
-assertion libraries are intentionally ignored.
+Only the assertion APIs listed above are recognized. Chai, Cypress, Playwright,
+or other assertion libraries are intentionally ignored.
