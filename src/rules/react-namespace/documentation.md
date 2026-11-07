@@ -114,6 +114,9 @@ type import. Removal is conservative: the specifier is dropped only when every
 reference to it is a convertible type reference, so a binding also used as a
 value is left in place for unused-import tooling to handle.
 
+With [`umdGlobal`](#umdglobal) enabled, no React import is added; the type is
+qualified as `React.…` and resolves through the UMD global.
+
 ### Convergence
 
 When several edits target the import region in one pass, ESLint applies the
@@ -123,8 +126,48 @@ form.
 
 ## Options
 
-This rule has no options. Both directions are always enforced.
+Both directions are always enforced. The rule accepts one options object.
+
+### `umdGlobal`
+
+Default: `false`.
+
+`@types/react` declares `export as namespace React`, so TypeScript resolves
+`React.ReactNode` in a type position without any import. Set `umdGlobal` to
+`true` to rely on that global: when the file has no default or namespace React
+import, the type fix qualifies the reference with `React.` and does not insert
+`import React from "…"`. The redundant named import is still removed. When a
+default or namespace React import exists, the fix uses its local name.
+
+```js
+// eslint.config.js
+export default [
+	{
+		rules: {
+			"flawless/react-namespace": ["error", { umdGlobal: true }],
+		},
+	},
+];
+```
+
+With `umdGlobal: true`, this code:
+
+```tsx
+import type { ReactNode } from "react";
+
+type Node = ReactNode;
+```
+
+is fixed to:
+
+```tsx
+type Node = React.ReactNode;
+```
 
 <!-- begin auto-generated rule options list -->
+
+| Name        | Description                                                                                             | Type    | Default |
+| :---------- | :------------------------------------------------------------------------------------------------------ | :------ | :------ |
+| `umdGlobal` | Rely on the `React` UMD global for types: the type fix does not insert a React import when none exists. | Boolean | `false` |
 
 <!-- end auto-generated rule options list -->

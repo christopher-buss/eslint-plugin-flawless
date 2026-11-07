@@ -1,4 +1,9 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import {
+	AST_NODE_TYPES,
+	type JSONSchema,
+	type TSESLint,
+	type TSESTree,
+} from "@typescript-eslint/utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
@@ -21,9 +26,35 @@ const MESSAGE_ID_TYPE = "typeNamedImport";
 
 export type MessageIds = typeof MESSAGE_ID_RUNTIME | typeof MESSAGE_ID_TYPE;
 
-export type Options = [];
+export interface ReactNamespaceOptions {
+	/**
+	 * Rely on the `React` UMD global (`export as namespace React` in
+	 * `@types/react`) for type references. When true and the file has no
+	 * default or namespace React import, the type fix qualifies with `React.`
+	 * and does not insert an import. Defaults to `false`.
+	 */
+	readonly umdGlobal?: boolean;
+}
+
+export type Options = [ReactNamespaceOptions?];
 
 const DEFAULT_IMPORT_SOURCE = "react";
+
+const DEFAULT_UMD_GLOBAL = false;
+
+const schema: Array<JSONSchema.JSONSchema4> = [
+	{
+		additionalProperties: false,
+		properties: {
+			umdGlobal: {
+				description:
+					"Rely on the `React` UMD global for types: the type fix does not insert a React import when none exists.",
+				type: "boolean",
+			},
+		},
+		type: "object",
+	},
+];
 
 const messages = {
 	[MESSAGE_ID_RUNTIME]:
@@ -97,6 +128,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sourceCode: Readonly<TSESLint.SourceCode>;
 	let resolutions: Map<TSESTree.Identifier | TSESTree.JSXIdentifier, ReactImportResolution>;
 	let removableInfoByVariable: Map<TSESLint.Scope.Variable, RemovableInfo>;
+	let umdGlobal: boolean;
 
 	function getRemovableInfo(variable: TSESLint.Scope.Variable): RemovableInfo {
 		let info = removableInfoByVariable.get(variable);
@@ -111,6 +143,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		before(): void {
 			({ sourceCode } = context);
+			umdGlobal = context.options[0]?.umdGlobal ?? DEFAULT_UMD_GLOBAL;
 			const settings = context.settings["react-x"];
 			importSource = settings?.importSource ?? DEFAULT_IMPORT_SOURCE;
 			program = sourceCode.ast;
@@ -195,7 +228,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					// only on the first reference, so both edits happen exactly
 					// once.
 					if (removable) {
-						if (!hasReactNamespaceImport(declarations)) {
+						if (!umdGlobal && !hasReactNamespaceImport(declarations)) {
 							fixes.push(
 								insertImportStatement(
 									fixer,
@@ -233,8 +266,9 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
+	defaultOptions: [{ umdGlobal: DEFAULT_UMD_GLOBAL }],
 	meta: {
+		defaultOptions: [{ umdGlobal: DEFAULT_UMD_GLOBAL }],
 		docs: {
 			description:
 				"Prefer named imports for React runtime values and the React namespace for React types",
@@ -244,7 +278,7 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema,
 		type: "problem",
 	},
 });
