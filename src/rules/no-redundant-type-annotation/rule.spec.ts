@@ -19,6 +19,29 @@ const valid: Array<ValidTestCase> = [
 		declare function getString(): string;
 		const value = getString();
 	`,
+	// A method whose object has no context gets no parameter types.
+	unindent`
+		const handlers = {
+			format(text: string) {
+				return text;
+			},
+		};
+	`,
+	// A union of object contexts types a method from each member.
+	unindent`
+		declare const handlers:
+			| { format(text: string): string }
+			| { format(text: number): string };
+		const next: typeof handlers = {
+			format(text: string) {
+				return text;
+			},
+		};
+	`,
+	// A union of different callbacks gives no contextual signature.
+	unindent`
+		const read: ((value: string) => void) | ((value: number) => void) = (value: string) => {};
+	`,
 	// No initializer, so inference has nothing to work from.
 	unindent`
 		declare const value: string;
@@ -618,6 +641,73 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// An object literal method takes its context from the property it fills.
+	{
+		code: unindent`
+			interface Handlers {
+				format(text: string, width: number): string;
+			}
+			const handlers: Handlers = {
+				format(text: string, width: number) {
+					return text.padEnd(width);
+				},
+			};
+		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
+		output: unindent`
+			interface Handlers {
+				format(text: string, width: number): string;
+			}
+			const handlers: Handlers = {
+				format(text, width) {
+					return text.padEnd(width);
+				},
+			};
+		`,
+	},
+	// An optional callback's `undefined` offers no signature of its own.
+	{
+		code: unindent`
+			interface Options {
+				onChange?: (value: string) => void;
+			}
+			declare function report(value: string): void;
+			const options: Options = { onChange: (value: string) => report(value) };
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Options {
+				onChange?: (value: string) => void;
+			}
+			declare function report(value: string): void;
+			const options: Options = { onChange: (value) => report(value) };
+		`,
+	},
+	{
+		code: unindent`
+			interface Options {
+				read?(value: string): void;
+			}
+			declare function report(value: string): void;
+			const options: Options = {
+				read(value: string) {
+					report(value);
+				},
+			};
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Options {
+				read?(value: string): void;
+			}
+			declare function report(value: string): void;
+			const options: Options = {
+				read(value) {
+					report(value);
+				},
+			};
+		`,
+	},
 	// A non-const assertion supplies a real contextual type.
 	{
 		code: unindent`

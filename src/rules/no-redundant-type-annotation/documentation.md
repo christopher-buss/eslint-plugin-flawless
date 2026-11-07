@@ -161,8 +161,15 @@ each((item: Item) => {
 });
 ```
 
-The check runs on function and arrow expressions only. A function declaration
-has no contextual type, so its parameters must be annotated.
+The check runs on function and arrow expressions, including object literal
+methods. A method takes its context from the property of the same name in the
+object's contextual type. A function declaration has no contextual type, so its
+parameters must be annotated.
+
+A contextual type of `undefined` or `null` gives no signature, so those members
+are dropped first: an optional callback property counts as its function type. A
+union of different function types, or a method in an object whose context is a
+union, is not reported.
 
 A parameter is reported only when the rule can prove where its context comes
 from, and that the fix cannot change it. The search climbs from the function
