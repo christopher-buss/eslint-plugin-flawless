@@ -3,6 +3,7 @@ import { AST_TOKEN_TYPES } from "@typescript-eslint/utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { isLineBreak, isWhitespace } from "../../utils/char-codes";
 
 export const RULE_NAME = "no-em-dash";
 
@@ -70,40 +71,6 @@ interface MarkdownNode {
 
 /** Mdast blocks whose children are phrasing content (one prose span each). */
 const MARKDOWN_PROSE_BLOCKS = new Set(["heading", "paragraph", "tableCell"]);
-
-/**
- * Whether a code unit ends a line, matching ESLint's line-break set (`\n`,
- * `\r`, U+2028, U+2029).
- *
- * @param code - A UTF-16 code unit.
- * @returns True when the code unit is a line break.
- */
-function isLineBreak(code: number): boolean {
-	return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
-}
-
-/**
- * Whether a code unit is whitespace, matching the `\s` class without running a
- * regex per character.
- *
- * @param code - A UTF-16 code unit.
- * @returns True when the code unit is whitespace.
- */
-function isWhitespace(code: number): boolean {
-	return (
-		(code >= CHAR_TAB && code <= 0x0d) ||
-		code === CHAR_SPACE ||
-		code === 0xa0 ||
-		code === 0x1680 ||
-		(code >= 0x2000 && code <= 0x200a) ||
-		code === 0x2028 ||
-		code === 0x2029 ||
-		code === 0x202f ||
-		code === 0x205f ||
-		code === 0x3000 ||
-		code === 0xfeff
-	);
-}
 
 /**
  * Whether the code unit at `index` ends a sentence: `.`, `!`, or `?`. In

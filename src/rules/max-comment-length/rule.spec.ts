@@ -77,6 +77,43 @@ const valid: Array<ValidTestCase> = [
 		`,
 		options: [{ maximumWords: 2 }],
 	},
+	// A trailing comment does not join the comment on the next line.
+	{
+		code: unindent`
+			export const a = 1; // one two
+			// three four
+			export const b = 2;
+		`,
+		options: [{ maximumWords: 2 }],
+	},
+	// Directives are not prose.
+	{
+		code: unindent`
+			export const a = 1;
+			// oxlint-disable-next-line no-console -- logging is needed for the CLI output
+			console.log(a);
+			// @ts-expect-error -- the upstream types are wrong for this overload today
+			a.b();
+			/* global window, document, navigator, location */
+			/// <reference types="node" lib="dom" path="x" />
+		`,
+		options: [{ maximumWords: 3 }],
+	},
+	// A directive before the header keeps the header exempt.
+	{
+		code: unindent`
+			// @ts-nocheck
+
+			// one two three four five
+			export const a = 1;
+		`,
+		options: [{ maximumWords: 3 }],
+	},
+	// Extra slashes and a closing star run are not words.
+	{
+		code: "export const a = 1;\n//// one two three\n/* four five six **/\n",
+		options: [{ maximumWords: 3 }],
+	},
 	// Default limit is 50.
 	`export const a = 1;\n// ${"word ".repeat(50)}\n`,
 ];
@@ -101,14 +138,22 @@ const invalid: Array<InvalidTestCase> = [
 		],
 		options: [{ maximumWords: 5 }],
 	},
-	// A trailing comment joins a comment on the next line.
+	// A banner is not JSDoc.
+	{
+		code: "export const a = 1;\n/***** one two three four *****/\n",
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
+	},
+	// A directive splits groups and does not count.
 	{
 		code: unindent`
-			export const a = 1; // one two
-			// three
+			export const a = 1;
+			// one two three four
+			// oxlint-disable-next-line no-console -- a long reason here
+			console.log(a);
 		`,
-		errors: [{ data: { count: 3, maximum: 2 }, line: 1, messageId }],
-		options: [{ maximumWords: 2 }],
+		errors: [{ data: { count: 4, maximum: 3 }, endLine: 2, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
 	},
 	{
 		code: "export const a = 1;\n/* one two three four */\n",

@@ -15,14 +15,22 @@ Line comments on consecutive lines, with only whitespace between them, form one
 group. A blank line, code, or a block comment starts a new group. A block
 comment is always a group of its own.
 
-A word is a run of non-whitespace characters. In a block comment, one `*` gutter
-at the start of each line is not a word.
+A trailing comment (after code on the same line) does not join the comment on
+the next line.
+
+A word is a run of non-whitespace characters. These are not words: extra `/`
+after `//`, `*` runs next to the block markers, and one `*` gutter at the start
+of each later block line.
 
 These comments are not checked:
 
-- The first group in the file, when only whitespace or a shebang comes before
-  it. This is the file header.
-- A lone `/** ... */` block, when `ignoreJSDoc` is on (the default).
+- The first group in the file, when only whitespace, a shebang, or directives
+  come before it. This is the file header.
+- A `/** ... */` block, when `ignoreJSDoc` is on (the default). A banner that
+  opens with `/***` is not JSDoc.
+- Tool directives, such as `eslint-disable`, `oxlint-disable`,
+  `@ts-expect-error`, `global`, `prettier-ignore`, `istanbul ignore`, and
+  `/// <reference>`. A directive also splits groups.
 
 ## Examples
 
