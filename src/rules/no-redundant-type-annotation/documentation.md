@@ -306,14 +306,22 @@ export const handler: Handler = (value: string) => {
 Candidates that pass the checks above are rechecked with their annotations
 removed in a temporary TypeScript program. The program reads unchanged source
 files from the parser's program, including unsaved editor buffers. The rule
-compares declaration, expression, and use-site types for each individual fix and
-for the combined ESLint fix. Types that print the same but name different
-declarations, such as a shadowed interface, compare as different. If combined
-removals depend on one another, it restores an annotation and checks the
-remaining removals again.
+compares declaration, expression, and use-site types for the combined ESLint
+fix. Types that print the same but name different declarations, such as a
+shadowed interface, compare as different. Union members and ordinary object
+properties compare in any order.
 
-Each single removal and the whole accepted set are checked; arbitrary subsets of
-several fixes are not exhaustively checked.
+Removals that can influence one another are also checked one at a time, for
+editors that apply a single fix. Two removals are coupled when their regions
+overlap or one statement uses both bindings. A variable's region is its
+statement. A parameter's region is its function, or the call or JSX element that
+receives the function, because that call can infer its type arguments from the
+parameter. If combined removals fail, every failing removal that is not coupled
+is restored at once. Among coupled removals, one annotation is restored first,
+since restoring a context provider can make the others safe; the remaining
+removals are then checked again.
+
+Arbitrary subsets of several fixes are not exhaustively checked.
 
 Loop candidates also trigger queries in the function, or file, that contains
 their outermost loop before type comparison, to expose control-flow inference
@@ -334,6 +342,14 @@ limit are still reported but carry no fix; `eslint --fix` repeats its fix
 passes, and each pass verifies further candidates after earlier fixes have been
 applied. If the compiler fails during verification, the annotations are left
 alone and not reported. Files with no candidates create no speculative program.
+Speculative programs reuse the parser program's resolved project references,
+module resolution cache, and file system lookups.
+
+Verification needs the parser and this plugin to load the same copy of
+`typescript`. TypeScript numbers nodes and symbols with module-level counters,
+so a second copy would corrupt the parser's checker. With two copies, candidates
+are reported without a fix. Install a single TypeScript version to enable the
+fix.
 
 ## Known limitations
 

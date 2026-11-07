@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { regressions } from "./regressions";
 import { noRedundantTypeAnnotation } from "./rule";
-import { type Candidate, COMPILER_FAILURE, verifyAnnotations } from "./verify";
+import { type Candidate, COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
@@ -252,6 +252,53 @@ const value: { (x: string): number; (x: number): string } = read();`;
 			"declare function read(): { b: number; a: string }; const value: { a: string; b: number } = read();";
 		const { candidates, program, source } = project(code);
 		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
+	});
+
+	it("ignores union member order, which follows each checker's query history", () => {
+		const code = 'declare function read(): "b" | "a";\nconst value: "a" | "b" = read();';
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
+	});
+
+	it("rejects every independent failure in one combined check", () => {
+		const code = `declare function json(): any;
+declare function read(): string;
+const first: string = json();
+const kept: string = read();
+const second: string = json();`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted.map(({ owner }) => owner.name.getText(source))).toStrictEqual(["kept"]);
+		expect(rejected.map(({ candidate }) => candidate.owner.name.getText(source))).toStrictEqual(
+			["first", "second"],
+		);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("checks parameters that share generic inference one at a time", () => {
+		const code = `declare function pair<T>(handlers: { make: (value: T) => T; use: (value: T) => void }): T;
+pair({ make: (value: string) => value, use: (value: string) => {} });`;
+		const { candidates, program, source } = project(code);
+		const { accepted } = verifyAnnotations(program, source, candidates);
+		for (const candidate of accepted) {
+			expect(compilerProblems(code, [candidate])).toStrictEqual([]);
+		}
+
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("does not verify a source from another copy of TypeScript", () => {
+		const { candidates, program, source } = project(
+			"declare function read(): string; const value: string = read();",
+		);
+		// Another compiler copy builds nodes with its own constructors.
+		class ForeignSourceFile {}
+
+		const foreign = Object.assign(new ForeignSourceFile(), source);
+		const { accepted, rejected, unverified } = verifyAnnotations(program, foreign, candidates);
+		expect(accepted).toStrictEqual([]);
+		expect(rejected).toStrictEqual([]);
+		expect(unverified.map(({ reason }) => reason)).toStrictEqual([FOREIGN_COMPILER]);
 	});
 
 	it("retains safe annotations after a rejected loop cycle", () => {

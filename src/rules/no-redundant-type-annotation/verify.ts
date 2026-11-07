@@ -24,6 +24,26 @@ export interface Verification<C extends Candidate> {
 /** The rejection reason prefix when the compiler fails during verification. */
 export const COMPILER_FAILURE = "The compiler could not verify this removal";
 
+/** The unverified reason when the parser loaded another TypeScript copy. */
+export const FOREIGN_COMPILER =
+	"The parser uses another copy of TypeScript, so removals cannot be verified";
+
+let sourceFileConstructor: unknown;
+
+/**
+ * Whether the parser built `source` with this module's copy of TypeScript.
+ * @param source - A source file from the parser's program.
+ * @returns True when both use the same compiler instance.
+ */
+function sharesCompiler(source: ts.SourceFile): boolean {
+	sourceFileConstructor ??= ts.createSourceFile(
+		"probe.ts",
+		"",
+		ts.ScriptTarget.Latest,
+	).constructor;
+	return source.constructor === sourceFileConstructor;
+}
+
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
 const MAX_PROGRAMS = 12;
@@ -64,6 +84,17 @@ export function verifyAnnotations<C extends Candidate>(
 		return { accepted: [], rejected, unverified };
 	}
 
+	// TypeScript numbers nodes and symbols from module-level counters. A
+	// second copy of the compiler would assign colliding ids to the parser's
+	// shared nodes, corrupting both checkers.
+	if (!sharesCompiler(source)) {
+		return {
+			accepted: [],
+			rejected,
+			unverified: candidates.map((candidate) => ({ candidate, reason: FOREIGN_COMPILER })),
+		};
+	}
+
 	try {
 		const checker = program.getTypeChecker();
 		const options = program.getCompilerOptions();
@@ -89,12 +120,22 @@ export function verifyAnnotations<C extends Candidate>(
 		});
 		const selected = eligible.slice(0, MAX_PROGRAMS - 2);
 		const references = referencesByOwner(checker, source, selected);
+		// Original types are printed on first comparison. A rejected removal
+		// usually differs at its declaration, so its other uses are never
+		// printed.
 		const snapshots = new Map(
 			selected.map((candidate) => {
 				return [
 					candidate,
 					observedNodes(candidate, references.get(candidate.owner) ?? []).map((node) => {
-						return { node, type: print(checker, node, declarationKey) };
+						let type: string | undefined;
+						return {
+							node,
+							original: (): string => {
+								type ??= print(checker, node, declarationKey);
+								return type;
+							},
+						};
 					}),
 				];
 			}),
@@ -153,32 +194,32 @@ export function verifyAnnotations<C extends Candidate>(
 
 			const problems = new Map<C, string>();
 			for (const candidate of group) {
-				for (const { node, type } of snapshots.get(candidate) ?? []) {
-					const replacement = mapped(node);
-					const inferred =
-						replacement === undefined
-							? undefined
-							: print(fresh, replacement, originalKey);
-					if (inferred !== type) {
-						problems.set(
-							candidate,
-							`Removing the annotation changes an observed type: ${type} -> ${inferred ?? "missing node"}`,
-						);
-						break;
-					}
-				}
-
-				if (
-					!problems.has(candidate) &&
-					emitsDeclarations &&
-					affectsDeclarationEmit(candidate.owner)
-				) {
+				// Naming queries only the declaration, while observed types
+				// check every use. Run the inexpensive rejection first.
+				if (emitsDeclarations && affectsDeclarationEmit(candidate.owner)) {
 					const owner = mapped(candidate.owner);
 					if (owner === undefined || !canNameType(fresh, owner)) {
 						problems.set(
 							candidate,
 							"The inferred type cannot be safely named for declaration emit",
 						);
+						continue;
+					}
+				}
+
+				for (const { node, original } of snapshots.get(candidate) ?? []) {
+					const replacement = mapped(node);
+					const inferred =
+						replacement === undefined
+							? undefined
+							: print(fresh, replacement, originalKey);
+					const type = original();
+					if (inferred !== type) {
+						problems.set(
+							candidate,
+							`Removing the annotation changes an observed type: ${type} -> ${inferred ?? "missing node"}`,
+						);
+						break;
 					}
 				}
 			}
@@ -903,6 +944,16 @@ function createTypePrinter(): (
 			ts.ScriptTarget.Latest,
 			true,
 		);
+		function byText(a: ts.Node, b: ts.Node): number {
+			const left = printer.printNode(ts.EmitHint.Unspecified, a, source);
+			const right = printer.printNode(ts.EmitHint.Unspecified, b, source);
+			if (left === right) {
+				return 0;
+			}
+
+			return left < right ? -1 : 1;
+		}
+
 		const transformed = ts.transform(source, [
 			(context) => {
 				function visit(original: ts.Node): ts.Node {
@@ -911,18 +962,18 @@ function createTypePrinter(): (
 						ts.isTypeLiteralNode(updated) &&
 						updated.members.every(ts.isPropertySignature)
 					) {
-						const members = [...updated.members].sort((a, b) => {
-							const left = printer.printNode(ts.EmitHint.Unspecified, a, source);
-							const right = printer.printNode(ts.EmitHint.Unspecified, b, source);
-							if (left === right) {
-								return 0;
-							}
-
-							return left < right ? -1 : 1;
-						});
 						return context.factory.updateTypeLiteralNode(
 							updated,
-							context.factory.createNodeArray(members),
+							context.factory.createNodeArray([...updated.members].sort(byText)),
+						);
+					}
+
+					// A checker orders union members by type creation, which
+					// depends on its query history. The order carries no meaning.
+					if (ts.isUnionTypeNode(updated)) {
+						return context.factory.updateUnionTypeNode(
+							updated,
+							context.factory.createNodeArray([...updated.types].sort(byText)),
 						);
 					}
 
