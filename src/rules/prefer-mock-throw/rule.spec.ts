@@ -95,6 +95,13 @@ const valid: Array<ValidTestCase> = [
 		let message = "boom";
 		mock.mockImplementation(() => { throw new Error(message); });
 	`,
+	// The write comes after every read, so each call must see it.
+	unindent`
+		let error = new Error("boom");
+		first.mockImplementation(() => { throw error; });
+		second.mockImplementation(() => { throw error; });
+		error = new Error("later");
+	`,
 	unindent`
 		let message = "boom";
 		mock.mockImplementation(() => { throw new Error(\`failed: \${message}\`); });
@@ -221,6 +228,30 @@ const invalid: Array<InvalidTestCase> = [
 		output: 'mock.mockThrow(new TypeError("nope", { cause: "inner" }))',
 	},
 	// Stable bindings initialized before the call.
+	{
+		// One binding read by several calls, some in a hoisted factory.
+		code: unindent`
+			const error = new Error("boom");
+			first.mockImplementation(() => { throw error; });
+			second.mockImplementationOnce(() => { throw new TypeError("x", { cause: error }); });
+			vi.mock("./module", () => {
+				const inner = new Error("inner");
+				third.mockImplementation(() => { throw [inner, inner]; });
+				fourth.mockImplementation(() => { throw error; });
+			});
+		`,
+		errors: [{ messageId }, { messageId }, { messageId }],
+		output: unindent`
+			const error = new Error("boom");
+			first.mockThrow(error);
+			second.mockThrowOnce(new TypeError("x", { cause: error }));
+			vi.mock("./module", () => {
+				const inner = new Error("inner");
+				third.mockThrow([inner, inner]);
+				fourth.mockImplementation(() => { throw error; });
+			});
+		`,
+	},
 	{
 		code: unindent`
 			const error = new Error("boom");
