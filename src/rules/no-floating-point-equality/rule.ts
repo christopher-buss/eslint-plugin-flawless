@@ -21,6 +21,8 @@ const ASSERT_METHODS = new Set([
 	"strictEqual",
 ]);
 const EXPECT_MATCHERS = new Set(["toBe", "toEqual", "toStrictEqual"]);
+const EXPECT_MODIFIERS = new Set(["rejects", "resolves"]);
+const EXPECT_VARIANTS = new Set(["poll", "soft"]);
 const EQUALITY_OPERATORS = new Set(["!=", "!==", "==", "==="]);
 const CONSTANT_OPERATORS = new Set(["%", "*", "**", "+", "-", "/"]);
 const PROPAGATING_OPERATORS = new Set(["%", "*", "**", "+", "-"]);
@@ -466,6 +468,19 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		);
 	}
 
+	function isExpectCallee(callee: TSESTree.Expression): boolean {
+		if (callee.type === AST_NODE_TYPES.Identifier) {
+			return resolveTestGlobalName(sourceCode, callee, expectSources) === "expect";
+		}
+
+		return (
+			callee.type === AST_NODE_TYPES.MemberExpression &&
+			callee.object.type === AST_NODE_TYPES.Identifier &&
+			EXPECT_VARIANTS.has(propertyName(callee) ?? "") &&
+			resolveTestGlobalName(sourceCode, callee.object, expectSources) === "expect"
+		);
+	}
+
 	function expectArguments(node: TSESTree.CallExpression): null | ReadonlyArray<TSESTree.Node> {
 		const member = node.callee;
 		if (
@@ -477,15 +492,25 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		let received = member.object;
-		if (received.type === AST_NODE_TYPES.MemberExpression && propertyName(received) === "not") {
+		let hasNot = false;
+		let hasModifier = false;
+		while (received.type === AST_NODE_TYPES.MemberExpression) {
+			const name = propertyName(received) ?? "";
+			if (name === "not" && !hasNot) {
+				hasNot = true;
+			} else if (EXPECT_MODIFIERS.has(name) && !hasModifier) {
+				hasModifier = true;
+			} else {
+				return null;
+			}
+
 			received = received.object;
 		}
 
 		if (
 			received.type !== AST_NODE_TYPES.CallExpression ||
-			received.callee.type !== AST_NODE_TYPES.Identifier ||
 			received.arguments.length === 0 ||
-			resolveTestGlobalName(sourceCode, received.callee, expectSources) !== "expect"
+			!isExpectCallee(received.callee)
 		) {
 			return null;
 		}

@@ -19,8 +19,9 @@ The rule reports:
 - Indirect exact checks such as `value <= 0.3 && value >= 0.3` and
   `value < 0.3 || value > 0.3`.
 - Floating-point-sensitive `switch` case labels.
-- `toBe`, `toEqual`, and `toStrictEqual` assertions, including their `.not`
-  forms, made through the global `expect` (Vitest `globals: true` or Jest
+- `toBe`, `toEqual`, and `toStrictEqual` assertions, including their `.not`,
+  `.resolves`, and `.rejects` forms and the `expect.soft` and `expect.poll`
+  variants, made through the global `expect` (Vitest `globals: true` or Jest
   injected globals) or an `expect` imported from `vitest`, `@jest/globals`, or
   `bun:test`. A local `expect` binding is ignored. A project that imports the
   test globals from a re-export names that package with

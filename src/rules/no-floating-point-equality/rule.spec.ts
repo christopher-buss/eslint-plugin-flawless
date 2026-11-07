@@ -171,6 +171,28 @@ const valid: Array<ValidTestCase> = [
 		import { expect } from "vitest"
 		expect(0.1 + 0.2).toStrictEqual(expect.any(Number))
 	`,
+	unindent`
+		function expect(value: unknown) {
+			return { resolves: { toBe(_: unknown) {} } }
+		}
+		expect(actual).resolves.toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).foo.toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect.soft(actual).toBeCloseTo(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect.foo(actual).toBe(0.3)
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(actual).resolves.toEqual(expect.any(Number))
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -347,6 +369,70 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [error],
 	},
 	{ code: "expect(actual).toEqual(0.3)", errors: [error] },
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).resolves.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).rejects.toEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).resolves.not.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).rejects.not.toEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect(promise).not.resolves.toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.soft(actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.soft(actual).not.toStrictEqual(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect.poll(() => actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			import { expect } from "vitest"
+			expect["soft"](actual).toBe(0.3)
+		`,
+		errors: [error],
+	},
+	{ code: "expect.soft(actual).toBe(0.3)", errors: [error] },
 	{
 		code: unindent`
 			import assert from "node:assert/strict"
