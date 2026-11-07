@@ -166,15 +166,61 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ messageId: typeNamedImport }],
 		filename,
 		options: [{ umdGlobal: true }],
-		output: "type Node = React.ReactNode;",
+		output: "export {};\ntype Node = React.ReactNode;",
 	},
 	{
 		code: 'import type { ReactNode } from "@rbxts/react";\ntype Node = ReactNode;',
 		errors: [{ messageId: typeNamedImport }],
 		filename,
 		options: [{ umdGlobal: true }],
-		output: "type Node = React.ReactNode;",
+		output: "export {};\ntype Node = React.ReactNode;",
 		settings: rbx,
+	},
+	// Another import keeps the file a module, so no `export {}` is added.
+	{
+		code: 'import type { ReactNode } from "react";\nimport { x } from "y";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import { x } from "y";\ntype Node = React.ReactNode;',
+	},
+	// A foreign `React` binding shadows the global: report without a fix.
+	{
+		code: 'import * as React from "some-other-lib";\nimport type { ReactNode } from "react";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	{
+		code: 'import type { ReactNode } from "react";\nconst React = 1;\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	{
+		code: 'import type { ReactNode } from "react";\ntype React = string;\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	// An existing namespace import keeps its local name; nothing is inserted.
+	{
+		code: 'import * as R from "react";\nimport type { ReactNode } from "react";\nlet x: ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import * as R from "react";\nlet x: R.ReactNode;',
+	},
+	// A named import also used as a value stays; only the type is qualified.
+	{
+		code: 'import { Component } from "react";\nclass A extends Component {}\nlet x: Component;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import { Component } from "react";\nclass A extends Component {}\nlet x: React.Component;',
 	},
 	// Other named specifiers survive; only the redundant one is removed.
 	{
@@ -190,7 +236,7 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ messageId: typeNamedImport }, { messageId: typeNamedImport }],
 		filename,
 		options: [{ umdGlobal: true }],
-		output: "let a: React.ReactNode;\nlet b: React.ReactNode;",
+		output: "export {};\nlet a: React.ReactNode;\nlet b: React.ReactNode;",
 	},
 	// An existing default import keeps its local name.
 	{

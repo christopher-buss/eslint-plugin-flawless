@@ -161,8 +161,17 @@ type Node = ReactNode;
 is fixed to:
 
 ```tsx
+export {};
+
 type Node = React.ReactNode;
 ```
+
+The option assumes that the types of the configured package declare the `React`
+UMD global (`export as namespace React`). Only enable it when that is true.
+
+When the removed import was the last import or export in the file, the fix
+replaces it with `export {};` so the file stays a module. When another binding
+named `React` is in scope, the rule reports but does not fix.
 
 <!-- begin auto-generated rule options list -->
 
