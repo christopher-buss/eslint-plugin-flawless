@@ -2,7 +2,7 @@ import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/util
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources } from "../../utils/test-globals";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 
 export const RULE_NAME = "no-floating-point-equality";
 
@@ -12,7 +12,15 @@ export type MessageIds = typeof MESSAGE_ID;
 export type Options = [];
 
 const ASSERT_SOURCES = new Set(["assert", "assert/strict", "node:assert", "node:assert/strict"]);
-const ASSERT_METHODS = new Set(["notStrictEqual", "strictEqual"]);
+const ASSERT_METHODS = new Set([
+	"deepEqual",
+	"deepStrictEqual",
+	"notDeepEqual",
+	"notDeepStrictEqual",
+	"notStrictEqual",
+	"strictEqual",
+]);
+const EXPECT_MATCHERS = new Set(["toBe", "toEqual", "toStrictEqual"]);
 const EQUALITY_OPERATORS = new Set(["!=", "!==", "==", "==="]);
 const CONSTANT_OPERATORS = new Set(["%", "*", "**", "+", "-", "/"]);
 const PROPAGATING_OPERATORS = new Set(["%", "*", "**", "+", "-"]);
@@ -176,7 +184,6 @@ function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let sourceCode: Readonly<TSESLint.SourceCode>;
-	let expectVariables: Set<TSESLint.Scope.Variable>;
 	let assertObjectVariables: Set<TSESLint.Scope.Variable>;
 	let assertFunctionVariables: Set<TSESLint.Scope.Variable>;
 	let resolvedVariables: WeakMap<TSESTree.Identifier, null | TSESLint.Scope.Variable>;
@@ -281,12 +288,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 
 				if (
-					expectSources.has(source) &&
-					specifier.type === AST_NODE_TYPES.ImportSpecifier &&
-					importName(specifier) === "expect"
-				) {
-					addDeclaredVariable(specifier, expectVariables);
-				} else if (
 					ASSERT_SOURCES.has(source) &&
 					(specifier.type === AST_NODE_TYPES.ImportDefaultSpecifier ||
 						specifier.type === AST_NODE_TYPES.ImportNamespaceSpecifier)
@@ -481,7 +482,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		const member = node.callee;
 		if (
 			member.type !== AST_NODE_TYPES.MemberExpression ||
-			propertyName(member) !== "toBe" ||
+			!EXPECT_MATCHERS.has(propertyName(member) ?? "") ||
 			node.arguments.length === 0
 		) {
 			return null;
@@ -496,7 +497,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			received.type !== AST_NODE_TYPES.CallExpression ||
 			received.callee.type !== AST_NODE_TYPES.Identifier ||
 			received.arguments.length === 0 ||
-			!isImportedBinding(received.callee, expectVariables)
+			resolveTestGlobalName(sourceCode, received.callee, expectSources) !== "expect"
 		) {
 			return null;
 		}
@@ -552,7 +553,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		before(): void {
 			({ sourceCode } = context);
-			expectVariables = new Set();
 			assertObjectVariables = new Set();
 			assertFunctionVariables = new Set();
 			resolvedVariables = new WeakMap();

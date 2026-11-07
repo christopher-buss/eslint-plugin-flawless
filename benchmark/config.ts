@@ -48,7 +48,7 @@ const FLOATING_CASES = [
 		testPath: "./cases/floating-call-heavy.ts",
 	},
 	{
-		expectedIssues: 0,
+		expectedIssues: 1,
 		name: "recognized import, unrelated calls",
 		testPath: "./cases/floating-import-unrelated.ts",
 	},
