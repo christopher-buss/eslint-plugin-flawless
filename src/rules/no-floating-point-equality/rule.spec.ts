@@ -162,6 +162,15 @@ const valid: Array<ValidTestCase> = [
 		`,
 		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
+	unindent`
+		import { expect } from "vitest"
+		const total = 0.1 + 0.2
+		expect(total).toEqual(expect.closeTo(0.3, 5))
+	`,
+	unindent`
+		import { expect } from "vitest"
+		expect(0.1 + 0.2).toStrictEqual(expect.any(Number))
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -364,6 +373,16 @@ const invalid: Array<InvalidTestCase> = [
 			const expected = 0.1 + 0.2
 			function outer() {
 				return () => actual === expected
+			}
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
+			const ratio = 0.1 + 0.2
+			function f() {
+				type ratio = number
+				return actual === ratio
 			}
 		`,
 		errors: [error],

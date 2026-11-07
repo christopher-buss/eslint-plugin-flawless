@@ -205,7 +205,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		let scope: null | TSESLint.Scope.Scope = sourceCode.getScope(identifier);
 		while (scope !== null) {
 			const variable = scope.set.get(identifier.name);
-			if (variable !== undefined) {
+			if (
+				variable !== undefined &&
+				(variable as { isValueVariable?: boolean }).isValueVariable !== false
+			) {
 				resolvedVariables.set(identifier, variable);
 				return variable;
 			}
@@ -454,6 +457,15 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		return false;
 	}
 
+	function isAsymmetricMatcher(node: TSESTree.Expression): boolean {
+		return (
+			node.type === AST_NODE_TYPES.CallExpression &&
+			node.callee.type === AST_NODE_TYPES.MemberExpression &&
+			node.callee.object.type === AST_NODE_TYPES.Identifier &&
+			resolveTestGlobalName(sourceCode, node.callee.object, expectSources) === "expect"
+		);
+	}
+
 	function expectArguments(node: TSESTree.CallExpression): null | ReadonlyArray<TSESTree.Node> {
 		const member = node.callee;
 		if (
@@ -484,7 +496,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			actual === undefined ||
 			expected === undefined ||
 			actual.type === AST_NODE_TYPES.SpreadElement ||
-			expected.type === AST_NODE_TYPES.SpreadElement
+			expected.type === AST_NODE_TYPES.SpreadElement ||
+			isAsymmetricMatcher(expected)
 		) {
 			return null;
 		}
@@ -499,12 +512,20 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 		let recognized = false;
 		if (node.callee.type === AST_NODE_TYPES.Identifier) {
+			if (assertFunctionVariables.size === 0) {
+				return null;
+			}
+
 			recognized = isImportedBinding(node.callee, assertFunctionVariables);
 		} else if (
 			node.callee.type === AST_NODE_TYPES.MemberExpression &&
 			ASSERT_METHODS.has(propertyName(node.callee) ?? "") &&
 			node.callee.object.type === AST_NODE_TYPES.Identifier
 		) {
+			if (assertObjectVariables.size === 0) {
+				return null;
+			}
+
 			recognized = isImportedBinding(node.callee.object, assertObjectVariables);
 		}
 
