@@ -24,6 +24,8 @@ const EXPECT_MATCHERS = new Set(["toBe", "toEqual", "toStrictEqual"]);
 const EQUALITY_OPERATORS = new Set(["!=", "!==", "==", "==="]);
 const CONSTANT_OPERATORS = new Set(["%", "*", "**", "+", "-", "/"]);
 const PROPAGATING_OPERATORS = new Set(["%", "*", "**", "+", "-"]);
+const INCLUSIVE_OPERATORS = new Set(["<=", ">="]);
+const EXCLUSIVE_OPERATORS = new Set(["<", ">"]);
 const DECIMAL_PATTERN = /^(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/u;
 
 const messages = {
@@ -191,7 +193,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sensitiveExpressions: WeakMap<TSESTree.Node, boolean>;
 	let literalSensitivity: Map<string, boolean>;
 	let constStates: Map<TSESLint.Scope.Variable, ConstState>;
-	let constNames: Set<string>;
 	let tokenSequences: WeakMap<TSESTree.Node, ReadonlyArray<string>>;
 	let expectSources: ReadonlySet<string>;
 
@@ -201,16 +202,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return cached;
 		}
 
-		if (!constNames.has(identifier.name)) {
-			resolvedVariables.set(identifier, null);
-			return null;
-		}
-
 		let scope: null | TSESLint.Scope.Scope = sourceCode.getScope(identifier);
 		while (scope !== null) {
-			const variable = scope.variables.find(
-				(candidate) => candidate.name === identifier.name,
-			);
+			const variable = scope.set.get(identifier.name);
 			if (variable !== undefined) {
 				resolvedVariables.set(identifier, variable);
 				return variable;
@@ -247,24 +241,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		if (variable !== undefined) {
 			target.add(variable);
 			indexReferences(variable);
-		}
-	}
-
-	function indexConstBindings(): void {
-		for (const scope of sourceCode.scopeManager?.scopes ?? []) {
-			for (const variable of scope.variables) {
-				const definition = variable.defs[0];
-				if (
-					variable.defs.length === 1 &&
-					definition?.type === TSESLint.Scope.DefinitionType.Variable &&
-					definition.parent.kind === "const" &&
-					definition.node.id.type === AST_NODE_TYPES.Identifier &&
-					definition.node.init !== null
-				) {
-					constNames.add(variable.name);
-					indexReferences(variable);
-				}
-			}
 		}
 	}
 
@@ -328,7 +304,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	function isFloatingPointLiteral(node: TSESTree.NumberLiteral): boolean {
-		const raw = sourceCode.getText(node).replaceAll("_", "").toLowerCase();
+		const raw = node.raw.replaceAll("_", "").toLowerCase();
 		const cached = literalSensitivity.get(raw);
 		if (cached !== undefined) {
 			return cached;
@@ -444,11 +420,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	function isIndirectExactComparison(node: TSESTree.LogicalExpression): boolean {
-		let accepted: null | Set<string> = null;
+		let accepted: null | ReadonlySet<string> = null;
 		if (node.operator === "&&") {
-			accepted = new Set(["<=", ">="]);
+			accepted = INCLUSIVE_OPERATORS;
 		} else if (node.operator === "||") {
-			accepted = new Set(["<", ">"]);
+			accepted = EXCLUSIVE_OPERATORS;
 		}
 
 		if (
@@ -560,10 +536,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			sensitiveExpressions = new WeakMap();
 			literalSensitivity = new Map();
 			constStates = new Map();
-			constNames = new Set();
 			tokenSequences = new WeakMap();
 			expectSources = getTestGlobalSources(context.settings);
-			indexConstBindings();
 			scanAssertionImports(sourceCode.ast);
 		},
 		BinaryExpression(node: TSESTree.BinaryExpression): void {
