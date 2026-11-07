@@ -1385,6 +1385,57 @@ function create(
 		});
 	}
 
+	/**
+	 * Finds a function expression's contextual type, without its nullish
+	 * members.
+	 *
+	 * The checker answers nothing for an object literal method, so its context
+	 * is read from the property of the same name in the object's context.
+	 *
+	 * @param node - The function expression to inspect.
+	 * @returns The contextual type, or undefined when there is none.
+	 */
+	function getFunctionContextualType(node: FunctionExpressionNode): Type | undefined {
+		const { parent } = node;
+		if (parent.type !== AST_NODE_TYPES.Property || !parent.method) {
+			const contextualType = checker.getContextualType(
+				services.esTreeNodeToTSNodeMap.get(node) as Expression,
+			);
+			return contextualType && checker.getNonNullableType(contextualType);
+		}
+
+		if (parent.computed || parent.parent.type !== AST_NODE_TYPES.ObjectExpression) {
+			return undefined;
+		}
+
+		const { key } = parent;
+		let name: string | undefined;
+		if (key.type === AST_NODE_TYPES.Identifier) {
+			({ name } = key);
+		} else if (typeof key.value === "string") {
+			name = key.value;
+		}
+
+		const object = services.esTreeNodeToTSNodeMap.get(parent.parent);
+		const objectType = checker.getContextualType(object);
+		if (name === undefined || objectType === undefined) {
+			return undefined;
+		}
+
+		// A union of object types picks the property from each member, which
+		// one property lookup does not show.
+		const apparentType = checker.getNonNullableType(objectType);
+		if (apparentType.isUnion()) {
+			return undefined;
+		}
+
+		const property = apparentType.getProperty(name);
+		return (
+			property &&
+			checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(property, object))
+		);
+	}
+
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
 		if (node.params.every((parameter) => isUntypedParameter(parameter))) {
 			return;
@@ -1399,12 +1450,11 @@ function create(
 			return;
 		}
 
-		const contextualType = checker.getContextualType(
-			services.esTreeNodeToTSNodeMap.get(node) as Expression,
-		);
+		const contextualType = getFunctionContextualType(node);
 		// TypeScript takes a contextual signature from a union only when every
 		// member offers the same one, which the union's own signatures do not
-		// show, so a union is left alone.
+		// show, so a union is left alone. Nullish members offer no signature
+		// and are skipped, so they are dropped first.
 		if (contextualType === undefined || contextualType.isUnion()) {
 			return;
 		}
