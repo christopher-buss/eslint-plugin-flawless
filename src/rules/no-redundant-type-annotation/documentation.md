@@ -85,12 +85,13 @@ const value: string = pick(); // NOT reported — without the annotation, `T` is
 
 The rule skips any call, `new` expression, or tagged template whose signature is
 generic and whose return type involves one of its own type parameters, unless
-the call site writes its type arguments out. The question is asked of the types,
-not of the written names, so a return type of `typeof fallback` that resolves to
-`T` counts too, as does a generic class without a constructor of its own. That
-is deliberately conservative: it also skips cases such as
-`const names: Array<string> = items.map(toName)`, where the annotation really is
-redundant.
+the call site writes its type arguments out, or every type parameter appears in
+one of the signature's parameter types. The arguments then infer the type
+parameters before the context is consulted, so
+`const value: string = first(items)` is checked. A mention behind an alias, a
+mapped type, or a conditional type is not seen, so such a call is still skipped.
+These are filters that save work; the verifier described below decides every
+removal.
 
 ### Named types are preserved
 
@@ -218,10 +219,11 @@ declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
 map([1], () => (text: string) => text.length); // NOT reported — without it, `text` is implicitly `any`
 ```
 
-Any generic callee is left alone, even when the parameter it types names no type
-parameter and the annotation really is redundant. Telling the two apart by the
-written names is unsound, because `typeof` and aliases can hide a type
-parameter.
+A generic callee is left alone unless the function is a direct argument of a
+call with one signature, and each of the callback's parameter types is the same
+before and after the call's type arguments are inferred. That holds for
+`promise.catch((reason: unknown) => reason)`, where `reason` names no type
+parameter, so it is checked; the verifier decides whether the removal is safe.
 
 A generator's `yield` counts as a return. The inferring call can also be a
 generic class's `new`, a tagged template, or a generic JSX component:

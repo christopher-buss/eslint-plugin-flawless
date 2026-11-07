@@ -773,10 +773,73 @@ function create(
 			return false;
 		}
 
-		return (
-			checker.getReturnTypeOfSignature(signature) !==
+		if (
+			checker.getReturnTypeOfSignature(signature) ===
 			checker.getReturnTypeOfSignature(declared)
+		) {
+			return false;
+		}
+
+		// A type parameter that some parameter mentions is inferred from the
+		// arguments first, and the context only fills in what they leave open.
+		// This is a cost filter, not a proof: the verifier decides.
+		const parameterTypes = declared.parameters.map((parameter) =>
+			checker.getTypeOfSymbol(parameter),
 		);
+		return (declared.getTypeParameters() ?? []).some((typeParameter) => {
+			return !parameterTypes.some((type) => mentionsType(type, typeParameter));
+		});
+	}
+
+	/**
+	 * Reports whether a type mentions another directly, in a union or
+	 * intersection member, a type argument, or a call signature.
+	 *
+	 * Aliases, mapped types, and conditional types are not opened, so a
+	 * mention behind them is not seen.
+	 *
+	 * @param type - The type to search.
+	 * @param target - The type to find.
+	 * @param depth - How many more levels to open.
+	 * @returns True when the target is found.
+	 */
+	function mentionsType(type: Type, target: Type, depth = 4): boolean {
+		if (type === target) {
+			return true;
+		}
+
+		if (depth === 0) {
+			return false;
+		}
+
+		function next(member: Type): boolean {
+			return mentionsType(member, target, depth - 1);
+		}
+
+		if (type.isUnionOrIntersection()) {
+			return type.types.some(next);
+		}
+
+		const objectFlags = (type as { objectFlags?: number }).objectFlags ?? 0;
+		if ((type.flags & TypeFlags.Object) === 0 || type.aliasSymbol !== undefined) {
+			return false;
+		}
+
+		if ((objectFlags & ObjectFlags.Reference) !== 0) {
+			return checker.getTypeArguments(type as TypeReference).some(next);
+		}
+
+		if ((objectFlags & ObjectFlags.Anonymous) === 0) {
+			return false;
+		}
+
+		return checker.getSignaturesOfType(type, SignatureKind.Call).some((callSignature) => {
+			return (
+				callSignature.parameters.some((parameter) =>
+					next(checker.getTypeOfSymbol(parameter)),
+				) || next(checker.getReturnTypeOfSignature(callSignature))
+			);
+		});
 	}
 
 	/**
@@ -813,6 +876,74 @@ function create(
 		}
 
 		return call.typeArguments !== undefined || !isGeneric(signature);
+	}
+
+	/**
+	 * Finds the one call signature of a parameter's type, without its nullish
+	 * members.
+	 *
+	 * @param parameter - The parameter symbol.
+	 * @returns The signature, or undefined when there is not exactly one.
+	 */
+	function getCallbackSignature(parameter: ts.Symbol | undefined): Signature | undefined {
+		if (parameter === undefined) {
+			return undefined;
+		}
+
+		const type = checker.getNonNullableType(checker.getTypeOfSymbol(parameter));
+		if (type.isUnion()) {
+			return undefined;
+		}
+
+		const signatures = checker.getSignaturesOfType(type, SignatureKind.Call);
+		return signatures.length === 1 ? signatures.at(0) : undefined;
+	}
+
+	/**
+	 * Reports whether a generic call types a callback argument's parameters
+	 * without inference.
+	 *
+	 * This is a cost filter, not a proof: the verifier decides. With one
+	 * signature, a callback parameter whose type is the same type object
+	 * before and after the call's type arguments are inferred names none of
+	 * them, as `reason` in `promise.catch((reason: unknown) => reason)` does.
+	 *
+	 * @param call - The call that receives the callback.
+	 * @param callback - The callback, a direct argument of the call.
+	 * @returns True when every callback parameter's type is settled.
+	 */
+	function hasSettledCallbackParameters(
+		call: CallLike,
+		callback: FunctionExpressionNode,
+	): boolean {
+		if (
+			call.type !== AST_NODE_TYPES.CallExpression &&
+			call.type !== AST_NODE_TYPES.NewExpression
+		) {
+			return false;
+		}
+
+		const index = call.arguments.indexOf(callback);
+		const signatures = getCalleeSignatures(call);
+		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
+		if (declared === undefined || index === -1 || isRestParameter(declared, index)) {
+			return false;
+		}
+
+		const resolved = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
+		const before = getCallbackSignature(declared.parameters[index]);
+		const after = getCallbackSignature(resolved?.parameters[index]);
+		if (before === undefined || before.parameters.length !== after?.parameters.length) {
+			return false;
+		}
+
+		return before.parameters.every((parameter, position) => {
+			const target = after.parameters[position];
+			return (
+				target !== undefined &&
+				checker.getTypeOfSymbol(parameter) === checker.getTypeOfSymbol(target)
+			);
+		});
 	}
 
 	/**
@@ -870,7 +1001,11 @@ function create(
 			}
 
 			const call = getReceivingCall(parent, current);
-			if (call !== undefined && hasFixedSignature(call)) {
+			if (
+				call !== undefined &&
+				(hasFixedSignature(call) ||
+					(current === node && hasSettledCallbackParameters(call, node)))
+			) {
 				anchor = call;
 			}
 
