@@ -6,6 +6,7 @@ import { name as packageName, version as packageVersion } from "../package.json"
 import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
 import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
 import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
+import { maxCommentLength } from "./rules/max-comment-length/rule";
 import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule";
 import { namingConvention } from "./rules/naming-convention/rule";
 import { noConditionalEmptyObjectSpread } from "./rules/no-conditional-empty-object-spread/rule";
@@ -52,6 +53,7 @@ export type PluginRules = {
 	"arrow-return-style": typeof arrowReturnStyle;
 	"jsx-shorthand-boolean": typeof jsxShorthandBoolean;
 	"jsx-shorthand-fragment": typeof jsxShorthandFragment;
+	"max-comment-length": typeof maxCommentLength;
 	"max-lines-per-function": typeof maxLinesPerFunction;
 	"naming-convention": typeof namingConvention;
 	"no-conditional-empty-object-spread": typeof noConditionalEmptyObjectSpread;
@@ -126,6 +128,7 @@ export const plugin: FlawlessPlugin = {
 		"arrow-return-style": arrowReturnStyle,
 		"jsx-shorthand-boolean": jsxShorthandBoolean,
 		"jsx-shorthand-fragment": jsxShorthandFragment,
+		"max-comment-length": maxCommentLength,
 		"max-lines-per-function": maxLinesPerFunction,
 		"naming-convention": namingConvention,
 		"no-conditional-empty-object-spread": noConditionalEmptyObjectSpread,

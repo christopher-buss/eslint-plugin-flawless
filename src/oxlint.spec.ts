@@ -104,6 +104,27 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(fixed).toContain("let x: React.ReactNode;");
 	});
 
+	it("max-comment-length reports a long group and skips the header", () => {
+		const { diagnostics } = runOxlint({
+			code: [
+				"#!/usr/bin/env node",
+				"// header one two three four",
+				"export const a = 1;",
+				"// one two",
+				"// three four",
+				"/** jsdoc one two three four */",
+				"",
+			].join("\n"),
+			filename: "file.ts",
+			options: [{ maximumWords: 3 }],
+			rule: "max-comment-length",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(max-comment-length)");
+		expect(diagnostics[0]?.message).toContain("4 words");
+	});
+
 	it("max-lines-per-function reports a function over the limit", () => {
 		const { diagnostics } = runOxlint({
 			code: "export function foo() {\n\tconst a = 1;\n\treturn a;\n}\n",
