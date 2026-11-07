@@ -157,6 +157,119 @@ const invalid: Array<InvalidTestCase> = [
 		output: 'import React from "@rbxts/react";\nlet x: React.ReactNode;',
 		settings: rbx,
 	},
+	// ── umdGlobal: rely on the `React` UMD global for types ──────────
+
+	// Sole named type import: qualify and drop the whole declaration
+	// without inserting a React import.
+	{
+		code: 'import type { ReactNode } from "react";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: "export {};\ntype Node = React.ReactNode;",
+	},
+	{
+		code: 'import type { ReactNode } from "@rbxts/react";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: "export {};\ntype Node = React.ReactNode;",
+		settings: rbx,
+	},
+	// Another import keeps the file a module, so no `export {}` is added.
+	{
+		code: 'import type { ReactNode } from "react";\nimport { x } from "y";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import { x } from "y";\ntype Node = React.ReactNode;',
+	},
+	// `export =` also keeps the file a module (and forbids `export {}`).
+	{
+		code: 'import type { ReactNode } from "react";\ntype Node = ReactNode;\nexport = 1;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: "type Node = React.ReactNode;\nexport = 1;",
+	},
+	// A foreign `React` binding shadows the global: report without a fix.
+	{
+		code: 'import * as React from "some-other-lib";\nimport type { ReactNode } from "react";\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	{
+		code: 'import type { ReactNode } from "react";\nconst React = 1;\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	{
+		code: 'import type { ReactNode } from "react";\ntype React = string;\ntype Node = ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: null,
+	},
+	// An existing namespace import keeps its local name; nothing is inserted.
+	{
+		code: 'import * as R from "react";\nimport type { ReactNode } from "react";\nlet x: ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import * as R from "react";\nlet x: R.ReactNode;',
+	},
+	// A named import also used as a value stays; only the type is qualified.
+	{
+		code: 'import { Component } from "react";\nclass A extends Component {}\nlet x: Component;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import { Component } from "react";\nclass A extends Component {}\nlet x: React.Component;',
+	},
+	// Other named specifiers survive; only the redundant one is removed.
+	{
+		code: 'import { useState, type ReactNode } from "react";\nuseState();\nlet x: ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import { useState } from "react";\nuseState();\nlet x: React.ReactNode;',
+	},
+	// Multiple references each qualify; the import is removed once.
+	{
+		code: 'import type { ReactNode } from "react";\nlet a: ReactNode;\nlet b: ReactNode;',
+		errors: [{ messageId: typeNamedImport }, { messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: "export {};\nlet a: React.ReactNode;\nlet b: React.ReactNode;",
+	},
+	// An existing default import keeps its local name.
+	{
+		code: 'import R, { ReactNode } from "react";\nlet x: ReactNode;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import R from "react";\nlet x: R.ReactNode;',
+	},
+	// Runtime direction is unaffected.
+	{
+		code: 'import React from "react";\nReact.useEffect();',
+		errors: [{ messageId: runtimeNamespace }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: 'import React, { useEffect } from "react";\nuseEffect();',
+	},
+	// `umdGlobal: false` keeps the default behavior.
+	{
+		code: 'import type { ReactNode } from "react";\nconst x: ReactNode = null;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: false }],
+		output: 'import React from "react";\nconst x: React.ReactNode = null;',
+	},
 ];
 
 run({

@@ -1,4 +1,10 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import {
+	AST_NODE_TYPES,
+	ASTUtils,
+	type JSONSchema,
+	type TSESLint,
+	type TSESTree,
+} from "@typescript-eslint/utils";
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
@@ -21,9 +27,35 @@ const MESSAGE_ID_TYPE = "typeNamedImport";
 
 export type MessageIds = typeof MESSAGE_ID_RUNTIME | typeof MESSAGE_ID_TYPE;
 
-export type Options = [];
+export interface ReactNamespaceOptions {
+	/**
+	 * Rely on the `React` UMD global (`export as namespace React` in
+	 * `@types/react`) for type references. When true and the file has no
+	 * default or namespace React import, the type fix qualifies with `React.`
+	 * and does not insert an import. Defaults to `false`.
+	 */
+	readonly umdGlobal?: boolean;
+}
+
+export type Options = [ReactNamespaceOptions?];
 
 const DEFAULT_IMPORT_SOURCE = "react";
+
+const DEFAULTS: Required<ReactNamespaceOptions> = { umdGlobal: false };
+
+const schema: Array<JSONSchema.JSONSchema4> = [
+	{
+		additionalProperties: false,
+		properties: {
+			umdGlobal: {
+				description:
+					"Rely on the `React` UMD global for types: the type fix does not insert a React import when none exists.",
+				type: "boolean",
+			},
+		},
+		type: "object",
+	},
+];
 
 const messages = {
 	[MESSAGE_ID_RUNTIME]:
@@ -56,6 +88,25 @@ interface RemovableInfo {
  */
 function isAssignmentTarget(node: TSESTree.MemberExpression): boolean {
 	return node.parent.type === AST_NODE_TYPES.AssignmentExpression && node.parent.left === node;
+}
+
+/**
+ * Whether a top-level statement marks the file as an ES module.
+ *
+ * @param statement - A top-level program statement.
+ * @returns True for import and export declarations, `export =`, and
+ *   `import x = require()`.
+ */
+function isModuleStatement(statement: TSESTree.ProgramStatement): boolean {
+	return (
+		statement.type === AST_NODE_TYPES.ImportDeclaration ||
+		statement.type === AST_NODE_TYPES.ExportAllDeclaration ||
+		statement.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
+		statement.type === AST_NODE_TYPES.ExportNamedDeclaration ||
+		statement.type === AST_NODE_TYPES.TSExportAssignment ||
+		(statement.type === AST_NODE_TYPES.TSImportEqualsDeclaration &&
+			statement.moduleReference.type === AST_NODE_TYPES.TSExternalModuleReference)
+	);
 }
 
 /**
@@ -97,6 +148,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sourceCode: Readonly<TSESLint.SourceCode>;
 	let resolutions: Map<TSESTree.Identifier | TSESTree.JSXIdentifier, ReactImportResolution>;
 	let removableInfoByVariable: Map<TSESLint.Scope.Variable, RemovableInfo>;
+	let umdGlobal: boolean;
 
 	function getRemovableInfo(variable: TSESLint.Scope.Variable): RemovableInfo {
 		let info = removableInfoByVariable.get(variable);
@@ -111,6 +163,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		before(): void {
 			({ sourceCode } = context);
+			umdGlobal = context.options[0]?.umdGlobal ?? DEFAULTS.umdGlobal;
 			const settings = context.settings["react-x"];
 			importSource = settings?.importSource ?? DEFAULT_IMPORT_SOURCE;
 			program = sourceCode.ast;
@@ -185,7 +238,18 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			context.report({
 				data: { name: typeName.name },
 				fix: (fixer) => {
-					const reactLocal = findReactNamespaceLocal(declarations) ?? "React";
+					const namespaceLocal = findReactNamespaceLocal(declarations);
+					// Under umdGlobal, a foreign `React` binding in scope would
+					// capture the qualified reference, so leave it unfixed.
+					if (
+						umdGlobal &&
+						namespaceLocal === null &&
+						ASTUtils.findVariable(sourceCode.getScope(typeName), "React") !== null
+					) {
+						return null;
+					}
+
+					const reactLocal = namespaceLocal ?? "React";
 					const fixes = [fixer.insertTextBefore(typeName, `${reactLocal}.`)];
 
 					const info = getRemovableInfo(resolution.variable);
@@ -195,7 +259,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					// only on the first reference, so both edits happen exactly
 					// once.
 					if (removable) {
-						if (!hasReactNamespaceImport(declarations)) {
+						if (!umdGlobal && !hasReactNamespaceImport(declarations)) {
 							fixes.push(
 								insertImportStatement(
 									fixer,
@@ -206,7 +270,19 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 						}
 
 						const found = findNamedSpecifier(declarations, typeName.name);
-						if (found !== null) {
+						// Removing the last import/export would turn the file
+						// into a script, so keep it a module with `export {};`.
+						if (
+							found !== null &&
+							umdGlobal &&
+							found.declaration.specifiers.length === 1 &&
+							!program.body.some(
+								(statement) =>
+									statement !== found.declaration && isModuleStatement(statement),
+							)
+						) {
+							fixes.push(fixer.replaceText(found.declaration, "export {};"));
+						} else if (found !== null) {
 							fixes.push(
 								removeNamedSpecifier(
 									fixer,
@@ -233,8 +309,9 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
+	defaultOptions: [DEFAULTS],
 	meta: {
+		defaultOptions: [DEFAULTS],
 		docs: {
 			description:
 				"Prefer named imports for React runtime values and the React namespace for React types",
@@ -244,7 +321,7 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema,
 		type: "problem",
 	},
 });
