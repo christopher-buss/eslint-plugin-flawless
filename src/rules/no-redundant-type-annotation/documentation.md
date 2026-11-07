@@ -349,7 +349,9 @@ Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,
 so a second copy would corrupt the parser's checker. With two copies, candidates
 are reported without a fix. Install a single TypeScript version to enable the
-fix.
+fix. Before TypeScript 5.3, `parserOptions.projectService` loads
+`typescript/lib/tsserverlibrary`, which is a separate copy of the compiler; use
+`parserOptions.project` there to enable the fix.
 
 ## Known limitations
 

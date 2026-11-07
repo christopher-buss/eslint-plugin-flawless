@@ -11,6 +11,14 @@ import { type Candidate, COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations }
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
+// cspell:ignore tsserverlibrary
+
+// Before TypeScript 5.3, the parser's project service loads
+// `typescript/lib/tsserverlibrary`, a second copy of the compiler. The rule
+// then reports candidates without verifying them, so they carry no fix.
+const [major = 0, minor = 0] = ts.versionMajorMinor.split(".").map(Number);
+const projectServiceSharesCompiler = major > 5 || (major === 5 && minor >= 3);
+
 /**
  * A real checker over an editor buffer, without writing the source to disk.
  * @param code - The unsaved source text.
@@ -161,7 +169,7 @@ describe("annotation verification", () => {
 		);
 		expect(messages).toHaveLength(1);
 		expect(messages[0]?.messageId).toBe("redundant");
-		expect(messages[0]?.fix).toBeDefined();
+		expect(messages[0]?.fix !== undefined).toBe(projectServiceSharesCompiler);
 	});
 
 	it("reports candidates past the work limit without a fix", () => {
@@ -186,7 +194,9 @@ describe("annotation verification", () => {
 			path.join(directory, "file.ts"),
 		);
 		expect(messages).toHaveLength(15);
-		expect(messages.filter(({ fix }) => fix !== undefined)).toHaveLength(10);
+		expect(messages.filter(({ fix }) => fix !== undefined)).toHaveLength(
+			projectServiceSharesCompiler ? 10 : 0,
+		);
 	});
 
 	it("distinguishes types that print the same name", () => {
