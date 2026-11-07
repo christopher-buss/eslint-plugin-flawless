@@ -402,4 +402,4 @@ consume(service396(value396), 396);
 consume(service397(value397), 397);
 consume(service398(value398), 398);
 consume(service399(value399), 399);
-expect(result).toEqual(0.3);
+expect(result).toBeCloseTo(0.3);

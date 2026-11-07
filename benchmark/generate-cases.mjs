@@ -109,7 +109,7 @@ emit(
 			{ length: FLOATING_N * 2 },
 			(_, i) => `consume(service${i}(value${i}), ${i});`,
 		),
-		"expect(result).toEqual(0.3);",
+		"expect(result).toBeCloseTo(0.3);",
 	].join("\n"),
 );
 
@@ -172,6 +172,10 @@ emit(
 		...Array.from({ length: 100 }, (_, i) => `expect(actual${i}).not.toBe(0.3);`),
 		...Array.from({ length: 100 }, (_, i) => `assert.strictEqual(actual${i}, 10 / 3);`),
 		...Array.from({ length: 100 }, (_, i) => `assert.notStrictEqual(actual${i}, 0.1 + 0.2);`),
+		...Array.from({ length: 50 }, (_, i) => `expect(actual${i}).toEqual(0.3);`),
+		...Array.from({ length: 50 }, (_, i) => `expect(actual${i}).not.toStrictEqual(10 / 3);`),
+		...Array.from({ length: 50 }, (_, i) => `assert.deepStrictEqual(actual${i}, 0.3);`),
+		...Array.from({ length: 50 }, (_, i) => `assert.notDeepStrictEqual(actual${i}, 1.1);`),
 	].join("\n"),
 );
 
