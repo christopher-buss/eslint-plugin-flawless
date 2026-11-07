@@ -194,8 +194,16 @@ export function verifyAnnotations<C extends Candidate>(
 			unverified.push({ candidate, reason: "The verification work limit was reached" });
 		}
 
-		if (accepted.length > 1) {
+		// An editor applies one fix at a time. Removals that cannot influence
+		// one another are safe alone when they are safe together, so only
+		// coupled removals need a program of their own.
+		const coupled = coupledCandidates(selected, references);
+		if (coupled.size > 0) {
 			accepted = accepted.filter((candidate) => {
+				if (!coupled.has(candidate)) {
+					return true;
+				}
+
 				const reason = check([candidate]).get(candidate);
 				if (reason !== undefined) {
 					recordRejection(candidate, reason);
@@ -212,21 +220,31 @@ export function verifyAnnotations<C extends Candidate>(
 				return { accepted, rejected, unverified };
 			}
 
-			// Restore one annotation first: restoring a context provider can
-			// make the other removals safe. Dropping all affected parameters at
-			// once would discard those reports unnecessarily.
+			// No other removal can cause an uncoupled candidate's problem, so
+			// restore all of those at once. Among coupled candidates, restore
+			// one annotation first: restoring a context provider can make the
+			// other removals safe.
+			const independent = accepted.filter((candidate) => {
+				return problems.has(candidate) && !coupled.has(candidate);
+			});
 			const restored =
 				accepted.find(
 					(candidate) =>
 						problems.has(candidate) && ts.isVariableDeclaration(candidate.owner),
 				) ?? accepted.find((candidate) => problems.has(candidate));
-			if (restored !== undefined) {
-				recordRejection(
-					restored,
-					problems.get(restored) ?? "The combined removal changes a type",
-				);
-				accepted = accepted.filter((candidate) => candidate !== restored);
+			let restoring = independent;
+			if (restoring.length === 0 && restored !== undefined) {
+				restoring = [restored];
 			}
+
+			for (const candidate of restoring) {
+				recordRejection(
+					candidate,
+					problems.get(candidate) ?? "The combined removal changes a type",
+				);
+			}
+
+			accepted = accepted.filter((candidate) => !restoring.includes(candidate));
 		}
 
 		for (const candidate of accepted) {
@@ -340,14 +358,90 @@ function requiredAssertionTargets(
 	return required;
 }
 
+const fileKeys = new Map<string, string>();
+
+interface SharedHost {
+	readonly base: ts.CompilerHost;
+	readonly directoryExists: (name: string) => boolean;
+	readonly fileExists: (name: string) => boolean;
+	readonly files: ReadonlyMap<string, ts.SourceFile>;
+	readonly moduleResolution: ts.ModuleResolutionCache;
+	readonly parsedReferences: ReadonlyMap<string, ts.ParsedCommandLine>;
+}
+
 function fileKey(name: string): string {
-	const resolved = path.resolve(name).replaceAll("\\", "/");
-	return ts.sys.useCaseSensitiveFileNames ? resolved : resolved.toLowerCase();
+	let key = fileKeys.get(name);
+	if (key === undefined) {
+		const resolved = path.resolve(name).replaceAll("\\", "/");
+		key = ts.sys.useCaseSensitiveFileNames ? resolved : resolved.toLowerCase();
+		fileKeys.set(name, key);
+	}
+
+	return key;
+}
+
+// One parser program serves every file of its project. Build its host state
+// once: without it, each speculative program re-reads every referenced
+// tsconfig and probes the file system for each of the project's files.
+// Project references come from the parser's resolution; a reference it could
+// not resolve stays unresolved in speculative programs as well.
+const sharedHosts = new WeakMap<ts.Program, SharedHost>();
+
+function memoize<T>(read: (name: string) => T): (name: string) => T {
+	const cache = new Map<string, T>();
+	return (name) => {
+		if (cache.has(name)) {
+			return cache.get(name) as T;
+		}
+
+		const value = read(name);
+		cache.set(name, value);
+		return value;
+	};
+}
+
+function sharedHost(old: ts.Program): SharedHost {
+	const cached = sharedHosts.get(old);
+	if (cached !== undefined) {
+		return cached;
+	}
+
+	const options = old.getCompilerOptions();
+	const base = ts.createCompilerHost(options, true);
+	const parsedReferences = new Map<string, ts.ParsedCommandLine>();
+	function collect(references: ReturnType<ts.Program["getResolvedProjectReferences"]>): void {
+		for (const reference of references ?? []) {
+			const key =
+				reference === undefined ? undefined : fileKey(reference.sourceFile.fileName);
+			if (reference !== undefined && key !== undefined && !parsedReferences.has(key)) {
+				parsedReferences.set(key, reference.commandLine);
+				collect(reference.references);
+			}
+		}
+	}
+
+	collect(old.getResolvedProjectReferences());
+	const host: SharedHost = {
+		base,
+		directoryExists: memoize(
+			(name) => base.directoryExists?.(name) ?? ts.sys.directoryExists(name),
+		),
+		fileExists: memoize((name) => base.fileExists(name)),
+		files: new Map(old.getSourceFiles().map((file) => [fileKey(file.fileName), file])),
+		moduleResolution: ts.createModuleResolutionCache(
+			old.getCurrentDirectory(),
+			(name) => base.getCanonicalFileName(name),
+			options,
+		),
+		parsedReferences,
+	};
+	sharedHosts.set(old, host);
+	return host;
 }
 
 /**
- * Builds programs that differ from `old` only in the text of `source`. The
- * file map and the base host are built once and shared by every program.
+ * Builds programs that differ from `old` only in the text of `source`. Host
+ * state is shared by every program built from the same parser program.
  * @param old - The parser's program.
  * @param source - The file whose text each program replaces.
  * @returns A function that creates a program for a replacement text.
@@ -356,25 +450,21 @@ function speculativeProgramFactory(
 	old: ts.Program,
 	source: ts.SourceFile,
 ): (text: string) => ts.Program {
-	const options = old.getCompilerOptions();
-	const base = ts.createCompilerHost(options, true);
-	const files = new Map(old.getSourceFiles().map((file) => [fileKey(file.fileName), file]));
+	const { base, directoryExists, fileExists, files, moduleResolution, parsedReferences } =
+		sharedHost(old);
 	const target = fileKey(source.fileName);
 	const projectReferences = old.getProjectReferences();
-	const rootNames = old.getRootFileNames();
 	let { text } = source;
 	const host: ts.CompilerHost = {
 		...base,
-		fileExists: (name) => {
-			return (
-				old.getSourceFile(name) !== undefined ||
-				files.has(fileKey(name)) ||
-				base.fileExists(name)
-			);
-		},
+		directoryExists,
+		fileExists: (name) => files.has(fileKey(name)) || fileExists(name),
 		getCurrentDirectory: () => old.getCurrentDirectory(),
+		getModuleResolutionCache: () => moduleResolution,
+		getParsedCommandLine: (name) => parsedReferences.get(fileKey(name)),
 		getSourceFile(name, languageVersion, onError, shouldCreate) {
-			if (fileKey(name) === target) {
+			const key = fileKey(name);
+			if (key === target) {
 				return ts.createSourceFile(name, text, languageVersion, true);
 			}
 
@@ -382,7 +472,7 @@ function speculativeProgramFactory(
 				| (ts.SourceFile & {
 						redirectInfo?: { unredirected: ts.SourceFile };
 				  })
-				| undefined = old.getSourceFile(name) ?? files.get(fileKey(name));
+				| undefined = files.get(key) ?? old.getSourceFile(name);
 			// TypeScript forbids returning a package redirect from a compiler
 			// host. This internal compatibility detail stays confined here.
 			return (
@@ -392,14 +482,16 @@ function speculativeProgramFactory(
 			);
 		},
 		readFile: (name) => {
-			return fileKey(name) === target
-				? text
-				: (old.getSourceFile(name)?.text ??
-						files.get(fileKey(name))?.text ??
-						base.readFile(name));
+			const key = fileKey(name);
+			return key === target ? text : (files.get(key)?.text ?? base.readFile(name));
 		},
 	};
-	const programOptions: ts.CreateProgramOptions = { host, oldProgram: old, options, rootNames };
+	const programOptions: ts.CreateProgramOptions = {
+		host,
+		oldProgram: old,
+		options: old.getCompilerOptions(),
+		rootNames: old.getRootFileNames(),
+	};
 	if (projectReferences !== undefined) {
 		programOptions.projectReferences = projectReferences;
 	}
@@ -585,6 +677,106 @@ function referencesByOwner(
 	}
 
 	return references;
+}
+
+/**
+ * The statement, or expression body of an arrow function, containing a node.
+ * @param node - A node in the file.
+ * @returns The innermost enclosing statement or arrow body.
+ */
+function enclosingStatement(node: ts.Node): ts.Node {
+	let current = node;
+	while (
+		!ts.isSourceFile(current.parent) &&
+		(!ts.isStatement(current) || !ts.isBlock(current.parent)) &&
+		(!ts.isArrowFunction(current.parent) || current.parent.body !== current)
+	) {
+		current = current.parent;
+	}
+
+	return current;
+}
+
+/**
+ * The region a removal can influence. A parameter influences its function,
+ * or, through generic inference, the call or element that receives it.
+ * Object and array literals between them do not isolate the inference.
+ * @param owner - The candidate's declaration.
+ * @returns The node whose types the removal may change.
+ */
+function influenceScope(owner: Candidate["owner"]): ts.Node {
+	if (!ts.isParameter(owner)) {
+		return enclosingStatement(owner);
+	}
+
+	let node: ts.Node = owner.parent;
+	while (
+		ts.isParenthesizedExpression(node.parent) ||
+		ts.isPropertyAssignment(node.parent) ||
+		ts.isObjectLiteralExpression(node.parent) ||
+		ts.isArrayLiteralExpression(node.parent) ||
+		ts.isSpreadElement(node.parent) ||
+		ts.isJsxExpression(node.parent) ||
+		ts.isJsxAttribute(node.parent) ||
+		ts.isJsxAttributes(node.parent)
+	) {
+		node = node.parent;
+	}
+
+	const { parent } = node;
+	if (
+		ts.isCallExpression(parent) ||
+		ts.isNewExpression(parent) ||
+		ts.isJsxOpeningElement(parent) ||
+		ts.isJsxSelfClosingElement(parent)
+	) {
+		return parent;
+	}
+
+	return owner.parent;
+}
+
+function contains(outer: ts.Node, inner: ts.Node): boolean {
+	return outer.pos <= inner.pos && inner.end <= outer.end;
+}
+
+/**
+ * Finds candidates whose removal may change another candidate's types: their
+ * influence scopes overlap, or one statement uses both bindings.
+ * @template C - The rule's candidate, including its report metadata.
+ * @param candidates - The candidates selected for verification.
+ * @param references - The referencing identifiers of each candidate owner.
+ * @returns The candidates that need an individual check.
+ */
+function coupledCandidates<C extends Candidate>(
+	candidates: ReadonlyArray<C>,
+	references: ReadonlyMap<ts.Node, ReadonlyArray<ts.Identifier>>,
+): Set<C> {
+	const scoped = candidates.map((candidate) => {
+		return {
+			candidate,
+			scopes: [
+				influenceScope(candidate.owner),
+				...(references.get(candidate.owner) ?? []).map(enclosingStatement),
+			],
+		};
+	});
+	const coupled = new Set<C>();
+	for (const [index, first] of scoped.entries()) {
+		for (const second of scoped.slice(index + 1)) {
+			const overlaps = first.scopes.some((outer) => {
+				return second.scopes.some(
+					(inner) => contains(outer, inner) || contains(inner, outer),
+				);
+			});
+			if (overlaps) {
+				coupled.add(first.candidate);
+				coupled.add(second.candidate);
+			}
+		}
+	}
+
+	return coupled;
 }
 
 function replay(checker: ts.TypeChecker, root: ts.Node): void {
