@@ -301,6 +301,58 @@ export const handler: Handler = (value: string) => {
 };
 ```
 
+## Verification before reporting
+
+Candidates that pass the checks above are rechecked with their annotations
+removed in a temporary TypeScript program. The program reads unchanged source
+files from the parser's program, including unsaved editor buffers. The rule
+compares declaration, expression, and use-site types for the combined ESLint
+fix. Types that print the same but name different declarations, such as a
+shadowed interface, compare as different. Union members and ordinary object
+properties compare in any order.
+
+Removals that can influence one another are also checked one at a time, for
+editors that apply a single fix. Two removals are coupled when their regions
+overlap or one statement uses both bindings. A variable's region is its
+statement. A parameter's region is its function, or the call or JSX element that
+receives the function, because that call can infer its type arguments from the
+parameter. If combined removals fail, every failing removal that is not coupled
+is restored at once. Among coupled removals, one annotation is restored first,
+since restoring a context provider can make the others safe; the remaining
+removals are then checked again.
+
+Arbitrary subsets of several fixes are not exhaustively checked.
+
+Loop candidates also trigger queries in the function, or file, that contains
+their outermost loop before type comparison, to expose control-flow inference
+cycles. Loop replay is enabled for TypeScript 5.9 and 6.0; other supported
+versions retain loop annotations because their checker query order has not been
+validated. Under `declaration` or `composite`, serialized inferred types outside
+function bodies are checked for references to inaccessible or shadowed names.
+These targeted checks supplement the existing conservative guards; they do not
+run complete compiler diagnostics or declaration emit.
+
+Assertion functions and receivers used by assertion calls keep their variable or
+parameter annotations. TypeScript requires explicitly typed call targets even
+when the inferred callable type would otherwise be identical.
+
+Verification is bounded to twelve speculative programs per lint of a file. At
+most ten candidate annotations are verified in that pass. Candidates past that
+limit are still reported but carry no fix; `eslint --fix` repeats its fix
+passes, and each pass verifies further candidates after earlier fixes have been
+applied. If the compiler fails during verification, the annotations are left
+alone and not reported. Files with no candidates create no speculative program.
+Speculative programs reuse the parser program's resolved project references,
+module resolution cache, and file system lookups.
+
+Verification needs the parser and this plugin to load the same copy of
+`typescript`. TypeScript numbers nodes and symbols with module-level counters,
+so a second copy would corrupt the parser's checker. With two copies, candidates
+are reported without a fix. Install a single TypeScript version to enable the
+fix. Before TypeScript 5.3, `parserOptions.projectService` loads
+`typescript/lib/tsserverlibrary`, which is a separate copy of the compiler; use
+`parserOptions.project` there to enable the fix.
+
 ## Known limitations
 
 - Variable declarations are checked for `const` and `let` with a plain
@@ -330,6 +382,10 @@ export const handler: Handler = (value: string) => {
   initializer is a literal the emitter could have read on its own.
 - The fix can leave a type import with no remaining use. Pair the rule with an
   unused-import rule, or `noUnusedLocals` will fail the build.
+- Verification uses the current file's project and TypeScript version. Other
+  tsconfigs, changes to importing files, and edits made by other rules in the
+  same fix pass are outside this check. Full before-and-after compiler
+  diagnostics remain part of the rule's test suite.
 
 This rule has no options.
 

@@ -86,8 +86,8 @@ export function checkFixes(snippets: ReadonlyArray<FixedSnippet>): Array<string>
 	for (const [tsconfig, group] of groupByTsconfig(snippets)) {
 		const pairs = group.map((snippet, index) => {
 			return {
-				after: virtualName(tsconfig, `after-${index}`, snippet),
-				before: virtualName(tsconfig, `before-${index}`, snippet),
+				after: virtualName(`after-${index}`, snippet),
+				before: virtualName(`before-${index}`, snippet),
 				snippet,
 			};
 		});
@@ -213,18 +213,16 @@ function groupByTsconfig<T extends Snippet>(snippets: ReadonlyArray<T>): Map<str
 }
 
 /**
- * Names a virtual file beside the project's tsconfig.
+ * Names a virtual file beside the source, preserving relative imports.
  *
- * @param tsconfig - The owning tsconfig.
  * @param label - Unique within the program, says what the file holds.
  * @param snippet - The snippet, whose extension the file keeps.
  * @returns An absolute file name no real file uses.
  */
-function virtualName(tsconfig: string, label: string, snippet: Snippet): string {
+function virtualName(label: string, snippet: Snippet): string {
 	return path.join(
-		path.dirname(tsconfig),
-		"__fix-safety__",
-		`${label}${path.extname(snippet.filename)}`,
+		path.dirname(snippet.filename),
+		`__fix-safety__-${label}${path.extname(snippet.filename)}`,
 	);
 }
 
@@ -343,7 +341,14 @@ function takeSnapshot(program: ts.Program, fileName: string): Snapshot {
 			ts.isTaggedTemplateExpression(node)
 		) {
 			record("call", node);
-		} else if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+		} else if (
+			ts.isArrowFunction(node) ||
+			ts.isFunctionExpression(node) ||
+			ts.isFunctionDeclaration(node) ||
+			ts.isMethodDeclaration(node) ||
+			ts.isGetAccessorDeclaration(node) ||
+			ts.isSetAccessorDeclaration(node)
+		) {
 			record("function", node);
 		}
 
@@ -468,7 +473,7 @@ function runFixPass({
 	tsconfig: string;
 }): Array<FixRun> {
 	const entries = runs.map((run, index) => {
-		return { fileName: virtualName(tsconfig, `pass-${pass}-${index}`, run.snippet), run };
+		return { fileName: virtualName(`pass-${pass}-${index}`, run.snippet), run };
 	});
 	const program = createProgram(loadProject(tsconfig), [
 		{

@@ -1,3 +1,49 @@
+diff --git a/dist/core/benchmark/run-benchmark.js b/dist/core/benchmark/run-benchmark.js
+index fd4de4066e6461953a931962e32838fa700be94d..11f88f846b1fa443b025270a8ef77419d258d4e9 100644
+--- a/dist/core/benchmark/run-benchmark.js
++++ b/dist/core/benchmark/run-benchmark.js
+@@ -34,17 +34,27 @@ async function runBenchmark(parameters) {
+         eslintConfigFile,
+         configDirectory,
+       })
+-      await eslint.lintText('/* eslint-disable */')
++      let sample = testCase.samples[0]
++      let [initial] = await eslint.lintText(sample.code, {
++        filePath: sample.filePath ?? sample.filename,
++      })
++      let fatal = initial.messages.find(message => message.fatal)
++      if (fatal) {
++        throw new Error(fatal.message)
++      }
+     } catch (error) {
+       let errorValue = error
+       console.error(
+         `Failed to create ESLint instance for TestCase "${testCase.name}": ${errorValue.message}. Skipping this test case.`,
+       )
++      process.exitCode = 1
+       continue
+     }
+     for (let sample of testCase.samples) {
+       bench.add(`${testCase.name} on ${sample.filename}`, async () => {
+-        await eslint.lintText(sample.code, { filePath: sample.filename })
++        await eslint.lintText(sample.code, {
++          filePath: sample.filePath ?? sample.filename,
++        })
+       })
+     }
+   }
+@@ -55,6 +65,11 @@ async function runBenchmark(parameters) {
+   let tinybenchTasks = await bench.run()
+   let processedResults = []
+   for (let task of tinybenchTasks) {
++    if (task.result?.error) {
++      console.error(`Benchmark task "${task.name}" failed: ${task.result.error}`)
++      process.exitCode = 1
++      continue
++    }
+     if (!task.result?.samples) {
+       console.warn(
+         `Task "${task.name}" ran but has no samples or result. Skipping.`,
 diff --git a/dist/core/eslint/create-eslint-instance.js b/dist/core/eslint/create-eslint-instance.js
 index dfb7154047fbaf58e03bcb110f4c7e8c97284cf0..9260e383cf8ed2933f010619dcde97eb29119135 100644
 --- a/dist/core/eslint/create-eslint-instance.js
@@ -21,7 +67,7 @@ index dfb7154047fbaf58e03bcb110f4c7e8c97284cf0..9260e383cf8ed2933f010619dcde97eb
  }
  export { createESLintInstance }
 diff --git a/dist/runners/run-benchmarks-from-config.js b/dist/runners/run-benchmarks-from-config.js
-index be4c012cd52224c5f761502202164db72cacf9d6..c43b099aadd8631212c3c1c9e0f1f18649438c1c 100644
+index be4c012cd52224c5f761502202164db72cacf9d6..28fb85c1049f7a26b76e26f21d5ab7085c89afac 100644
 --- a/dist/runners/run-benchmarks-from-config.js
 +++ b/dist/runners/run-benchmarks-from-config.js
 @@ -51,6 +51,7 @@ async function runBenchmarksFromConfig(parameters) {
@@ -32,8 +78,16 @@ index be4c012cd52224c5f761502202164db72cacf9d6..c43b099aadd8631212c3c1c9e0f1f186
            }
            let caseNameSuffix = `Case ${caseIndex + 1}`
            let testCaseName = `${testSpec.name} - ${caseNameSuffix}`
+@@ -185,6 +186,7 @@ async function loadCodeSamples(testPath, configDirectory) {
+         codeSamples.push({
+           language: getLanguageByFileName(file),
+           filename: path.basename(file),
++          filePath: file,
+           code,
+         })
+       } catch (error) {
 diff --git a/dist/types/test-case.d.ts b/dist/types/test-case.d.ts
-index 9f4cf8f3fe42f396c8415a34dfa9dd433a1eb8cd..5f45c254223a309c178123ea54ee582125311a82 100644
+index 9f4cf8f3fe42f396c8415a34dfa9dd433a1eb8cd..979956424747b7760a2f8b4c710d007a850532ec 100644
 --- a/dist/types/test-case.d.ts
 +++ b/dist/types/test-case.d.ts
 @@ -29,6 +29,9 @@ export interface RuleConfig {
@@ -56,6 +110,12 @@ index 9f4cf8f3fe42f396c8415a34dfa9dd433a1eb8cd..5f45c254223a309c178123ea54ee5821
  }
  
  /** Represents a single timing measurement. */
+@@ -86,2 +92,5 @@ export interface CodeSample {
+   /** Filename with extension (e.g., example.js). */
+   filename: string
++
++  /** Original file path for project resolution; filename remains the report label. */
++  filePath?: string
 diff --git a/dist/types/user-benchmark-config.d.ts b/dist/types/user-benchmark-config.d.ts
 index 4348a6ed7c2e2960ac71c4e6f7876c0a27c67a23..290b0fab438c9160c1eba75f36cde0a2baecdea1 100644
 --- a/dist/types/user-benchmark-config.d.ts

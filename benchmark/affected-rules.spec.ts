@@ -21,8 +21,14 @@ describe(affectedRules, () => {
 				"benchmark/cases/all/no-reflect-get.tsx",
 				"benchmark/cases/floating-literals.ts",
 				"benchmark/cases/realistic.ts",
+				"benchmark/cases/typed/annotation-dense.ts",
 			]),
-		).toStrictEqual(["arrow-return-style", "no-floating-point-equality", "no-reflect-get"]);
+		).toStrictEqual([
+			"arrow-return-style",
+			"no-floating-point-equality",
+			"no-redundant-type-annotation",
+			"no-reflect-get",
+		]);
 	});
 
 	it("ignores tests, docs, and files outside the benchmark's reach", () => {
