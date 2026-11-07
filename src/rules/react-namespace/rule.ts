@@ -94,14 +94,18 @@ function isAssignmentTarget(node: TSESTree.MemberExpression): boolean {
  * Whether a top-level statement marks the file as an ES module.
  *
  * @param statement - A top-level program statement.
- * @returns True for import and export declarations.
+ * @returns True for import and export declarations, `export =`, and
+ *   `import x = require()`.
  */
 function isModuleStatement(statement: TSESTree.ProgramStatement): boolean {
 	return (
 		statement.type === AST_NODE_TYPES.ImportDeclaration ||
 		statement.type === AST_NODE_TYPES.ExportAllDeclaration ||
 		statement.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
-		statement.type === AST_NODE_TYPES.ExportNamedDeclaration
+		statement.type === AST_NODE_TYPES.ExportNamedDeclaration ||
+		statement.type === AST_NODE_TYPES.TSExportAssignment ||
+		(statement.type === AST_NODE_TYPES.TSImportEqualsDeclaration &&
+			statement.moduleReference.type === AST_NODE_TYPES.TSExternalModuleReference)
 	);
 }
 

@@ -184,6 +184,14 @@ const invalid: Array<InvalidTestCase> = [
 		options: [{ umdGlobal: true }],
 		output: 'import { x } from "y";\ntype Node = React.ReactNode;',
 	},
+	// `export =` also keeps the file a module (and forbids `export {}`).
+	{
+		code: 'import type { ReactNode } from "react";\ntype Node = ReactNode;\nexport = 1;',
+		errors: [{ messageId: typeNamedImport }],
+		filename,
+		options: [{ umdGlobal: true }],
+		output: "type Node = React.ReactNode;\nexport = 1;",
+	},
 	// A foreign `React` binding shadows the global: report without a fix.
 	{
 		code: 'import * as React from "some-other-lib";\nimport type { ReactNode } from "react";\ntype Node = ReactNode;',
