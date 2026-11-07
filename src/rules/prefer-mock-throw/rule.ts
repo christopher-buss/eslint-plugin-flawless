@@ -40,6 +40,16 @@ const HOISTED_METHODS = new Set(["hoisted", "mock"]);
 /** Unary operators that are side-effect free on a literal operand. */
 const LITERAL_UNARY_OPERATORS = new Set(["!", "+", "-", "typeof", "void", "~"]);
 
+/** Definition kinds that can bind a stable value; a `Variable` must be `const`. */
+const STABLE_DEFINITIONS: ReadonlySet<DefinitionType> = new Set([
+	DefinitionType.CatchClause,
+	DefinitionType.ClassName,
+	DefinitionType.FunctionName,
+	DefinitionType.ImportBinding,
+	DefinitionType.Parameter,
+	DefinitionType.Variable,
+]);
+
 type Implementation = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
 
 /**
@@ -81,6 +91,15 @@ function getThrownExpression(implementation: Implementation): null | TSESTree.Ex
 	}
 
 	const { body, params } = implementation;
+	if (body.type !== AST_NODE_TYPES.BlockStatement || body.body.length !== 1) {
+		return null;
+	}
+
+	const [statement] = body.body;
+	if (statement?.type !== AST_NODE_TYPES.ThrowStatement) {
+		return null;
+	}
+
 	const isPlainParameter = params.every((parameter) => {
 		return (
 			parameter.type === AST_NODE_TYPES.Identifier ||
@@ -88,16 +107,7 @@ function getThrownExpression(implementation: Implementation): null | TSESTree.Ex
 				parameter.argument.type === AST_NODE_TYPES.Identifier)
 		);
 	});
-	if (!isPlainParameter || body.type !== AST_NODE_TYPES.BlockStatement) {
-		return null;
-	}
-
-	const [statement, ...rest] = body.body;
-	if (statement?.type !== AST_NODE_TYPES.ThrowStatement || rest.length > 0) {
-		return null;
-	}
-
-	return statement.argument;
+	return isPlainParameter ? statement.argument : null;
 }
 
 /**
@@ -128,6 +138,29 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sources: ReadonlySet<string>;
 	// Unresolved globals this file assigns, built on first need.
 	let writtenGlobals: ReadonlySet<string> | undefined;
+	// Per-file caches. A binding shared by many calls would otherwise have its
+	// references scanned once per call, which is quadratic in the file size.
+	let reassignedVariables: Map<TSESLint.Scope.Variable, boolean>;
+	let hoistedFactories: Map<TSESTree.CallExpression, null | TSESTree.Node>;
+
+	/**
+	 * Determines whether a binding is written after its declaration. Cached per
+	 * binding, as the answer is the same for every call.
+	 *
+	 * @param variable - The binding.
+	 * @returns `true` when any reference other than the initializer writes it.
+	 */
+	function isReassigned(variable: TSESLint.Scope.Variable): boolean {
+		let reassigned = reassignedVariables.get(variable);
+		if (reassigned === undefined) {
+			reassigned = variable.references.some((reference) => {
+				return reference.isWrite() && reference.init !== true;
+			});
+			reassignedVariables.set(variable, reassigned);
+		}
+
+		return reassigned;
+	}
 
 	/**
 	 * Finds the hoisted `vi.mock()` / `vi.hoisted()` factory a node sits in. The
@@ -137,7 +170,24 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @param node - The node to start from.
 	 * @returns The enclosing hoisted factory, or `null` when there is none.
 	 */
-	function getHoistedFactory(node: TSESTree.Node): null | TSESTree.Node {
+	function getHoistedFactory(node: TSESTree.CallExpression): null | TSESTree.Node {
+		let factory = hoistedFactories.get(node);
+		if (factory === undefined) {
+			factory = findHoistedFactory(node);
+			hoistedFactories.set(node, factory);
+		}
+
+		return factory;
+	}
+
+	/**
+	 * Walks up from a node to the hoisted factory it sits in. Use the cached
+	 * {@link getHoistedFactory} instead.
+	 *
+	 * @param node - The node to start from.
+	 * @returns The enclosing hoisted factory, or `null` when there is none.
+	 */
+	function findHoistedFactory(node: TSESTree.Node): null | TSESTree.Node {
 		let current = node;
 		while (current.type !== AST_NODE_TYPES.Program) {
 			const { parent } = current;
@@ -221,23 +271,24 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return !writtenGlobals.has(identifier.name);
 		}
 
-		const isReassigned = variable.references.some((reference) => {
-			return reference.isWrite() && reference.init !== true;
-		});
-		if (isReassigned || variable.scope.block === implementation) {
-			// Written after its declaration, or the implementation's own
-			// parameter or `arguments`.
+		// Cheap rejections first: the implementation's own parameter or
+		// `arguments`, a redeclared name, or a definition that is never stable.
+		if (variable.scope.block === implementation || variable.defs.length > 1) {
 			return false;
 		}
 
-		const [definition, ...redeclarations] = variable.defs;
+		const [definition] = variable.defs;
 		if (definition === undefined) {
 			// Only a global has no definition; an outer function's `arguments`
 			// is live and so not stable.
-			return variable.scope.type === ScopeType.global;
+			return variable.scope.type === ScopeType.global && !isReassigned(variable);
 		}
 
-		if (redeclarations.length > 0) {
+		if (
+			!STABLE_DEFINITIONS.has(definition.type) ||
+			(definition.type === DefinitionType.Variable && definition.parent.kind !== "const") ||
+			isReassigned(variable)
+		) {
 			return false;
 		}
 
@@ -250,27 +301,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return false;
 		}
 
-		// eslint-disable-next-line ts/switch-exhaustiveness-check -- We have a default case
-		switch (definition.type) {
-			case DefinitionType.CatchClause:
-			case DefinitionType.FunctionName:
-			case DefinitionType.ImportBinding:
-			case DefinitionType.Parameter: {
-				return true;
-			}
-			case DefinitionType.ClassName: {
-				return isInitializedBefore(variable, definition.node, call);
-			}
-			case DefinitionType.Variable: {
-				return (
-					definition.parent.kind === "const" &&
-					isInitializedBefore(variable, definition.node, call)
-				);
-			}
-			default: {
-				return false;
-			}
-		}
+		return definition.type === DefinitionType.ClassName ||
+			definition.type === DefinitionType.Variable
+			? isInitializedBefore(variable, definition.node, call)
+			: true;
 	}
 
 	/**
@@ -394,6 +428,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			({ sourceCode } = context);
 			sources = getTestGlobalSources(context.settings);
 			writtenGlobals = undefined;
+			reassignedVariables = new Map();
+			hoistedFactories = new Map();
 		},
 		CallExpression(node: TSESTree.CallExpression): void {
 			const { arguments: callArguments, callee } = node;
