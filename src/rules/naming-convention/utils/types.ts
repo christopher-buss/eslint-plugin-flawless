@@ -75,6 +75,11 @@ export interface NamingSelector {
 	 * empty array opts this selector out of it.
 	 */
 	allowedWords?: Array<string>;
+	/**
+	 * Restricts the selector to members of a type that a React component takes
+	 * as its props. Shapes nested inside a prop's type are not props.
+	 */
+	componentProp?: true;
 	custom?: MatchRegex;
 	filter?: MatchRegex | string;
 	/**
@@ -109,6 +114,7 @@ export interface NormalizedSelector {
 	 * overlap (`UDim2` over `UDim`), then bucketed by first character.
 	 */
 	allowedWords: AllowedWordIndex | undefined;
+	componentProp: boolean;
 	custom: NormalizedMatchRegex | undefined;
 	filter: NormalizedMatchRegex | undefined;
 	/**

@@ -573,6 +573,125 @@ Details worth knowing:
 The `TypeArgumentReference` type is exported from the package root alongside
 `TypeMatcher` and `TypeReference`.
 
+### `componentProp`
+
+A naming policy for React component props cannot use the file extension or a
+`Props` suffix to find them: a TSX file also declares hook results, service
+bags, and test harnesses. `componentProp: true` restricts a selector to members
+of a type that a component actually takes as its props. Combine it with `types`
+to give component-valued props their own format:
+
+```js
+const namingConventionOptions = [
+	{
+		componentProp: true,
+		format: ["StrictPascalCase"],
+		selector: ["typeProperty", "typeMethod"],
+		types: [
+			{ name: "ComponentType" },
+			{ name: "FunctionComponent" },
+			{ name: "ComponentClass" },
+		],
+	},
+	{
+		componentProp: true,
+		format: ["strictCamelCase"],
+		selector: ["typeProperty", "typeMethod"],
+	},
+	{
+		format: ["strictCamelCase", "StrictPascalCase"],
+		selector: ["typeProperty", "typeMethod"],
+	},
+];
+```
+
+Examples of **correct** code with that config:
+
+```tsx
+interface PanelProps {
+	readonly Content: React.ComponentType;
+	readonly onStateChange?: () => void;
+	// a render callback returns JSX, but it is not a component
+	readonly renderItem?: (index: number) => React.JSX.Element;
+	readonly size: number;
+}
+
+// not props: no component takes this type, so the last selector applies
+interface GuiHoverStateResult {
+	readonly guiEvents: { readonly InputBegan?: () => void };
+	readonly isHovered: boolean;
+}
+
+export function Panel(props: PanelProps): React.JSX.Element {
+	return <frame />;
+}
+```
+
+Examples of **incorrect** code with that config:
+
+```tsx
+interface PanelProps {
+	readonly content: React.ComponentType;
+	readonly Size: number;
+}
+
+export const Panel = React.memo((props: PanelProps) => {
+	return <frame />;
+});
+```
+
+A type is a props type when one of these takes it as its props:
+
+- A function whose name starts with a capital letter, whose first parameter has
+  a type annotation, and whose return type is a React element or node
+  (`JSX.Element`, `ReactElement`, `ReactNode`, optionally with `null`,
+  `undefined`, or a boolean). Function declarations, and arrow functions and
+  function expressions assigned to a variable, count.
+- A variable whose name starts with a capital letter and whose annotation is a
+  component type: `FC`, `FunctionComponent`, `ComponentType`, `ComponentClass`,
+  `VFC`, `ExoticComponent`, `NamedExoticComponent`, or
+  `ForwardRefExoticComponent`, also through a project alias. A generic alias
+  passes its type arguments through: `type View<P> = React.FC<P>` used as
+  `View<PanelProps>` makes `PanelProps` a props type.
+- A call to `memo` or `forwardRef`: the explicit props type argument
+  (`memo<Props>`, `forwardRef<Ref, Props>`) and the first parameter of the
+  function it wraps. The wrapped function needs no name or return type.
+- A class that extends `Component` or `PureComponent`.
+
+The component types, base classes, and wrappers must be React's own: the rule
+resolves each name through TypeScript's symbol table, and the declaration must
+come from `react`, `@types/react`, or `@rbxts/react`. Thus a renamed import
+(`import { FC as View } from "react"`) still matches, but a project type named
+`ComponentType` or another library's `memo` does not.
+
+From the props type, the rule follows type aliases (generic ones with their type
+arguments), intersections, unions, `extends` clauses, and the `Partial`,
+`Required`, `Readonly`, `PropsWithChildren`, and `PropsWithoutRef` generics.
+Every interface and type literal it reaches declares props, in this file or in
+any other file of the program. Some things are not props:
+
+- **Nested shapes.** The members of `native: { BackgroundColor3: Color3 }` or of
+  an event map that a prop refers to keep their own policy.
+- **Members selected from another shape.** `Pick<GuiInputEvents, "InputBegan">`
+  takes a member that `GuiInputEvents` owns, so `InputBegan` keeps the name its
+  owner gives it. `Omit` is the same: in
+  `interface ButtonProps extends Omit<BaseButtonProps, "onClick">`, only the
+  members `ButtonProps` declares are props. If `BaseButtonProps` holds props
+  too, use it as the props type of a component, or declare its members in
+  `ButtonProps`.
+- **Types declared in `.d.ts` files.** No one lints them.
+
+Details worth knowing:
+
+- Only `typeProperty` and `typeMethod` names can match. A function-typed prop
+  such as `onStateChange?: () => void` is a `typeMethod`.
+- A `componentProp` selector **outranks** an otherwise equivalent unconstrained
+  one, whichever order they are declared in, and also `types` and
+  `typeArgumentOf` constraints. Add `types` to a `componentProp` selector to
+  make it more specific than the plain `componentProp` selector.
+- To find the components, the rule reads every source file of the program once
+  per program. It does this only when a `componentProp` selector is configured.
+
 ## Further Reading
 
 (Optional: Links to relevant roblox-ts documentation, GitHub issues, or related

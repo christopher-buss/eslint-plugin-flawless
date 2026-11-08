@@ -1,5 +1,6 @@
 import type { SelectorString } from "./enums";
 import {
+	COMPONENT_PROP_WEIGHT,
 	MetaSelector,
 	Modifier,
 	PredefinedFormat,
@@ -132,6 +133,10 @@ function normalizeOption(
 		}
 	}
 
+	if (option.componentProp === true) {
+		weight |= COMPONENT_PROP_WEIGHT;
+	}
+
 	// give selectors with a filter the _highest_ priority
 	if (option.filter !== undefined) {
 		weight |= 1 << 30;
@@ -145,6 +150,7 @@ function normalizeOption(
 			option.allowedWords !== undefined
 				? normalizeAllowedWords(option.allowedWords)
 				: settingsAllowedWords,
+		componentProp: option.componentProp === true,
 		custom: option.custom
 			? {
 					match: option.custom.match,

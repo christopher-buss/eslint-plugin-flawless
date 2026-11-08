@@ -6,6 +6,7 @@ import type ts from "typescript";
 import { TypeFlags } from "typescript";
 
 import type { MessageIds } from "../rule";
+import { isComponentPropertyMember } from "./component-property";
 import type { ModifierType, PredefinedFormatType, SelectorString, SelectorType } from "./enums";
 import {
 	MetaSelector,
@@ -114,6 +115,11 @@ export function createValidator(
 				!isInMatchingTypeArgument(node, config.typeArgumentOf, context)
 			) {
 				// is not written inside a matching call's type arguments
+				continue;
+			}
+
+			if (config.componentProp && !isComponentPropertyMember(node, context)) {
+				// is not a member of a component's props type
 				continue;
 			}
 
