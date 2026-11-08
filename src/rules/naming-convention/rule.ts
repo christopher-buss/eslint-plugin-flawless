@@ -550,7 +550,10 @@ function create(
 								modifiers.add(Modifier.destructured);
 							}
 
-							if (isUnused(index.name, context.sourceCode.getScope(index))) {
+							if (
+								unusedVariables !== undefined &&
+								isUnused(index.name, context.sourceCode.getScope(index))
+							) {
 								modifiers.add(Modifier.unused);
 							}
 
@@ -757,9 +760,11 @@ function create(
 		"TSTypeParameterDeclaration > TSTypeParameter": {
 			handler: (node: TSESTree.TSTypeParameter, validator): void => {
 				const modifiers = new Set<ModifierType>();
-				const scope = context.sourceCode.getScope(node);
 
-				if (isUnused(node.name.name, scope)) {
+				if (
+					unusedVariables !== undefined &&
+					isUnused(node.name.name, context.sourceCode.getScope(node))
+				) {
 					modifiers.add(Modifier.unused);
 				}
 

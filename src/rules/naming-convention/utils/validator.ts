@@ -706,7 +706,7 @@ function isCorrectType(
 				predicates.push((inner) => {
 					// this will resolve things like true => boolean, 'a' =>
 					// string and 1 => number
-					const base = checker.getWidenedType(checker.getBaseTypeOfLiteralType(inner));
+					const base = checker.getBaseTypeOfLiteralType(inner);
 					return (base.flags & flag) !== 0;
 				});
 				break;
