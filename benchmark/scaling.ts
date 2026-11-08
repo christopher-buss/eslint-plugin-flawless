@@ -95,10 +95,11 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 	const extension = path.extname(absolutePath);
 	const code = build(readFileSync(absolutePath, "utf8"), copies);
 	const ruleKey = `flawless/${subject.ruleId}`;
-	const programs =
-		subject.ruleId === "no-redundant-type-annotation"
-			? [typedProgram(absolutePath, code)]
-			: undefined;
+	const isAnnotation = subject.ruleId === "no-redundant-type-annotation";
+	// A typed fixture gets a program, so a typed rule does its real work.
+	const programs = subject.testPath.startsWith("./cases/typed/")
+		? [typedProgram(absolutePath, code)]
+		: undefined;
 	const config: Linter.Config = {
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: {
@@ -123,7 +124,7 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 			throw new Error(`${subject.ruleId} x${copies}: ${fatal.message}`);
 		}
 		if (
-			programs !== undefined &&
+			isAnnotation &&
 			messages.filter((message) => message.ruleId === ruleKey && message.fix !== undefined)
 				.length !== 10
 		) {

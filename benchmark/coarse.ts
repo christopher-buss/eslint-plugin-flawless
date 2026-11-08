@@ -40,6 +40,8 @@ export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath:
 		ruleId: "no-known-value-widening",
 		testPath: "./cases/all/no-known-value-widening.tsx",
 	},
+	// Typed: the fixture lives in the typed project so the rule gets types.
+	{ ruleId: "no-ignored-return", testPath: "./cases/typed/no-ignored-return.ts" },
 	{ ruleId: "no-object-parameters", testPath: "./cases/all/no-object-parameters.tsx" },
 	{ ruleId: "no-reflect-get", testPath: "./cases/all/no-reflect-get.tsx" },
 	{ ruleId: "no-reflect-set", testPath: "./cases/all/no-reflect-set.tsx" },

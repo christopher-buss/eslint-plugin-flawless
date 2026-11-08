@@ -15,6 +15,7 @@ import { noConditionalInTest } from "./rules/no-conditional-in-test/rule";
 import { noEmDash } from "./rules/no-em-dash/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
+import { noIgnoredReturn } from "./rules/no-ignored-return/rule";
 import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
 import { noMaterializedFilterMap } from "./rules/no-materialized-filter-map/rule";
 import { noObjectParameters } from "./rules/no-object-parameters/rule";
@@ -63,6 +64,7 @@ export type PluginRules = {
 	"no-em-dash": typeof noEmDash;
 	"no-export-default-arrow": typeof noExportDefaultArrow;
 	"no-floating-point-equality": typeof noFloatingPointEquality;
+	"no-ignored-return": typeof noIgnoredReturn;
 	"no-known-value-widening": typeof noKnownValueWidening;
 	"no-materialized-filter-map": typeof noMaterializedFilterMap;
 	"no-object-parameters": typeof noObjectParameters;
@@ -139,6 +141,7 @@ export const plugin: FlawlessPlugin = {
 		"no-em-dash": noEmDash,
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-floating-point-equality": noFloatingPointEquality,
+		"no-ignored-return": noIgnoredReturn,
 		"no-known-value-widening": noKnownValueWidening,
 		"no-materialized-filter-map": noMaterializedFilterMap,
 		"no-object-parameters": noObjectParameters,
