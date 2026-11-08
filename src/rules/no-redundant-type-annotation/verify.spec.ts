@@ -229,10 +229,10 @@ export function inner(): void {
 }`;
 		const { candidates, program, source } = project(code, extra, { declaration: true });
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name.getText(source))).toStrictEqual(["value"]);
-		expect(rejected.map(({ candidate }) => candidate.owner.name.getText(source))).toStrictEqual(
-			["outer"],
-		);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
+		expect(
+			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
+		).toStrictEqual(["outer"]);
 	});
 
 	it("leaves annotations alone when the edit cannot be verified", () => {
@@ -278,10 +278,10 @@ const kept: string = read();
 const second: string = json();`;
 		const { candidates, program, source } = project(code);
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name.getText(source))).toStrictEqual(["kept"]);
-		expect(rejected.map(({ candidate }) => candidate.owner.name.getText(source))).toStrictEqual(
-			["first", "second"],
-		);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["kept"]);
+		expect(
+			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
+		).toStrictEqual(["first", "second"]);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
@@ -317,7 +317,7 @@ pair({ make: (value: string) => value, use: (value: string) => {} });`;
 		const { candidates, program, source } = project(code);
 		const { accepted } = verifyAnnotations(program, source, candidates);
 		expect(accepted).toHaveLength(1);
-		expect(accepted[0]!.owner.name.getText(source)).toBe("safe");
+		expect(accepted[0]!.owner.name!.getText(source)).toBe("safe");
 	});
 
 	it("bounds work in files with many candidates", () => {
@@ -331,6 +331,101 @@ pair({ make: (value: string) => value, use: (value: string) => {} });`;
 		expect(rejected).toStrictEqual([]);
 		expect(accepted.length + unverified.length).toBe(candidates.length);
 		expect(unverified.every(({ reason }) => reason.includes("work limit"))).toBe(true);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+});
+
+/**
+ * Like `project`, with function return types as the only candidates.
+ * @param code - The unsaved source text.
+ * @returns The program, its source, and the return type removals.
+ */
+function returnProject(code: string): ReturnType<typeof project> {
+	const result = project(code);
+	const candidates: Array<Candidate> = [];
+	function visit(node: ts.Node): void {
+		if (
+			(ts.isFunctionDeclaration(node) ||
+				ts.isFunctionExpression(node) ||
+				ts.isArrowFunction(node) ||
+				ts.isMethodDeclaration(node)) &&
+			node.type !== undefined
+		) {
+			candidates.push({
+				owner: node,
+				range: [code.lastIndexOf(":", node.type.getStart(result.source)), node.type.end],
+			});
+		}
+
+		ts.forEachChild(node, visit);
+	}
+
+	visit(result.source);
+	return { ...result, candidates };
+}
+
+describe("return type verification", () => {
+	it.each([
+		[
+			"a function declaration",
+			"const kinds = new Set<string>();\nfunction getKinds(): Set<string> { return kinds; }",
+		],
+		[
+			"an async function",
+			"const kinds = new Set<string>();\nasync function load(): Promise<Set<string>> { return kinds; }",
+		],
+		[
+			"a class method",
+			"const kinds = new Set<string>();\nclass Store { read(): Set<string> { return kinds; } }",
+		],
+		["a body with no value", "declare function log(): void;\nfunction run(): void { log(); }"],
+	])("accepts %s", (_, code) => {
+		const { candidates, program, source } = returnProject(code);
+		const { accepted } = verifyAnnotations(program, source, candidates);
+		expect(accepted).toHaveLength(1);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it.each([
+		["a widened literal", 'const lit = (): "a" => "a";'],
+		["a body with no value as `undefined`", "const none = (): undefined => {};"],
+		["a contextually typed `new`", "const empty = (): Set<string> => new Set();"],
+		["a callback that sets `map`'s type", "const out = [1].map((x): string | number => x);"],
+		["self recursion", "const visit = (n: number): boolean => (n > 0 ? visit(n - 1) : true);"],
+	])("rejects %s", (_, code) => {
+		const { candidates, program, source } = returnProject(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted).toStrictEqual([]);
+		expect(rejected).toHaveLength(1);
+	});
+
+	it("never accepts both halves of a mutual recursion", () => {
+		const code = `const isEven = (n: number): boolean => n === 0 || isOdd(n - 1);
+const isOdd = (n: number): boolean => n !== 0 && isEven(n - 1);`;
+		const { candidates, program, source } = returnProject(code);
+		const { accepted } = verifyAnnotations(program, source, candidates);
+		expect(accepted.length).toBeLessThan(2);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("checks a return type and a parameter of one function together", () => {
+		const code = "const read: (x: string) => string = (x: string): string => x;";
+		const { candidates, program, source } = returnProject(code);
+		const [returned] = candidates;
+		const owner = returned?.owner;
+		const parameter =
+			owner !== undefined && ts.isArrowFunction(owner) ? owner.parameters[0] : undefined;
+		const parameterType = parameter?.type;
+		expect(parameterType).toBeDefined();
+
+		const { accepted } = verifyAnnotations(program, source, [
+			...candidates,
+			{
+				owner: parameter!,
+				range: [code.lastIndexOf(":", parameterType!.getStart(source)), parameterType!.end],
+			},
+		]);
+		expect(accepted).toHaveLength(2);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 });
