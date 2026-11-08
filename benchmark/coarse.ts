@@ -7,6 +7,11 @@ export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath:
 	{ ruleId: "jsx-shorthand-boolean", testPath: "./cases/all/jsx-shorthand-boolean.tsx" },
 	{ ruleId: "jsx-shorthand-fragment", testPath: "./cases/all/jsx-shorthand-fragment.tsx" },
 	{
+		options: [{ maximumWords: 8 }],
+		ruleId: "max-comment-length",
+		testPath: "./cases/all/max-comment-length.tsx",
+	},
+	{
 		options: [{ max: 5 }],
 		ruleId: "max-lines-per-function",
 		testPath: "./cases/all/max-lines-per-function.tsx",
