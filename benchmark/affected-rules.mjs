@@ -60,6 +60,11 @@ export function affectedRules(files) {
 			continue;
 		}
 
+		if (file === "benchmark/cases/typed/no-ignored-return.ts") {
+			rules.add("no-ignored-return");
+			continue;
+		}
+
 		if (/^benchmark\/cases\/typed\/annotation-[^/]+\.ts$/.test(file)) {
 			rules.add("no-redundant-type-annotation");
 			continue;

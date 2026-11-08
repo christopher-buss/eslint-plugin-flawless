@@ -79,15 +79,18 @@ interface Service {
 	handle17(value: number): void;
 	handle18(value: number): void;
 	handle19(value: number): void;
-	push(value: number): void;
 	emit(event: string): void;
+	map(callback: () => void): void;
+	push(value: number): void;
 	set(key: string, value: number): void;
+	trim(): void;
 }
 
 declare const service: Service;
 declare const list: Array<number>;
 declare const text: string;
 declare const date: Date;
+let found = 0;
 
 // Most calls name no table method: the rule must stop before any type lookup.
 export function busy(): void {
@@ -173,28 +176,57 @@ export function busy(): void {
 	service.set("k19", 19);
 }
 
-// A table name on a non-builtin receiver pays the type lookup, then passes.
-export function lookalike(store: { map(callback: () => void): void; trim(): void }): void {
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
-	store.map(() => {});
-	store.trim();
+// A table name on a large non-builtin type pays the type lookup, then passes.
+export function lookalike(): void {
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+	service.map(() => {});
+	service.trim();
+}
+
+// The two exceptions: a replacer function and a find callback that assigns.
+export function exceptions(): void {
+	text.replace(/a/g, (match) => match.toUpperCase());
+	list.find((item) => {
+		found = item;
+		return item > 1;
+	});
+	text.replace(/a/g, (match) => match.toUpperCase());
+	list.find((item) => {
+		found = item;
+		return item > 1;
+	});
+	text.replace(/a/g, (match) => match.toUpperCase());
+	list.find((item) => {
+		found = item;
+		return item > 1;
+	});
+	text.replace(/a/g, (match) => match.toUpperCase());
+	list.find((item) => {
+		found = item;
+		return item > 1;
+	});
+	text.replace(/a/g, (match) => match.toUpperCase());
+	list.find((item) => {
+		found = item;
+		return item > 1;
+	});
 }
 
 export function reported(): void {

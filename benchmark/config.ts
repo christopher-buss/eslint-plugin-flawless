@@ -345,6 +345,35 @@ if (isSelected(TYPE_ANNOTATION_RULE_ID)) {
 	}
 }
 
+// The same proof for typed coarse rules: without a program they report nothing,
+// and the timing would measure a rule that did no type work.
+for (const entry of COARSE) {
+	if (entry.expectedReports === undefined || !isSelected(entry.ruleId)) {
+		continue;
+	}
+
+	const absolutePath = path.resolve(HERE, entry.testPath);
+	const messages = new Linter({ configType: "flat" }).verify(
+		readFileSync(absolutePath, "utf8"),
+		{
+			files: ["**/*.ts"],
+			languageOptions: { parser: tsParser, parserOptions: typedParserOptions },
+			plugins: { flawless: builtPlugin },
+			rules: { [`flawless/${entry.ruleId}`]: ["error", ...(entry.options ?? [])] },
+		},
+		absolutePath,
+	);
+	if (
+		messages.length !== entry.expectedReports ||
+		messages.some((message) => message.ruleId !== `flawless/${entry.ruleId}`)
+	) {
+		throw new Error(
+			`${entry.testPath}: expected ${entry.expectedReports} rule report(s), ` +
+				`received ${JSON.stringify(messages)}`,
+		);
+	}
+}
+
 const tests = [
 	...(isSelected(RULE_ID) ? arrowTests : []),
 	...(isSelected(FLOATING_RULE_ID) ? floatingTests : []),

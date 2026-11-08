@@ -2,8 +2,15 @@
 // check). arrow-return-style and no-floating-point-equality are profiled in
 // detail in config.ts, so they are intentionally absent here. A rule needing
 // options (to report at all) passes them through, matching the shape it would
-// take in eslint config.
-export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string }> = [
+// take in eslint config. A typed rule reports nothing without a program, so its
+// entry pins `expectedReports`: config.ts and scaling.ts fail when the count
+// differs, instead of timing a rule that did no type work.
+export const COARSE: Array<{
+	expectedReports?: number;
+	options?: Array<unknown>;
+	ruleId: string;
+	testPath: string;
+}> = [
 	{
 		options: [{ threshold: 2 }],
 		ruleId: "cognitive-complexity",
@@ -41,7 +48,11 @@ export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath:
 		testPath: "./cases/all/no-known-value-widening.tsx",
 	},
 	// Typed: the fixture lives in the typed project so the rule gets types.
-	{ ruleId: "no-ignored-return", testPath: "./cases/typed/no-ignored-return.ts" },
+	{
+		expectedReports: 4,
+		ruleId: "no-ignored-return",
+		testPath: "./cases/typed/no-ignored-return.ts",
+	},
 	{ ruleId: "no-object-parameters", testPath: "./cases/all/no-object-parameters.tsx" },
 	{ ruleId: "no-reflect-get", testPath: "./cases/all/no-reflect-get.tsx" },
 	{ ruleId: "no-reflect-set", testPath: "./cases/all/no-reflect-set.tsx" },

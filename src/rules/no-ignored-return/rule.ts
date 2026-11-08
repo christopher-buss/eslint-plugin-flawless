@@ -273,6 +273,13 @@ function isNode(value: unknown): value is TSESTree.Node {
  * @returns True when an assignment is found.
  */
 function hasAssignment(node: TSESTree.Node, visitorKeys: TSESLint.SourceCode.VisitorKeys): boolean {
+	// A nested function runs later, if at all, so its writes do not count. The
+	// check is on the node itself, so a callback that returns a function stops
+	// here too.
+	if (isFunctionNode(node)) {
+		return false;
+	}
+
 	if (node.type === AST_NODE_TYPES.AssignmentExpression) {
 		return true;
 	}
@@ -281,11 +288,7 @@ function hasAssignment(node: TSESTree.Node, visitorKeys: TSESLint.SourceCode.Vis
 		const value: unknown = node[key as keyof typeof node];
 		const children = Array.isArray(value) ? value : [value];
 		for (const child of children) {
-			if (!isNode(child) || isFunctionNode(child)) {
-				continue;
-			}
-
-			if (hasAssignment(child, visitorKeys)) {
+			if (isNode(child) && hasAssignment(child, visitorKeys)) {
 				return true;
 			}
 		}

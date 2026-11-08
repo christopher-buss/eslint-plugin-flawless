@@ -60,6 +60,17 @@ const valid: Array<ValidTestCase> = [
 	"list.trim();",
 	"date.setTime(0);",
 	"re.exec(text);",
+	// Optional calls, private names and calls that are not the whole statement.
+	"list.map?.((x) => x);",
+	"(list?.map)((x) => x);",
+	"0, text.trim();",
+	"text.trim()!;",
+	unindent`
+		export class Holder {
+			#trim(): string { return ""; }
+			run(): void { this.#trim(); }
+		}
+	`,
 	// A user object with a table method name.
 	unindent`
 		declare const store: { map(callback: () => void): void; trim(): void };
@@ -124,6 +135,32 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [{ messageId: "ignoredReturn" }],
 	},
+	// A callback that returns a function does not run that function.
+	{
+		code: "list.find((x) => () => { found = x; });",
+		errors: [{ messageId: "ignoredReturn" }],
+	},
+	{
+		code: "list.find((x) => function () { found = x; });",
+		errors: [{ messageId: "ignoredReturn" }],
+	},
+	// Only an assignment counts, not an update.
+	{
+		code: "list.find((x) => { found++; return x > 1; });",
+		errors: [{ messageId: "ignoredReturn" }],
+	},
+	// A replacer whose type prints as an alias name is not a function type node.
+	{
+		code: unindent`
+			type Replacer = (m: string) => string;
+			declare const named: Replacer;
+			text.replace(/a/g, named);
+		`,
+		errors: [{ messageId: "ignoredReturn" }],
+	},
+	{ code: "(text as string).trim();", errors: [{ messageId: "ignoredReturn" }] },
+	{ code: "(text.trim());", errors: [{ messageId: "ignoredReturn" }] },
+	{ code: 'Math["max"](1, 2);', errors: [{ messageId: "ignoredReturn" }] },
 	// A local class named `Date` matches by name.
 	{
 		code: unindent`
@@ -162,4 +199,12 @@ run({
 	invalid,
 	rule: noIgnoredReturn,
 	valid,
+});
+
+// Without type information the receiver kind is unknown, so nothing reports.
+run({
+	name: `${RULE_NAME} (untyped)`,
+	parserOptions: { ecmaVersion: "latest", sourceType: "module" },
+	rule: noIgnoredReturn,
+	valid: ["declare const text: string; text.trim();", "[1].map((x) => x);"],
 });
