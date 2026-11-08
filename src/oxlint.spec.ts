@@ -104,6 +104,32 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(fixed).toContain("let x: React.ReactNode;");
 	});
 
+	it("cognitive-complexity reports a function above the threshold", () => {
+		const { diagnostics } = runOxlint({
+			code: [
+				"export const f = (a: number, b: number): number => {",
+				"	if (a > 0) {",
+				"		for (;;) {",
+				"			if (b > 0 && a > b) {",
+				"				return 1;",
+				"			}",
+				"		}",
+				"	}",
+				"	return 0;",
+				"};",
+				"export const g = (a: number): number => (a > 0 ? 1 : 0);",
+				"",
+			].join("\n"),
+			filename: "file.ts",
+			options: [{ threshold: 2 }],
+			rule: "cognitive-complexity",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(cognitive-complexity)");
+		expect(diagnostics[0]?.message).toContain("Cognitive Complexity of 7");
+	});
+
 	it("max-comment-length reports a long group and skips the header", () => {
 		const { diagnostics } = runOxlint({
 			code: [

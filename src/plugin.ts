@@ -4,6 +4,7 @@ import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
 import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
+import { cognitiveComplexity } from "./rules/cognitive-complexity/rule";
 import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
 import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
 import { maxCommentLength } from "./rules/max-comment-length/rule";
@@ -51,6 +52,7 @@ export const PLUGIN_NAME: string = packageName.replace(/^eslint-plugin-/, "");
 // eslint-disable-next-line ts/consistent-type-definitions -- see above
 export type PluginRules = {
 	"arrow-return-style": typeof arrowReturnStyle;
+	"cognitive-complexity": typeof cognitiveComplexity;
 	"jsx-shorthand-boolean": typeof jsxShorthandBoolean;
 	"jsx-shorthand-fragment": typeof jsxShorthandFragment;
 	"max-comment-length": typeof maxCommentLength;
@@ -126,6 +128,7 @@ export const plugin: FlawlessPlugin = {
 	},
 	rules: {
 		"arrow-return-style": arrowReturnStyle,
+		"cognitive-complexity": cognitiveComplexity,
 		"jsx-shorthand-boolean": jsxShorthandBoolean,
 		"jsx-shorthand-fragment": jsxShorthandFragment,
 		"max-comment-length": maxCommentLength,

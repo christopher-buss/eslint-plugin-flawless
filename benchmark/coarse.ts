@@ -4,6 +4,11 @@
 // options (to report at all) passes them through, matching the shape it would
 // take in eslint config.
 export const COARSE: Array<{ options?: Array<unknown>; ruleId: string; testPath: string }> = [
+	{
+		options: [{ threshold: 2 }],
+		ruleId: "cognitive-complexity",
+		testPath: "./cases/all/cognitive-complexity.tsx",
+	},
 	{ ruleId: "jsx-shorthand-boolean", testPath: "./cases/all/jsx-shorthand-boolean.tsx" },
 	{ ruleId: "jsx-shorthand-fragment", testPath: "./cases/all/jsx-shorthand-fragment.tsx" },
 	{
