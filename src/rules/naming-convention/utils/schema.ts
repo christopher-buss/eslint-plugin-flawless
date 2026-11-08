@@ -156,6 +156,14 @@ const MATCH_REGEX_SCHEMA: JSONSchema.JSONSchema4 = {
 	$ref: "#/$defs/matchRegexConfig",
 };
 type JSONSchemaProperties = Record<string, JSONSchema.JSONSchema4>;
+const COMPONENT_PROP_SELECTORS: ReadonlySet<IndividualAndMetaSelectorsString> = new Set([
+	"default",
+	"memberLike",
+	"method",
+	"property",
+	"typeMethod",
+	"typeProperty",
+]);
 const FORMAT_OPTIONS_PROPERTIES: JSONSchemaProperties = {
 	allowedWords: {
 		$ref: "#/$defs/allowedWordsConfig",
@@ -178,11 +186,6 @@ function selectorSchema(
 	modifiers?: Array<ModifierString>,
 ): Array<JSONSchema.JSONSchema4> {
 	const selector: JSONSchemaProperties = {
-		// a role constraint composes with every selector the same way; it only
-		// ever matches interface and type-literal members
-		componentProp: {
-			$ref: "#/$defs/componentPropConfig",
-		},
 		filter: {
 			oneOf: [
 				{
@@ -202,6 +205,14 @@ function selectorSchema(
 			$ref: "#/$defs/typeArgumentOfConfig",
 		},
 	};
+
+	// a role constraint that only interface and type-literal members can meet,
+	// so only the selectors that cover them offer it
+	if (COMPONENT_PROP_SELECTORS.has(selectorString)) {
+		selector["componentProp"] = {
+			$ref: "#/$defs/componentPropConfig",
+		};
+	}
 
 	if (modifiers && modifiers.length > 0) {
 		selector["modifiers"] = {

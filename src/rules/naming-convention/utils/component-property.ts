@@ -1,19 +1,22 @@
+import * as core from "@eslint-react/core";
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type ts from "typescript";
-import { forEachChild, SymbolFlags, SyntaxKind, TypeFlags } from "typescript";
+import { forEachChild, SyntaxKind, TypeFlags } from "typescript";
 
-import { moduleSpecifierMatches } from "./module-specifier";
+import { resolveReactPackage } from "../../../utils/react-package";
+import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
 import type { Context } from "./types";
 
 /**
  * Packages whose declarations count as React. Component types, component base
- * classes and wrappers must resolve to one of them, so a project type or
- * another library's function with the same name is not mistaken for React's.
+ * classes, wrappers and named render types must resolve to one of them, so a
+ * project type or another library's function with the same name is not
+ * mistaken for React's. The `react-x` `importSource` setting adds its package.
  */
-const REACT_MODULES: ReadonlyArray<string> = ["react", "@types/react", "@rbxts/react"];
+const DEFAULT_REACT_MODULES: ReadonlyArray<string> = ["react", "@types/react", "@rbxts/react"];
 
 /**
  * Component types whose first type argument is the props type:
@@ -59,16 +62,12 @@ const PASS_THROUGH_TYPE_NAMES: ReadonlySet<string> = new Set([
 	"Required",
 ]);
 
-/** Named types a component may return. */
+/** React's named types a component may return. */
 const RENDER_OUTPUT_NAMES: ReadonlySet<string> = new Set([
 	"ReactElement",
 	"ReactNode",
 	"ReactPortal",
 ]);
-
-/** The JSX namespace's element type, `JSX.Element`. */
-const JSX_ELEMENT_NAME = "Element";
-const JSX_NAMESPACE_NAME = "JSX";
 
 const IGNORED_RENDER_FLAGS = TypeFlags.BooleanLiteral | TypeFlags.Null | TypeFlags.Undefined;
 
@@ -79,12 +78,19 @@ const IGNORED_RENDER_FLAGS = TypeFlags.BooleanLiteral | TypeFlags.Null | TypeFla
 const MAX_GENERIC_DEPTH = 32;
 
 /**
- * Props-type declarations (interfaces and type literals) per program. The scan
- * reads every source file, so it runs once per program instead of once per
- * name. Keys are programs, which a change replaces, so a stale result is never
- * read.
+ * Generic bodies are not deduplicated, so a recursive alias with several
+ * self-references could branch out before the depth limit stops it. This caps
+ * the steps one props type may take.
  */
-const propsContainerCache = new WeakMap<ts.Program, ReadonlySet<ts.Node>>();
+const MAX_PROPS_TYPE_STEPS = 10_000;
+
+/**
+ * Props-type declarations (interfaces and type literals) per program and React
+ * module list. The scan reads every source file, so it runs once per program
+ * instead of once per name. Keys are programs, which a change replaces, so a
+ * stale result is never read.
+ */
+const propsContainerCache = new WeakMap<ts.Program, Map<string, ReadonlySet<ts.Node>>>();
 
 /**
  * A type node, together with the type arguments its enclosing generic
@@ -128,8 +134,12 @@ export function isComponentPropertyMember(node: TSESTree.Node, context: Context)
 
 	const services = getParserServices(context);
 	const tsContainer = services.esTreeNodeToTSNodeMap.get(container);
+	// the scan never records declaration files, so they need no scan
+	if (tsContainer.getSourceFile().isDeclarationFile) {
+		return false;
+	}
 
-	return getPropsContainers(services.program).has(tsContainer);
+	return getPropsContainers(services.program, getReactModules(context)).has(tsContainer);
 }
 
 /**
@@ -161,6 +171,28 @@ function getMemberContainer(
 	}
 
 	return parent.parent;
+}
+
+/**
+ * Reads the React packages: the defaults, plus the package the `react-x`
+ * `importSource` setting names and its `@types` package. Shared settings are not
+ * validated, so anything that is not a string is ignored.
+ *
+ * @param context - The rule context of the file being linted.
+ * @returns The module specifiers whose declarations count as React.
+ */
+function getReactModules(context: Context): ReadonlyArray<string> {
+	const settings: unknown = context.settings["react-x"];
+	const importSource =
+		typeof settings === "object" && settings !== null
+			? (settings as { importSource?: unknown }).importSource
+			: undefined;
+	if (typeof importSource !== "string" || importSource.length === 0) {
+		return DEFAULT_REACT_MODULES;
+	}
+
+	const reactPackage = resolveReactPackage(importSource);
+	return [...new Set([...DEFAULT_REACT_MODULES, `@types/${reactPackage}`, reactPackage])];
 }
 
 function getRightmostName(expression: ts.Node): ts.Identifier | undefined {
@@ -205,44 +237,6 @@ function asTypeReference(node: ts.Node): TypeReferenceParts | undefined {
 	}
 
 	return undefined;
-}
-
-/**
- * Resolves a name through TypeScript's symbol table, following import aliases
- * so a renamed import resolves to the declaration it was imported from.
- *
- * @param node - The identifier to resolve.
- * @param checker - The program's type checker.
- * @returns The declaring symbol, or undefined when the name has none.
- */
-function resolveSymbol(node: ts.Node, checker: ts.TypeChecker): ts.Symbol | undefined {
-	const symbol = checker.getSymbolAtLocation(node);
-	if (symbol === undefined || (symbol.flags & SymbolFlags.Alias) === 0) {
-		return symbol;
-	}
-
-	return checker.getAliasedSymbol(symbol);
-}
-
-function isReactSymbol(symbol: ts.Symbol): boolean {
-	return (
-		symbol.declarations?.some((declaration) => {
-			const { fileName } = declaration.getSourceFile();
-			return REACT_MODULES.some((module) => moduleSpecifierMatches(fileName, module));
-		}) === true
-	);
-}
-
-/**
- * Checks whether a symbol is one of React's own declarations with one of the
- * given names.
- *
- * @param symbol - The resolved symbol.
- * @param names - The accepted names.
- * @returns True if the symbol is a React declaration with an accepted name.
- */
-function isReactSymbolNamed(symbol: ts.Symbol | undefined, names: ReadonlySet<string>): boolean {
-	return symbol !== undefined && names.has(symbol.name) && isReactSymbol(symbol);
 }
 
 /**
@@ -364,7 +358,10 @@ function expandPropsType(
 				return [];
 			}
 
-			const symbol = resolveSymbol(reference.nameNode, checker);
+			const symbol = resolveAliasedSymbol(
+				checker.getSymbolAtLocation(reference.nameNode),
+				checker,
+			);
 			if (symbol !== undefined && PASS_THROUGH_TYPE_NAMES.has(symbol.name)) {
 				return reference.typeArguments?.slice(0, 1).map(withBindings) ?? [];
 			}
@@ -399,44 +396,28 @@ function expandPropsType(
 	}
 }
 
-/**
- * Names the component wrapper a call invokes. The callee must resolve to
- * React's own `memo` or `forwardRef`, so a local function or another library's
- * function with the same name is not a wrapper. Renamed imports resolve too.
- *
- * @param callee - The callee expression.
- * @param checker - The program's type checker.
- * @returns The wrapper name, or undefined when the call is not to a wrapper.
- */
-function getWrapperName(callee: ts.Expression, checker: ts.TypeChecker): string | undefined {
-	const nameNode = getRightmostName(callee);
-	if (nameNode === undefined) {
-		return undefined;
-	}
-
-	const symbol = resolveSymbol(nameNode, checker);
-	if (symbol === undefined || !WRAPPER_PROPS_ARGUMENT_INDEX.has(symbol.name)) {
-		return undefined;
-	}
-
-	return isReactSymbol(symbol) ? symbol.name : undefined;
-}
-
-/**
- * React treats a lowercase JSX tag as a host element, so a component name
- * always starts with a capital letter. Render callbacks (`renderItem`) do not,
- * and so their parameter types are not props.
- *
- * @param name - The function's or variable's name.
- * @returns True if the name can name a component.
- */
-function isComponentName(name: string): boolean {
-	const first = name.charAt(0);
-	return first !== first.toLowerCase();
-}
-
 function isFunctionLike(node: ts.Node): node is ts.ArrowFunction | ts.FunctionExpression {
 	return node.kind === SyntaxKind.ArrowFunction || node.kind === SyntaxKind.FunctionExpression;
+}
+
+/**
+ * Checks whether a node's subtree can hold a component: a call, a class, a
+ * function, or a variable. Type nodes, type declarations and imports cannot,
+ * so the scan does not walk into them.
+ *
+ * @param node - The node to check.
+ * @returns True if the scan must walk into the node.
+ */
+function mayContainComponents(node: ts.Node): boolean {
+	if (node.kind >= SyntaxKind.FirstTypeNode && node.kind <= SyntaxKind.LastTypeNode) {
+		return false;
+	}
+
+	return (
+		node.kind !== SyntaxKind.InterfaceDeclaration &&
+		node.kind !== SyntaxKind.TypeAliasDeclaration &&
+		node.kind !== SyntaxKind.ImportDeclaration
+	);
 }
 
 function unwrapExpression(node: ts.Expression | undefined): ts.Expression | undefined {
@@ -454,74 +435,103 @@ function unwrapExpression(node: ts.Expression | undefined): ts.Expression | unde
 	return current;
 }
 
-function isElementType(type: ts.Type): boolean {
-	if (type.aliasSymbol !== undefined && RENDER_OUTPUT_NAMES.has(type.aliasSymbol.name)) {
-		return true;
-	}
-
-	const symbol = type.getSymbol();
-	if (symbol === undefined) {
-		return false;
-	}
-
-	if (RENDER_OUTPUT_NAMES.has(symbol.name)) {
-		return true;
-	}
-
-	if (symbol.name !== JSX_ELEMENT_NAME) {
-		return false;
-	}
-
-	// `Element` alone also names the DOM element; only the one declared in a
-	// `JSX` namespace is render output
+/**
+ * Checks whether a symbol is the `Element` interface of a `JSX` namespace.
+ * `Element` alone also names the DOM element, which is not render output.
+ *
+ * @param symbol - The symbol of a return type part.
+ * @returns True if the symbol is `JSX.Element`.
+ */
+function isJsxElementSymbol(symbol: ts.Symbol): boolean {
 	return (
+		symbol.name === "Element" &&
 		symbol.declarations?.some((declaration) => {
 			const namespace = declaration.parent.parent;
 			return (
 				namespace.kind === SyntaxKind.ModuleDeclaration &&
-				(namespace as ts.ModuleDeclaration).name.text === JSX_NAMESPACE_NAME
+				(namespace as ts.ModuleDeclaration).name.text === "JSX"
 			);
 		}) === true
 	);
 }
 
-/**
- * Checks whether a function's return type is what a component renders: a
- * React element or node, optionally with `null`, `undefined`, or a boolean.
- *
- * @param type - The function's return type.
- * @returns True if the type is render output.
- */
-function isRenderOutput(type: ts.Type): boolean {
-	if (type.aliasSymbol !== undefined && RENDER_OUTPUT_NAMES.has(type.aliasSymbol.name)) {
-		return true;
-	}
-
-	const parts = type.isUnion() ? type.types : [type];
-	let hasElement = false;
-	for (const part of parts) {
-		if ((part.flags & IGNORED_RENDER_FLAGS) !== 0) {
-			continue;
-		}
-
-		if (!isElementType(part)) {
-			return false;
-		}
-
-		hasElement = true;
-	}
-
-	return hasElement;
-}
-
-function collectPropsContainers(program: ts.Program): Set<ts.Node> {
+function collectPropsContainers(
+	program: ts.Program,
+	reactModules: ReadonlyArray<string>,
+): Set<ts.Node> {
 	const checker = program.getTypeChecker();
 	const containers = new Set<ts.Node>();
 	// only nodes read without bindings are deduplicated: a generic body means
 	// something different for each set of type arguments
 	const visited = new Set<ts.Node>();
 
-	function addPropsType(typeNode: ts.Node | undefined, bindings: Bindings): void {
+	function isReactSymbol(symbol: ts.Symbol): boolean {
+		return reactModules.some((module) => symbolDeclaredIn(symbol, module));
+	}
+
+	function resolveReactSymbol(
+		nameNode: ts.Node,
+		names: ReadonlyMap<string, unknown> | ReadonlySet<string>,
+	): ts.Symbol | undefined {
+		const symbol = resolveAliasedSymbol(checker.getSymbolAtLocation(nameNode), checker);
+		return symbol !== undefined && names.has(symbol.name) && isReactSymbol(symbol)
+			? symbol
+			: undefined;
+	}
+
+	/**
+	 * Checks whether a function's return type is what a component renders: a
+	 * React element or node, optionally with `null`, `undefined`, or a boolean.
+	 *
+	 * @param type - The function's return type.
+	 * @returns True if the type is render output.
+	 */
+	function isRenderOutput(type: ts.Type): boolean {
+		if (isReactRenderSymbol(type.aliasSymbol)) {
+			return true;
+		}
+
+		const parts = type.isUnion() ? type.types : [type];
+		let hasElement = false;
+		for (const part of parts) {
+			if ((part.flags & IGNORED_RENDER_FLAGS) !== 0) {
+				continue;
+			}
+
+			const symbol = part.getSymbol();
+			if (
+				symbol === undefined ||
+				(!isReactRenderSymbol(symbol) && !isJsxElementSymbol(symbol))
+			) {
+				return false;
+			}
+
+			hasElement = true;
+		}
+
+		return hasElement;
+	}
+
+	function isReactRenderSymbol(symbol: ts.Symbol | undefined): boolean {
+		return (
+			symbol !== undefined && RENDER_OUTPUT_NAMES.has(symbol.name) && isReactSymbol(symbol)
+		);
+	}
+
+	/**
+	 * Walks a props type and records the containers it reaches.
+	 *
+	 * @param typeNode - Where the walk starts, such as a parameter annotation.
+	 * @param bindings - The bindings the node is read with.
+	 * @param target - Receives the containers found.
+	 * @param seen - Nodes already walked without bindings.
+	 */
+	function walkPropsType(
+		typeNode: ts.Node | undefined,
+		bindings: Bindings,
+		target: Set<ts.Node>,
+		seen: Set<ts.Node>,
+	): void {
 		if (typeNode === undefined) {
 			return;
 		}
@@ -530,24 +540,30 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 			{ bindings, depth: 0, node: typeNode },
 		];
 
-		while (stack.length > 0) {
+		let steps = 0;
+		while (stack.length > 0 && steps < MAX_PROPS_TYPE_STEPS) {
 			const current = stack.pop();
 			if (current === undefined || current.depth > MAX_GENERIC_DEPTH) {
 				continue;
 			}
 
 			if (current.bindings.size === 0) {
-				if (visited.has(current.node)) {
+				if (seen.has(current.node)) {
 					continue;
 				}
 
-				visited.add(current.node);
+				seen.add(current.node);
 			}
 
-			for (const next of expandPropsType(current, checker, containers)) {
+			steps += 1;
+			for (const next of expandPropsType(current, checker, target)) {
 				stack.push({ ...next, depth: current.depth + 1 });
 			}
 		}
+	}
+
+	function addPropsType(typeNode: ts.Node | undefined, bindings: Bindings): void {
+		walkPropsType(typeNode, bindings, containers, visited);
 	}
 
 	function addComponentTypeAnnotation(
@@ -564,14 +580,17 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 			return false;
 		}
 
-		const symbol = resolveSymbol(reference.nameNode, checker);
-		if (isReactSymbolNamed(symbol, COMPONENT_TYPE_NAMES)) {
+		if (resolveReactSymbol(reference.nameNode, COMPONENT_TYPE_NAMES) !== undefined) {
 			addPropsType(reference.typeArguments?.[0], bindings);
 			return true;
 		}
 
 		// a project alias of a component type, generic or not: `type View<P> =
 		// React.FC<P>`
+		const symbol = resolveAliasedSymbol(
+			checker.getSymbolAtLocation(reference.nameNode),
+			checker,
+		);
 		return resolveReference(reference, symbol, bindings).some((resolved) => {
 			const target =
 				resolved.node.kind === SyntaxKind.TypeAliasDeclaration
@@ -591,6 +610,14 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 			return;
 		}
 
+		// the props type is cheap to walk, while the return type may need the
+		// whole body checked: only check it when the walk finds new containers
+		const found = new Set<ts.Node>();
+		walkPropsType(props.type, NO_BINDINGS, found, new Set());
+		if (![...found].some((container) => !containers.has(container))) {
+			return;
+		}
+
 		const signature = checker.getSignatureFromDeclaration(func);
 		if (
 			signature === undefined ||
@@ -599,21 +626,42 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 			return;
 		}
 
-		addPropsType(props.type, NO_BINDINGS);
+		for (const container of found) {
+			containers.add(container);
+		}
 	}
 
 	function addWrapperCall(call: ts.CallExpression): void {
-		const wrapperName = getWrapperName(call.expression, checker);
-		if (wrapperName === undefined) {
+		const { expression: callee } = call;
+		const nameNode = getRightmostName(callee);
+		if (nameNode === undefined) {
 			return;
 		}
 
-		const index = WRAPPER_PROPS_ARGUMENT_INDEX.get(wrapperName) ?? 0;
-		addPropsType(call.typeArguments?.[index], NO_BINDINGS);
+		// resolving a property name type-checks its receiver, so only a property
+		// already named like a wrapper is resolved. A renamed import is always a
+		// plain identifier, which resolves cheaply.
+		if (
+			callee.kind === SyntaxKind.PropertyAccessExpression &&
+			!WRAPPER_PROPS_ARGUMENT_INDEX.has(nameNode.text)
+		) {
+			return;
+		}
+
+		const wrapper = resolveReactSymbol(nameNode, WRAPPER_PROPS_ARGUMENT_INDEX);
+		const index =
+			wrapper === undefined ? undefined : WRAPPER_PROPS_ARGUMENT_INDEX.get(wrapper.name);
+		if (index === undefined) {
+			return;
+		}
+
+		const { typeArguments } = call;
+		addPropsType(typeArguments?.[index], NO_BINDINGS);
 
 		// the wrapper marks its argument as a component, so the return type
 		// needs no check here
-		const inner = unwrapExpression(call.arguments[0]);
+		const [argument] = call.arguments;
+		const inner = unwrapExpression(argument);
 		if (inner !== undefined && isFunctionLike(inner)) {
 			addPropsType(inner.parameters[0]?.type, NO_BINDINGS);
 		}
@@ -627,8 +675,7 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 
 			for (const heritage of clause.types) {
 				const name = getRightmostName(heritage.expression);
-				const symbol = name === undefined ? undefined : resolveSymbol(name, checker);
-				if (isReactSymbolNamed(symbol, COMPONENT_CLASS_NAMES)) {
+				if (name !== undefined && resolveReactSymbol(name, COMPONENT_CLASS_NAMES)) {
 					addPropsType(heritage.typeArguments?.[0], NO_BINDINGS);
 				}
 			}
@@ -638,7 +685,7 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 	function inspectVariable(declaration: ts.VariableDeclaration): void {
 		if (
 			declaration.name.kind !== SyntaxKind.Identifier ||
-			!isComponentName(declaration.name.text)
+			!core.isFunctionComponentName(declaration.name.text)
 		) {
 			return;
 		}
@@ -669,8 +716,10 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 				break;
 			}
 			case SyntaxKind.FunctionDeclaration: {
+				// React treats a lowercase JSX tag as a host element, so render
+				// callbacks (`renderItem`) are not components
 				const func = node as ts.FunctionDeclaration;
-				if (func.name !== undefined && isComponentName(func.name.text)) {
+				if (func.name !== undefined && core.isFunctionComponentName(func.name.text)) {
 					addFunctionComponent(func);
 				}
 
@@ -686,12 +735,19 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 		}
 	}
 
+	const stack: Array<ts.Node> = [];
+	function pushChild(child: ts.Node): void {
+		if (mayContainComponents(child)) {
+			stack.push(child);
+		}
+	}
+
 	for (const sourceFile of program.getSourceFiles()) {
 		if (sourceFile.isDeclarationFile || program.isSourceFileFromExternalLibrary(sourceFile)) {
 			continue;
 		}
 
-		const stack: Array<ts.Node> = [sourceFile];
+		stack.push(sourceFile);
 		while (stack.length > 0) {
 			const node = stack.pop();
 			if (node === undefined) {
@@ -699,23 +755,29 @@ function collectPropsContainers(program: ts.Program): Set<ts.Node> {
 			}
 
 			inspect(node);
-			forEachChild(node, (child) => {
-				stack.push(child);
-			});
+			forEachChild(node, pushChild);
 		}
 	}
 
 	return containers;
 }
 
-function getPropsContainers(program: ts.Program): ReadonlySet<ts.Node> {
-	const cached = propsContainerCache.get(program);
-	if (cached !== undefined) {
-		return cached;
+function getPropsContainers(
+	program: ts.Program,
+	reactModules: ReadonlyArray<string>,
+): ReadonlySet<ts.Node> {
+	let byModules = propsContainerCache.get(program);
+	if (byModules === undefined) {
+		byModules = new Map();
+		propsContainerCache.set(program, byModules);
 	}
 
-	const containers = collectPropsContainers(program);
-	propsContainerCache.set(program, containers);
+	const key = reactModules.join("\n");
+	let containers = byModules.get(key);
+	if (containers === undefined) {
+		containers = collectPropsContainers(program, reactModules);
+		byModules.set(key, containers);
+	}
 
 	return containers;
 }

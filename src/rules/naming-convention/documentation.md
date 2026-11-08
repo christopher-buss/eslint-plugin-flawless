@@ -658,9 +658,12 @@ A type is a props type when one of these takes it as its props:
   function it wraps. The wrapped function needs no name or return type.
 - A class that extends `Component` or `PureComponent`.
 
-The component types, base classes, and wrappers must be React's own: the rule
+The component types, base classes, wrappers, and the `ReactElement`,
+`ReactNode`, and `ReactPortal` return types must be React's own: the rule
 resolves each name through TypeScript's symbol table, and the declaration must
-come from `react`, `@types/react`, or `@rbxts/react`. Thus a renamed import
+come from `react`, `@types/react`, or `@rbxts/react`. The `react-x`
+`importSource` setting adds its package (and its `@types` package), with a bare
+scope such as `@rbxts` read as `@rbxts/react`. Thus a renamed import
 (`import { FC as View } from "react"`) still matches, but a project type named
 `ComponentType` or another library's `memo` does not.
 
@@ -683,8 +686,10 @@ any other file of the program. Some things are not props:
 
 Details worth knowing:
 
-- Only `typeProperty` and `typeMethod` names can match. A function-typed prop
-  such as `onStateChange?: () => void` is a `typeMethod`.
+- Only `typeProperty` and `typeMethod` names can match, so the option is only
+  accepted on those selectors and on `default`, `memberLike`, `property`, and
+  `method`. A function-typed prop such as `onStateChange?: () => void` is a
+  `typeMethod`.
 - A `componentProp` selector **outranks** an otherwise equivalent unconstrained
   one, whichever order they are declared in, and also `types` and
   `typeArgumentOf` constraints. Add `types` to a `componentProp` selector to

@@ -5,6 +5,7 @@ import tsParser from "@typescript-eslint/parser";
 
 import { Linter } from "eslint";
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, it } from "vitest";
 
@@ -4432,8 +4433,21 @@ const componentPropertyOptions: Options = [
 function propertyError(
 	name: string,
 	formats = "strictCamelCase",
+	type = "Type Property",
 ): Array<{ data: Record<string, string>; messageId: "doesNotMatchFormat" }> {
-	return [{ data: { name, formats, type: "Type Property" }, messageId: "doesNotMatchFormat" }];
+	return [{ data: { name, formats, type }, messageId: "doesNotMatchFormat" }];
+}
+
+/**
+ * Adds the fixture file name and the shared options to a test case, unless the
+ * case gives its own.
+ *
+ * @template T - The test case type.
+ * @param testCase - A valid or invalid case of the `componentProp` suite.
+ * @returns The test case with the defaults.
+ */
+function withComponentPropertyDefaults<T extends object>(testCase: T): T {
+	return { filename: componentPropertyCase, options: componentPropertyOptions, ...testCase };
 }
 
 const panelProps = unindent`
@@ -4587,12 +4601,7 @@ const componentPropertyInvalid: Array<Exclude<InvalidTestCase, string>> = [
 				return <div />;
 			}
 		`,
-		errors: [
-			{
-				data: { name: "RenderItem", formats: "strictCamelCase", type: "Type Method" },
-				messageId: "doesNotMatchFormat",
-			},
-		],
+		errors: propertyError("RenderItem", "strictCamelCase", "Type Method"),
 	},
 	{
 		// `@rbxts/react` uses the same type names
@@ -4654,6 +4663,20 @@ const componentPropertyInvalid: Array<Exclude<InvalidTestCase, string>> = [
 			export const Card = remember((props: CardProps) => null);
 		`),
 		errors: [...propertyError("Title"), ...propertyError("Size")],
+	},
+	{
+		// the `react-x` `importSource` setting adds its package to React's
+		code: unindent`
+			import { memo } from "other-lib";
+
+			interface Shape {
+				readonly Width: number;
+			}
+
+			export const Measure = memo((shape: Shape) => shape.Width);
+		`,
+		errors: propertyError("Width"),
+		settings: { "react-x": { importSource: "other-lib" } },
 	},
 	{
 		// a `componentProp` selector outranks an unconstrained one, whatever
@@ -4892,28 +4915,14 @@ const componentPropertyValid: Array<Exclude<ValidTestCase, string>> = [
 	},
 	{
 		// the cross-file hook result stays on the broad policy
-		code: unindent`
-			export interface BaseProps {
-				readonly visible?: boolean;
-			}
-
-			export interface CardProps extends BaseProps {
-				readonly title: string;
-			}
-
-			export interface CardHookResult {
-				readonly InputBegan?: () => void;
-			}
-		`,
+		code: readFileSync(componentPropertySharedProps, "utf8"),
 		filename: componentPropertySharedProps,
 	},
 ];
 
 run({
 	name: `${RULE_NAME}/component-prop`,
-	invalid: componentPropertyInvalid.map((testCase) => {
-		return { filename: componentPropertyCase, options: componentPropertyOptions, ...testCase };
-	}),
+	invalid: componentPropertyInvalid.map(withComponentPropertyDefaults),
 	parserOptions: {
 		ecmaVersion: "latest",
 		project: path.join(componentPropertyDirectory, "tsconfig.json"),
@@ -4921,9 +4930,7 @@ run({
 		tsconfigRootDir: componentPropertyDirectory,
 	},
 	rule: namingConvention,
-	valid: componentPropertyValid.map((testCase) => {
-		return { filename: componentPropertyCase, options: componentPropertyOptions, ...testCase };
-	}),
+	valid: componentPropertyValid.map(withComponentPropertyDefaults),
 });
 
 it.each([
@@ -4936,6 +4943,12 @@ it.each([
 			format: ["camelCase"],
 			selector: "typeProperty",
 		});
+	}).toThrow();
+});
+
+it("rejects `componentProp` on a selector that cannot match it", () => {
+	expect(() => {
+		verifyWithOptions({ componentProp: true, format: ["camelCase"], selector: "parameter" });
 	}).toThrow();
 });
 

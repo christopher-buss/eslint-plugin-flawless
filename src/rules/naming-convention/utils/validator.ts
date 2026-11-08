@@ -18,8 +18,8 @@ import {
 	UnderscoreOption,
 } from "./enums";
 import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format";
-import { moduleSpecifierMatches } from "./module-specifier";
 import { isMetaSelector, isMethodOrPropertySelector, selectorTypeToMessageString } from "./shared";
+import { symbolDeclaredIn } from "./symbol";
 import { isInMatchingTypeArgument } from "./type-argument";
 import type { Context, NormalizedSelector, TypeReference } from "./types";
 
@@ -96,6 +96,9 @@ export function createValidator(
 				? node.name
 				: `${node.value}`;
 
+		// several configs may ask, but the answer is the same for each
+		let isComponentProperty: boolean | undefined;
+
 		// return will break the loop and stop checking configs
 		// it is only used when the name is known to have failed or succeeded a
 		// config.
@@ -118,9 +121,12 @@ export function createValidator(
 				continue;
 			}
 
-			if (config.componentProp && !isComponentPropertyMember(node, context)) {
-				// is not a member of a component's props type
-				continue;
+			if (config.componentProp) {
+				isComponentProperty ??= isComponentPropertyMember(node, context);
+				if (!isComponentProperty) {
+					// is not a member of a component's props type
+					continue;
+				}
 			}
 
 			if (!isCorrectType(typeNode, config, context, selectorType)) {
@@ -567,23 +573,7 @@ function symbolMatchesTypeReference(
 		return false;
 	}
 
-	if (reference.from === undefined) {
-		return true;
-	}
-
-	const { declarations } = symbol;
-	if (!declarations || declarations.length === 0) {
-		return false;
-	}
-
-	for (const declaration of declarations) {
-		const { fileName } = declaration.getSourceFile();
-		if (moduleSpecifierMatches(fileName, reference.from)) {
-			return true;
-		}
-	}
-
-	return false;
+	return reference.from === undefined || symbolDeclaredIn(symbol, reference.from);
 }
 
 function matchesSymbolTypeReference(type: ts.Type, reference: TypeReference): boolean {

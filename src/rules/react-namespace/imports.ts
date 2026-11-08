@@ -1,6 +1,8 @@
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
+import { resolveReactPackage } from "../../utils/react-package";
+
 /** The kind of binding an identifier resolves to within a React import. */
 export type ReactImportKind = "named" | "namespace";
 
@@ -11,9 +13,6 @@ export interface EnsureNamedValueImportParameters {
 	readonly importSource: string;
 	readonly program: TSESTree.Program;
 }
-
-/** Matches a bare npm scope (`@rbxts`) with no package segment. */
-const SCOPE_PATTERN = /^@[^/]+$/;
 
 /**
  * Whether a module specifier refers to the configured React package. Matches the
@@ -248,20 +247,6 @@ export function findNamedSpecifier(
 	}
 
 	return null;
-}
-
-/**
- * Resolves the React package the `react-x` `importSource` setting points at. The
- * setting may be a package (`react`, `@rbxts/react`) or a bare npm scope
- * (`@rbxts`, as Roblox configs set it). A scope names no package, so treating it
- * as one claims every sibling (`@rbxts/react-roblox`, `@rbxts/flux`) as React;
- * the React package under a scope is `<scope>/react`.
- *
- * @param importSource - The configured `react-x` import source.
- * @returns The React package name to match against.
- */
-function resolveReactPackage(importSource: string): string {
-	return SCOPE_PATTERN.test(importSource) ? `${importSource}/react` : importSource;
 }
 
 function isNamedSpecifier(specifier: TSESTree.ImportClause): specifier is TSESTree.ImportSpecifier {
