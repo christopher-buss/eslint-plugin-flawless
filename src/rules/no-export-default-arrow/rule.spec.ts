@@ -17,6 +17,17 @@ const valid: Array<ValidTestCase> = [
 	// Arrows that are not default exports are untouched.
 	"const now = () => Date.now()",
 	"export const useQuery = () => {}",
+	// A wrapped arrow in a named constant is already named.
+	unindent`
+		const handler = (() => 1) as Handler
+		export default handler
+	`,
+	// Only arrows are reported; a wrapped function expression has its own name.
+	"export default (function handler() {}) as Handler",
+	// Arrows nested inside the exported value are not the value itself.
+	"export default [() => 1] as const",
+	"export default { run: () => 1 } satisfies Task",
+	"export default call(() => 1)",
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -122,6 +133,150 @@ const invalid: Array<InvalidTestCase> = [
 		filename: "page.tsx",
 		output: unindent`
 			const Page = () => <></>
+
+			export default Page
+		`,
+	},
+	// Parentheses are not AST nodes, so a parenthesized arrow is reported. The
+	// fix replaces only the keywords, so parentheses and comments stay.
+	{
+		code: "export default (/* keep */ () => 1)",
+		errors: [{ messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = (/* keep */ () => 1)
+
+			export default handler
+		`,
+	},
+	// Type wrappers do not name the arrow; the fix keeps them on the value.
+	{
+		code: "export default (() => 1) as Handler",
+		errors: [{ column: 17, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = (() => 1) as Handler
+
+			export default handler
+		`,
+	},
+	{
+		code: "export default (() => 1) satisfies Handler",
+		errors: [{ column: 17, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = (() => 1) satisfies Handler
+
+			export default handler
+		`,
+	},
+	{
+		code: "export default (() => 1)!",
+		errors: [{ column: 17, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = (() => 1)!
+
+			export default handler
+		`,
+	},
+	// Wrappers nest in any order.
+	{
+		code: "export default ((() => 1) as unknown) as Handler",
+		errors: [{ column: 18, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = ((() => 1) as unknown) as Handler
+
+			export default handler
+		`,
+	},
+	{
+		code: "export default ((() => 1)! satisfies Handler) as Handler",
+		errors: [{ column: 18, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = ((() => 1)! satisfies Handler) as Handler
+
+			export default handler
+		`,
+	},
+	// An instantiation expression does not name the arrow either.
+	{
+		code: "export default (<T,>(value: T) => value)<string>",
+		errors: [{ column: 17, messageId }],
+		filename: "identity.ts",
+		output: unindent`
+			const identity = (<T,>(value: T) => value)<string>
+
+			export default identity
+		`,
+	},
+	// The trailing semicolon stays, so ASI cannot join the next statement.
+	{
+		code: unindent`
+			export default (() => 1) as Handler;
+			(globalThis as any).x = 1;
+		`,
+		errors: [{ messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = (() => 1) as Handler;
+			(globalThis as any).x = 1;
+
+			export default handler
+		`,
+	},
+	// No fix when the generated name is already bound in the module.
+	{
+		code: unindent`
+			import type { Page } from './types'
+
+			export default (() => <div />) satisfies Page
+		`,
+		errors: [{ messageId }],
+		filename: "page.tsx",
+		output: null,
+	},
+	{
+		code: unindent`
+			const handler = 1
+
+			export default () => handler
+		`,
+		errors: [{ messageId }],
+		filename: "handler.ts",
+		output: null,
+	},
+	// JSX under a type wrapper in the return value is still a component.
+	{
+		code: "export default () => <div /> as ReactElement",
+		errors: [{ messageId }],
+		filename: "page.tsx",
+		output: unindent`
+			const Page = () => <div /> as ReactElement
+
+			export default Page
+		`,
+	},
+	// Angle-bracket assertions only parse in `.ts` files, not `.tsx`.
+	{
+		code: "export default <Handler>(() => 1)",
+		errors: [{ column: 26, messageId }],
+		filename: "handler.ts",
+		output: unindent`
+			const handler = <Handler>(() => 1)
+
+			export default handler
+		`,
+	},
+	// The name case comes from the unwrapped arrow, so JSX selects PascalCase.
+	{
+		code: "export default (() => <div />) satisfies Component",
+		errors: [{ messageId }],
+		filename: "page.tsx",
+		output: unindent`
+			const Page = (() => <div />) satisfies Component
 
 			export default Page
 		`,
