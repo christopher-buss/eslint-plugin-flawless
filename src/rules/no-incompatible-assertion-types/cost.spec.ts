@@ -58,6 +58,9 @@ function lint(code: string): Counts & { reports: number } {
 			languageOptions: {
 				parser,
 				parserOptions: {
+					// With `CI` set, single-run inference parses the file on
+					// disk, not `code`.
+					disallowAutomaticSingleRunInference: true,
 					project: path.join(directory, "tsconfig.json"),
 					tsconfigRootDir: directory,
 				},
