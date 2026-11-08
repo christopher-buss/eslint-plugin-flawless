@@ -77,9 +77,9 @@ function increment(value: number): number {
 
 <!-- begin auto-generated rule options list -->
 
-| Name                | Description                                                                                | Type    | Default |
-| :------------------ | :----------------------------------------------------------------------------------------- | :------ | :------ |
-| `minimumReferences` | The number of external value references at which a trivial function is no longer reported. | Integer | `5`     |
+| Name                | Description                                                                     | Type    | Default |
+| :------------------ | :------------------------------------------------------------------------------ | :------ | :------ |
+| `minimumReferences` | The number of external calls at which a trivial function is no longer reported. | Integer | `5`     |
 
 <!-- end auto-generated rule options list -->
 
