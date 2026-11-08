@@ -65,6 +65,11 @@ export function affectedRules(files) {
 			continue;
 		}
 
+		if (/^benchmark\/cases\/typed\/assertion-[^/]+\.ts$/.test(file)) {
+			rules.add("no-incompatible-assertion-types");
+			continue;
+		}
+
 		if (/^benchmark\/cases\/floating-[^/]+\.ts$/.test(file)) {
 			rules.add(FLOATING_RULE_ID);
 			continue;

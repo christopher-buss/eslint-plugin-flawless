@@ -47,6 +47,10 @@ const SUBJECTS = [
 		ruleId: "no-redundant-type-annotation",
 		testPath: "./cases/typed/annotation-removals.ts",
 	},
+	{
+		ruleId: "no-incompatible-assertion-types",
+		testPath: "./cases/typed/assertion-mixed.ts",
+	},
 ];
 
 const IMPORT_LINE = /^import\s/;
@@ -95,10 +99,8 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 	const extension = path.extname(absolutePath);
 	const code = build(readFileSync(absolutePath, "utf8"), copies);
 	const ruleKey = `flawless/${subject.ruleId}`;
-	const programs =
-		subject.ruleId === "no-redundant-type-annotation"
-			? [typedProgram(absolutePath, code)]
-			: undefined;
+	const isTyped = subject.testPath.startsWith("./cases/typed/");
+	const programs = isTyped ? [typedProgram(absolutePath, code)] : undefined;
 	const config: Linter.Config = {
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: {
@@ -123,11 +125,18 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 			throw new Error(`${subject.ruleId} x${copies}: ${fatal.message}`);
 		}
 		if (
-			programs !== undefined &&
+			subject.ruleId === "no-redundant-type-annotation" &&
 			messages.filter((message) => message.ruleId === ruleKey && message.fix !== undefined)
 				.length !== 10
 		) {
 			throw new Error(`${subject.ruleId} x${copies}: expected 10 verified removals`);
+		}
+
+		if (
+			subject.ruleId === "no-incompatible-assertion-types" &&
+			messages.filter((message) => message.ruleId === ruleKey).length !== 200 * copies
+		) {
+			throw new Error(`${subject.ruleId} x${copies}: expected ${200 * copies} reports`);
 		}
 
 		if (index >= warmup) {
