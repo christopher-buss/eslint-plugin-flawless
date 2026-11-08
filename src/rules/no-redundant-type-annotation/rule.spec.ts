@@ -42,6 +42,35 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		const read: ((value: string) => void) | ((value: number) => void) = (value: string) => {};
 	`,
+	// A type parameter only the context can fill.
+	unindent`
+		declare function fromAny<T>(value: unknown): T;
+		declare const raw: unknown;
+		const value: string = fromAny(raw);
+	`,
+	// A callback parameter typed by an inferred type parameter.
+	unindent`
+		declare function wrap<T>(value: T, callback: (value: T) => void): void;
+		wrap("a", (value: string) => {});
+	`,
+	// An object literal argument can leave out what infers `T`.
+	unindent`
+		declare function from<T>(source: { length: number; item?: T }): Array<T>;
+		const items: Array<string> = from({ length: 2 });
+	`,
+	// An array literal argument can be empty.
+	unindent`
+		declare function first<T>(items: Array<T>): T;
+		const value: string = first([]);
+	`,
+	// The callback's `this` is inferred from the call.
+	unindent`
+		declare function map<U, This = undefined>(
+			callback: (this: This, item: string) => U,
+			thisArg?: This,
+		): Array<U>;
+		const lengths = map((item: string) => item.length);
+	`,
 	// No initializer, so inference has nothing to work from.
 	unindent`
 		declare const value: string;
@@ -140,12 +169,6 @@ const valid: Array<ValidTestCase> = [
 	unindent`
 		declare function pick<T = number>(): T;
 		const value: string = pick();
-	`,
-	// A generic whose declared return type mentions its own parameter.
-	unindent`
-		declare function first<T>(items: Array<T>): T;
-		declare const items: Array<string>;
-		const value: string = first(items);
 	`,
 	// A generic with an inferred return type is treated the same way.
 	unindent`
@@ -641,6 +664,32 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// An argument infers `T` before the context is consulted.
+	{
+		code: unindent`
+			declare function first<T>(items: Array<T>): T;
+			declare const items: Array<string>;
+			const value: string = first(items);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function first<T>(items: Array<T>): T;
+			declare const items: Array<string>;
+			const value = first(items);
+		`,
+	},
+	// The callback parameter names no type parameter of the call.
+	{
+		code: unindent`
+			declare function attempt<R>(onError: (reason: unknown) => R): R;
+			const result = attempt((reason: unknown) => String(reason));
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function attempt<R>(onError: (reason: unknown) => R): R;
+			const result = attempt((reason) => String(reason));
+		`,
+	},
 	// An object literal method takes its context from the property it fills.
 	{
 		code: unindent`
