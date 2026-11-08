@@ -62,6 +62,10 @@ export const COARSE: Array<{
 	{ ruleId: "no-trivial-functions", testPath: "./cases/all/no-trivial-functions.tsx" },
 	{ ruleId: "no-unknown-parameters", testPath: "./cases/all/no-unknown-parameters.tsx" },
 	{
+		ruleId: "no-unnecessary-prop-alias",
+		testPath: "./cases/all/no-unnecessary-prop-alias.tsx",
+	},
+	{
 		ruleId: "no-unnecessary-use-callback",
 		testPath: "./cases/all/no-unnecessary-use-callback.tsx",
 	},

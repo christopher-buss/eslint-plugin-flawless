@@ -32,3 +32,17 @@ export const TYPE_ANNOTATION_CASES = [
 		testPath: "./cases/typed/annotation-retained.ts",
 	},
 ] as const;
+
+/** Typed fixtures for no-incompatible-assertion-types and their report counts. */
+export const INCOMPATIBLE_ASSERTION_CASES = [
+	{
+		expectedIssues: 0,
+		name: "500 non-assertion calls",
+		testPath: "./cases/typed/assertion-unrelated.ts",
+	},
+	{
+		expectedIssues: 200,
+		name: "400 equality assertions, 200 reports",
+		testPath: "./cases/typed/assertion-mixed.ts",
+	},
+] as const;

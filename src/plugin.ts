@@ -16,6 +16,7 @@ import { noEmDash } from "./rules/no-em-dash/rule";
 import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
 import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
 import { noIgnoredReturn } from "./rules/no-ignored-return/rule";
+import { noIncompatibleAssertionTypes } from "./rules/no-incompatible-assertion-types/rule";
 import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
 import { noMaterializedFilterMap } from "./rules/no-materialized-filter-map/rule";
 import { noObjectParameters } from "./rules/no-object-parameters/rule";
@@ -29,6 +30,7 @@ import { noSharedTestState } from "./rules/no-shared-test-state/rule";
 import { noTrivialFunctions } from "./rules/no-trivial-functions/rule";
 import { noUnknownParameters } from "./rules/no-unknown-parameters/rule";
 import { noUnknownReturns } from "./rules/no-unknown-returns/rule";
+import { noUnnecessaryPropertyAlias } from "./rules/no-unnecessary-prop-alias/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { noUnsafeDictionaryType } from "./rules/no-unsafe-dictionary-type/rule";
@@ -65,6 +67,7 @@ export type PluginRules = {
 	"no-export-default-arrow": typeof noExportDefaultArrow;
 	"no-floating-point-equality": typeof noFloatingPointEquality;
 	"no-ignored-return": typeof noIgnoredReturn;
+	"no-incompatible-assertion-types": typeof noIncompatibleAssertionTypes;
 	"no-known-value-widening": typeof noKnownValueWidening;
 	"no-materialized-filter-map": typeof noMaterializedFilterMap;
 	"no-object-parameters": typeof noObjectParameters;
@@ -78,6 +81,7 @@ export type PluginRules = {
 	"no-trivial-functions": typeof noTrivialFunctions;
 	"no-unknown-parameters": typeof noUnknownParameters;
 	"no-unknown-returns": typeof noUnknownReturns;
+	"no-unnecessary-prop-alias": typeof noUnnecessaryPropertyAlias;
 	"no-unnecessary-use-callback": typeof noUnnecessaryUseCallback;
 	"no-unnecessary-use-memo": typeof noUnnecessaryUseMemo;
 	"no-unsafe-dictionary-type": typeof noUnsafeDictionaryType;
@@ -142,6 +146,7 @@ export const plugin: FlawlessPlugin = {
 		"no-export-default-arrow": noExportDefaultArrow,
 		"no-floating-point-equality": noFloatingPointEquality,
 		"no-ignored-return": noIgnoredReturn,
+		"no-incompatible-assertion-types": noIncompatibleAssertionTypes,
 		"no-known-value-widening": noKnownValueWidening,
 		"no-materialized-filter-map": noMaterializedFilterMap,
 		"no-object-parameters": noObjectParameters,
@@ -155,6 +160,7 @@ export const plugin: FlawlessPlugin = {
 		"no-trivial-functions": noTrivialFunctions,
 		"no-unknown-parameters": noUnknownParameters,
 		"no-unknown-returns": noUnknownReturns,
+		"no-unnecessary-prop-alias": noUnnecessaryPropertyAlias,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
 		"no-unsafe-dictionary-type": noUnsafeDictionaryType,

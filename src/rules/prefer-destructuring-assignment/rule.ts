@@ -3,6 +3,7 @@ import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { RESERVED_WORDS } from "../../utils/reserved-words";
 
 export const RULE_NAME = "prefer-destructuring-assignment";
 
@@ -15,63 +16,6 @@ export type Options = [];
 const messages = {
 	[MESSAGE_ID]: "Use destructuring assignment for component props.",
 };
-
-/**
- * Identifiers that cannot be used as a binding name in strict-mode module code.
- * A property may be accessed with such a name (`props.default`), but a shorthand
- * destructuring pattern built from it (`{ default }`) would be a syntax error,
- * so the autofix bails when one is encountered.
- */
-const RESERVED_WORDS = new Set([
-	"arguments",
-	"await",
-	"break",
-	"case",
-	"catch",
-	"class",
-	"const",
-	"continue",
-	"debugger",
-	"default",
-	"delete",
-	"do",
-	"else",
-	"enum",
-	"eval",
-	"export",
-	"extends",
-	"false",
-	"finally",
-	"for",
-	"function",
-	"if",
-	"implements",
-	"import",
-	"in",
-	"instanceof",
-	"interface",
-	"let",
-	"new",
-	"null",
-	"package",
-	"private",
-	"protected",
-	"public",
-	"return",
-	"static",
-	"super",
-	"switch",
-	"this",
-	"throw",
-	"true",
-	"try",
-	"typeof",
-	"var",
-	"void",
-	"while",
-	"with",
-	"yield",
-]);
 
 /**
  * A reference to the props parameter paired with the member expression it is the

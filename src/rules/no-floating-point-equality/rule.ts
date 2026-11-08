@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/util
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { scanAssertImports } from "../../utils/assert-imports";
 import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
 
 export const RULE_NAME = "no-floating-point-equality";
@@ -11,7 +12,6 @@ const MESSAGE_ID = "noExactFloatEquality";
 export type MessageIds = typeof MESSAGE_ID;
 export type Options = [];
 
-const ASSERT_SOURCES = new Set(["assert", "assert/strict", "node:assert", "node:assert/strict"]);
 const ASSERT_METHODS = new Set([
 	"deepEqual",
 	"deepStrictEqual",
@@ -160,14 +160,6 @@ function propertyName(node: TSESTree.MemberExpression): null | string {
 	return null;
 }
 
-function importName(specifier: TSESTree.ImportSpecifier): null | string {
-	if (specifier.imported.type === AST_NODE_TYPES.Identifier) {
-		return specifier.imported.name;
-	}
-
-	return typeof specifier.imported.value === "string" ? specifier.imported.value : null;
-}
-
 function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 	if (node.operator === "<" || node.operator === "<=") {
 		return [
@@ -188,8 +180,8 @@ function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let sourceCode: Readonly<TSESLint.SourceCode>;
-	let assertObjectVariables: Set<TSESLint.Scope.Variable>;
-	let assertFunctionVariables: Set<TSESLint.Scope.Variable>;
+	let assertObjectVariables: ReadonlyMap<TSESLint.Scope.Variable, unknown>;
+	let assertFunctionVariables: ReadonlyMap<TSESLint.Scope.Variable, unknown>;
 	let resolvedVariables: WeakMap<TSESTree.Identifier, null | TSESLint.Scope.Variable>;
 	let numericValues: WeakMap<TSESTree.Node, NumericValue>;
 	let sensitiveExpressions: WeakMap<TSESTree.Node, boolean>;
@@ -224,7 +216,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 	function isImportedBinding(
 		identifier: TSESTree.Identifier,
-		variables: Set<TSESLint.Scope.Variable>,
+		variables: ReadonlyMap<TSESLint.Scope.Variable, unknown>,
 	): boolean {
 		const variable = resolveVariable(identifier);
 		return variable !== null && variables.has(variable);
@@ -234,53 +226,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		for (const reference of variable.references) {
 			if (reference.identifier.type === AST_NODE_TYPES.Identifier) {
 				resolvedVariables.set(reference.identifier, variable);
-			}
-		}
-	}
-
-	function addDeclaredVariable(
-		specifier: TSESTree.ImportClause,
-		target: Set<TSESLint.Scope.Variable>,
-	): void {
-		const variable = sourceCode.getDeclaredVariables(specifier)[0];
-		if (variable !== undefined) {
-			target.add(variable);
-			indexReferences(variable);
-		}
-	}
-
-	function scanAssertionImports(program: TSESTree.Program): void {
-		for (const statement of program.body) {
-			if (
-				statement.type !== AST_NODE_TYPES.ImportDeclaration ||
-				typeof statement.source.value !== "string" ||
-				statement.importKind === "type"
-			) {
-				continue;
-			}
-
-			const source = statement.source.value;
-			for (const specifier of statement.specifiers) {
-				if (
-					specifier.type === AST_NODE_TYPES.ImportSpecifier &&
-					specifier.importKind === "type"
-				) {
-					continue;
-				}
-
-				if (
-					ASSERT_SOURCES.has(source) &&
-					(specifier.type === AST_NODE_TYPES.ImportDefaultSpecifier ||
-						specifier.type === AST_NODE_TYPES.ImportNamespaceSpecifier)
-				) {
-					addDeclaredVariable(specifier, assertObjectVariables);
-				} else if (
-					ASSERT_SOURCES.has(source) &&
-					specifier.type === AST_NODE_TYPES.ImportSpecifier &&
-					ASSERT_METHODS.has(importName(specifier) ?? "")
-				) {
-					addDeclaredVariable(specifier, assertFunctionVariables);
-				}
 			}
 		}
 	}
@@ -575,8 +520,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		before(): void {
 			({ sourceCode } = context);
-			assertObjectVariables = new Set();
-			assertFunctionVariables = new Set();
 			resolvedVariables = new WeakMap();
 			numericValues = new WeakMap();
 			sensitiveExpressions = new WeakMap();
@@ -584,7 +527,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			constStates = new Map();
 			tokenSequences = new WeakMap();
 			expectSources = getTestGlobalSources(context.settings);
-			scanAssertionImports(sourceCode.ast);
+			const assertImports = scanAssertImports(sourceCode, ASSERT_METHODS);
+			assertObjectVariables = assertImports.objects;
+			assertFunctionVariables = assertImports.functions;
+			for (const variable of assertObjectVariables.keys()) {
+				indexReferences(variable);
+			}
+
+			for (const variable of assertFunctionVariables.keys()) {
+				indexReferences(variable);
+			}
 		},
 		BinaryExpression(node: TSESTree.BinaryExpression): void {
 			if (

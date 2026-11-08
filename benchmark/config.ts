@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import builtPlugin from "../dist/index.mjs";
 import { COARSE } from "./coarse";
 import { typedParserOptions } from "./eslint.config.mjs";
-import { TYPE_ANNOTATION_CASES } from "./typed";
+import { INCOMPATIBLE_ASSERTION_CASES, TYPE_ANNOTATION_CASES } from "./typed";
 
 // Benchmarks the flawless rules against the BUILT plugin (dist/index.mjs).
 // Building first matters: arrow-return-style locates its oxfmt worker relative
@@ -41,6 +41,7 @@ const RULE_PATH = "../dist/index.mjs";
 const RULE_ID = "arrow-return-style";
 const FLOATING_RULE_ID = "no-floating-point-equality";
 const TYPE_ANNOTATION_RULE_ID = "no-redundant-type-annotation";
+const INCOMPATIBLE_RULE_ID = "no-incompatible-assertion-types";
 const EMPTY_RULE_PATH = "./empty-rule.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -173,6 +174,26 @@ const typedTests = TYPE_ANNOTATION_CASES.flatMap((fixture) => {
 	];
 });
 
+const incompatibleTests = INCOMPATIBLE_ASSERTION_CASES.flatMap((fixture) => {
+	const base = {
+		cases: [{ testPath: fixture.testPath }],
+		fix: false,
+		iterations: 30,
+		timeout: 500,
+		warmup: { enabled: true, iterations: 5 },
+	};
+	const name = `${INCOMPATIBLE_RULE_ID}: ${fixture.name}`;
+	return [
+		{ ...base, name: `${name} [flawless]`, ruleId: INCOMPATIBLE_RULE_ID, rulePath: RULE_PATH },
+		{
+			...base,
+			name: `${name} [typed parser baseline]`,
+			ruleId: `baseline/${INCOMPATIBLE_RULE_ID}`,
+			rulePath: EMPTY_RULE_PATH,
+		},
+	];
+});
+
 // Rules without benchmark coverage, exempt from the coverage check below.
 //   - prefer-read-only-props, no-materialized-filter-map, and no-unknown-returns
 //     still need typed fixtures. Real paths now make typed benchmarks possible;
@@ -200,6 +221,7 @@ const benched = new Set([
 	RULE_ID,
 	FLOATING_RULE_ID,
 	TYPE_ANNOTATION_RULE_ID,
+	INCOMPATIBLE_RULE_ID,
 	...COARSE.map((entry) => entry.ruleId),
 ]);
 const missing = Object.keys(builtPlugin.rules).filter(
@@ -374,10 +396,37 @@ for (const entry of COARSE) {
 	}
 }
 
+if (isSelected(INCOMPATIBLE_RULE_ID)) {
+	const typedCounter = new Linter({ configType: "flat" });
+	for (const fixture of INCOMPATIBLE_ASSERTION_CASES) {
+		const absolutePath = path.resolve(HERE, fixture.testPath);
+		const messages = typedCounter.verify(
+			readFileSync(absolutePath, "utf8"),
+			{
+				files: ["**/*.ts"],
+				languageOptions: { parser: tsParser, parserOptions: typedParserOptions },
+				plugins: { flawless: builtPlugin },
+				rules: { [`flawless/${INCOMPATIBLE_RULE_ID}`]: "error" },
+			},
+			absolutePath,
+		);
+		if (
+			messages.length !== fixture.expectedIssues ||
+			messages.some((message) => message.ruleId !== `flawless/${INCOMPATIBLE_RULE_ID}`)
+		) {
+			throw new Error(
+				`${fixture.testPath}: expected ${fixture.expectedIssues} rule report(s), ` +
+					`received ${JSON.stringify(messages)}`,
+			);
+		}
+	}
+}
+
 const tests = [
 	...(isSelected(RULE_ID) ? arrowTests : []),
 	...(isSelected(FLOATING_RULE_ID) ? floatingTests : []),
 	...(isSelected(TYPE_ANNOTATION_RULE_ID) ? typedTests : []),
+	...(isSelected(INCOMPATIBLE_RULE_ID) ? incompatibleTests : []),
 	...coarseTests.filter((test) => isSelected(test.ruleId)),
 ];
 
