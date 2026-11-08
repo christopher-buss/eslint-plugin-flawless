@@ -341,6 +341,13 @@ const invalid: Array<InvalidTestCase> = [
 	},
 	{
 		code: unindent`
+			import { strict as assert } from "node:assert"
+			assert.strictEqual(actual, 0.3)
+		`,
+		errors: [error],
+	},
+	{
+		code: unindent`
 			import { notStrictEqual as differs } from "node:assert/strict"
 			differs(actual, 0.3, "message")
 		`,

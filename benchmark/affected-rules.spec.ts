@@ -22,10 +22,12 @@ describe(affectedRules, () => {
 				"benchmark/cases/floating-literals.ts",
 				"benchmark/cases/realistic.ts",
 				"benchmark/cases/typed/annotation-dense.ts",
+				"benchmark/cases/typed/assertion-mixed.ts",
 			]),
 		).toStrictEqual([
 			"arrow-return-style",
 			"no-floating-point-equality",
+			"no-incompatible-assertion-types",
 			"no-redundant-type-annotation",
 			"no-reflect-get",
 		]);

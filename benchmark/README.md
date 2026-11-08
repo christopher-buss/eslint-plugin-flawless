@@ -13,6 +13,10 @@ All fixtures share one `config.ts`:
   adapter can be included for identical-fixture comparisons.
 - **`no-redundant-type-annotation`** gets typed detection, parser-baseline, and
   autofix timings. It also participates in the rule-time growth check.
+- **`no-incompatible-assertion-types`** gets typed detection and parser-baseline
+  timings on a file of non-assertion calls (the rule cost should stay near the
+  baseline) and a file of equality assertions. It also participates in the
+  growth check.
 - **Every other rule** gets one coarse run — enough to catch a gross regression,
   not to attribute cost to a code path.
 - **Benchmarked rules** also get a growth check (`scaling.ts`) that fails on
@@ -121,8 +125,9 @@ over per-copy time at x2. A linear rule stays near 1 (up to ~5 from GC and
 repeated top-level bindings); an O(n²) rule approaches 64. Over 8 fails, after
 one re-measure to absorb a noisy runner. Rules on the `COARSE` manifest
 (`coarse.ts`) are checked, plus `arrow-return-style` (`useOxfmt:false`) and
-`no-floating-point-equality` on their realistic fixtures, and the typed
-`no-redundant-type-annotation` removal fixture.
+`no-floating-point-equality` on their realistic fixtures, the typed
+`no-redundant-type-annotation` removal fixture, and the typed
+`no-incompatible-assertion-types` assertion fixture.
 
 Unlike wall-clock medians, growth is a ratio on the same machine, so runner
 speed cancels out and CI can gate on it.
@@ -145,7 +150,9 @@ posts the results as a single (auto-updated) PR comment.
 Only affected rules run. `affected-rules.mjs` diffs the PR against its base and
 maps each changed file to a rule: `src/rules/<rule>/**` and
 `benchmark/cases/all/<rule>.tsx` to that rule, `cases/floating-*.ts` to
-`no-floating-point-equality`, other `cases/*.ts` to `arrow-return-style`. Specs
+`no-floating-point-equality`, `cases/typed/annotation-*.ts` to
+`no-redundant-type-annotation`, `cases/typed/assertion-*.ts` to
+`no-incompatible-assertion-types`, other `cases/*.ts` to `arrow-return-style`. Specs
 and Markdown are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
 plugin entry, the benchmark config, the patch, dependencies) runs every rule.
 The result reaches `config.ts` as `BENCH_RULES`; when it names no benchmarked
