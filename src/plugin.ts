@@ -28,6 +28,7 @@ import { noSharedTestState } from "./rules/no-shared-test-state/rule";
 import { noTrivialFunctions } from "./rules/no-trivial-functions/rule";
 import { noUnknownParameters } from "./rules/no-unknown-parameters/rule";
 import { noUnknownReturns } from "./rules/no-unknown-returns/rule";
+import { noUnnecessaryPropertyAlias } from "./rules/no-unnecessary-prop-alias/rule";
 import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
 import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
 import { noUnsafeDictionaryType } from "./rules/no-unsafe-dictionary-type/rule";
@@ -76,6 +77,7 @@ export type PluginRules = {
 	"no-trivial-functions": typeof noTrivialFunctions;
 	"no-unknown-parameters": typeof noUnknownParameters;
 	"no-unknown-returns": typeof noUnknownReturns;
+	"no-unnecessary-prop-alias": typeof noUnnecessaryPropertyAlias;
 	"no-unnecessary-use-callback": typeof noUnnecessaryUseCallback;
 	"no-unnecessary-use-memo": typeof noUnnecessaryUseMemo;
 	"no-unsafe-dictionary-type": typeof noUnsafeDictionaryType;
@@ -152,6 +154,7 @@ export const plugin: FlawlessPlugin = {
 		"no-trivial-functions": noTrivialFunctions,
 		"no-unknown-parameters": noUnknownParameters,
 		"no-unknown-returns": noUnknownReturns,
+		"no-unnecessary-prop-alias": noUnnecessaryPropertyAlias,
 		"no-unnecessary-use-callback": noUnnecessaryUseCallback,
 		"no-unnecessary-use-memo": noUnnecessaryUseMemo,
 		"no-unsafe-dictionary-type": noUnsafeDictionaryType,

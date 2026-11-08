@@ -208,6 +208,18 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 		expect(diagnostics[0]?.code).toBe("flawless(prefer-destructuring-assignment)");
 	});
 
+	it("no-unnecessary-prop-alias reports an aliased prop", () => {
+		const { diagnostics } = runOxlint({
+			code: "export function C({ title: heading, icon: Icon }) {\n\treturn <Icon title={heading} />;\n}\n",
+			filename: "file.tsx",
+			rule: "no-unnecessary-prop-alias",
+		});
+
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]?.code).toBe("flawless(no-unnecessary-prop-alias)");
+		expect(diagnostics[0]?.message).toContain("'title'");
+	});
+
 	it("purity reports an impure call during render", () => {
 		const { diagnostics } = runOxlint({
 			code: "export function D() {\n\tconst v = os.time();\n\treturn <div>{v}</div>;\n}\n",
