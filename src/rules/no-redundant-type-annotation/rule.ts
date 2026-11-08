@@ -1,5 +1,5 @@
-import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
-import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type {
@@ -17,6 +17,10 @@ import { pushChildNodes } from "../../utils/nested-expressions";
 import { type Candidate, verifyAnnotations } from "./verify";
 
 const {
+	isArrowFunction,
+	isFunctionDeclaration,
+	isFunctionExpression,
+	isMethodDeclaration,
 	isParameter,
 	isTypeReferenceNode,
 	isVariableDeclaration,
@@ -32,10 +36,39 @@ export const RULE_NAME = "no-redundant-type-annotation";
 const CATCH_MESSAGE_ID = "redundantCatch";
 const MESSAGE_ID = "redundant";
 const PARAMETER_MESSAGE_ID = "redundantParameter";
+const RETURN_MESSAGE_ID = "redundantReturn";
 
-export type MessageIds = typeof CATCH_MESSAGE_ID | typeof MESSAGE_ID | typeof PARAMETER_MESSAGE_ID;
+export type MessageIds =
+	| typeof CATCH_MESSAGE_ID
+	| typeof MESSAGE_ID
+	| typeof PARAMETER_MESSAGE_ID
+	| typeof RETURN_MESSAGE_ID;
 
-type Options = [];
+export interface NoRedundantTypeAnnotationOptions {
+	/**
+	 * Check the return types of function expressions that
+	 * `explicit-function-return-type` with `allowExpressions` lets omit.
+	 */
+	readonly allowExpressions?: boolean;
+	/** Check the return type of every function. */
+	readonly checkReturnTypes?: boolean;
+}
+
+export type Options = [NoRedundantTypeAnnotationOptions?];
+
+const DEFAULT_OPTIONS = { allowExpressions: false, checkReturnTypes: false };
+
+/**
+ * The parents that make a function expression a declaration to
+ * `explicit-function-return-type`, which then requires its return type even
+ * with `allowExpressions`. This copies that rule's list.
+ */
+const DECLARING_PARENTS: ReadonlySet<AST_NODE_TYPES> = new Set([
+	AST_NODE_TYPES.ExportDefaultDeclaration,
+	AST_NODE_TYPES.MethodDefinition,
+	AST_NODE_TYPES.PropertyDefinition,
+	AST_NODE_TYPES.VariableDeclarator,
+]);
 
 /** A node that passes its operands to a signature's parameters. */
 type CallLike =
@@ -43,6 +76,12 @@ type CallLike =
 	| TSESTree.JSXOpeningElement
 	| TSESTree.NewExpression
 	| TSESTree.TaggedTemplateExpression;
+
+/** A function that can carry a return type annotation and has a body. */
+type ReturnTypedFunction =
+	| TSESTree.ArrowFunctionExpression
+	| TSESTree.FunctionDeclaration
+	| TSESTree.FunctionExpression;
 
 /** A function whose parameters can take their types from a context. */
 type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
@@ -54,6 +93,8 @@ const messages = {
 		"The `{{typeName}}` annotation restates the type the initializer already has. Remove it and let inference carry the type.",
 	[PARAMETER_MESSAGE_ID]:
 		"The `{{typeName}}` annotation restates the type this parameter already gets from its context. Remove it and let inference carry the type.",
+	[RETURN_MESSAGE_ID]:
+		"The `{{typeName}}` return type restates the type the function already returns. Remove it and let inference carry the type.",
 };
 
 /**
@@ -610,6 +651,9 @@ function create(
 	// not a restatement of the initializer; it is the only copy the emitter can
 	// read, and removing it turns the report into error TS9010.
 	const declarationsAreIsolated = compilerOptions.isolatedDeclarations ?? false;
+	const options = context.options[0] ?? {};
+	const checkReturnTypes = options.checkReturnTypes ?? DEFAULT_OPTIONS.checkReturnTypes;
+	const allowExpressions = options.allowExpressions ?? DEFAULT_OPTIONS.allowExpressions;
 	let exportedNames: Set<string> | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
 	const candidates: Array<
@@ -632,7 +676,14 @@ function create(
 		type: Type,
 	): void {
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
-		if (isVariableDeclaration(owner) || isParameter(owner)) {
+		if (
+			isVariableDeclaration(owner) ||
+			isParameter(owner) ||
+			isFunctionDeclaration(owner) ||
+			isFunctionExpression(owner) ||
+			isArrowFunction(owner) ||
+			isMethodDeclaration(owner)
+		) {
 			candidates.push({ annotation, messageId, owner, range: annotation.range, type });
 			return;
 		}
@@ -1545,7 +1596,12 @@ function create(
 	 * @param node - The declarator to inspect.
 	 * @returns True when the emitter may need the variable's type.
 	 */
-	function isReadByEmitter(node: TSESTree.VariableDeclarator): boolean {
+	function isReadByEmitter(
+		node:
+			| TSESTree.ClassDeclaration
+			| TSESTree.FunctionDeclaration
+			| TSESTree.VariableDeclarator,
+	): boolean {
 		return context.sourceCode.getDeclaredVariables(node).some((variable) => {
 			return variable.references.some(({ identifier }) => {
 				if (identifier === node.id) {
@@ -1620,6 +1676,429 @@ function create(
 			property &&
 			checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(property, object))
 		);
+	}
+
+	/**
+	 * Reports whether the options ask for this function's return type.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when its return type is checked.
+	 */
+	function checksReturnTypeOf(node: ReturnTypedFunction): boolean {
+		if (checkReturnTypes) {
+			return true;
+		}
+
+		return (
+			allowExpressions &&
+			node.type !== AST_NODE_TYPES.FunctionDeclaration &&
+			!DECLARING_PARENTS.has(node.parent.type)
+		);
+	}
+
+	/**
+	 * Reports whether a function's return type is one the rule never removes.
+	 *
+	 * Overloads, generators, and accessors keep their return types: there the
+	 * annotation is a contract the body cannot restate, or inference does not
+	 * follow it.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the return type is out of scope.
+	 */
+	function hasFixedReturnType(node: ReturnTypedFunction): boolean {
+		if (node.generator) {
+			return true;
+		}
+
+		const { parent } = node;
+		if (
+			(parent.type === AST_NODE_TYPES.MethodDefinition ||
+				parent.type === AST_NODE_TYPES.Property) &&
+			(parent.kind === "get" || parent.kind === "set")
+		) {
+			return true;
+		}
+
+		// An implementation with overloads, or a function merged with other
+		// declarations, has more than one signature to keep in step.
+		const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+		const name = "name" in tsNode ? tsNode.name : undefined;
+		if (name !== undefined && ts.isIdentifier(name)) {
+			const declarations = checker.getSymbolAtLocation(name)?.declarations ?? [];
+			if (declarations.length > 1) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Reports whether a function sits where the declaration emitter can read
+	 * it. Inside a function body it never can.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the function is outside every function body.
+	 */
+	function isVisibleToEmitter(node: ReturnTypedFunction): boolean {
+		let current: TSESTree.Node = node;
+		while (current.type !== AST_NODE_TYPES.Program) {
+			const parent: TSESTree.Node = current.parent;
+			if (isFunctionNode(parent) && parent.body === current) {
+				return false;
+			}
+
+			current = parent;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Reports whether the declaration emitter reads a function's return type.
+	 * Under `isolatedDeclarations` it reads the written type only, so there
+	 * the annotation is required.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the emitter may need the return type.
+	 */
+	function feedsDeclarationEmit(node: ReturnTypedFunction): boolean {
+		if (!isVisibleToEmitter(node)) {
+			return false;
+		}
+
+		const { parent } = node;
+		if (node.type === AST_NODE_TYPES.FunctionDeclaration) {
+			return isEmittedDeclaration(node);
+		}
+
+		// A method is emitted with its class. A class expression is not
+		// followed to where it goes.
+		if (parent.type === AST_NODE_TYPES.MethodDefinition) {
+			const owner = parent.parent.parent;
+			return owner.type !== AST_NODE_TYPES.ClassDeclaration || isEmittedDeclaration(owner);
+		}
+
+		return (
+			feedsEmittedType(node) ||
+			(parent.type === AST_NODE_TYPES.VariableDeclarator &&
+				parent.init === node &&
+				isReadByEmitter(parent))
+		);
+	}
+
+	/**
+	 * Reports whether a function or class declaration leaves the module, or
+	 * an emitted declaration reads it.
+	 *
+	 * @param node - The declaration to inspect.
+	 * @returns True when the emitter prints it.
+	 */
+	function isEmittedDeclaration(
+		node: TSESTree.ClassDeclaration | TSESTree.FunctionDeclaration,
+	): boolean {
+		const { id, parent } = node;
+		return (
+			parent.type === AST_NODE_TYPES.ExportNamedDeclaration ||
+			parent.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
+			(id !== null && getExportedNames().has(id.name)) ||
+			isReadByEmitter(node)
+		);
+	}
+
+	/**
+	 * Reports whether a function refers to itself. Without its return type
+	 * such a function has no type to start from, and becomes implicitly `any`.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the body refers to the function.
+	 */
+	function isSelfReferencing(node: ReturnTypedFunction): boolean {
+		const { body, parent, range } = node;
+		const [start, end] = range;
+		const bindings = [
+			...context.sourceCode.getDeclaredVariables(node),
+			...(parent.type === AST_NODE_TYPES.VariableDeclarator && parent.init === node
+				? context.sourceCode.getDeclaredVariables(parent)
+				: []),
+		];
+		const readsBinding = bindings.some((variable) => {
+			return (
+				variable.defs.some(({ type }) => {
+					return (
+						type === TSESLint.Scope.DefinitionType.FunctionName ||
+						type === TSESLint.Scope.DefinitionType.Variable
+					);
+				}) &&
+				variable.references.some(({ identifier }) => {
+					return identifier.range[0] >= start && identifier.range[1] <= end;
+				})
+			);
+		});
+		if (readsBinding) {
+			return true;
+		}
+
+		// A method reaches itself through `this` or its object.
+		if (
+			(parent.type === AST_NODE_TYPES.MethodDefinition ||
+				parent.type === AST_NODE_TYPES.Property ||
+				parent.type === AST_NODE_TYPES.PropertyDefinition) &&
+			!parent.computed &&
+			parent.key.type === AST_NODE_TYPES.Identifier
+		) {
+			const { name } = parent.key;
+			return someDescendant(
+				body,
+				() => {
+					return false;
+				},
+				(child) => {
+					return (
+						child.type === AST_NODE_TYPES.MemberExpression &&
+						!child.computed &&
+						child.property.type === AST_NODE_TYPES.Identifier &&
+						child.property.name === name
+					);
+				},
+			);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Lists the values a function returns, without entering nested functions.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns The returned expressions, whether a bare `return` appears, and
+	 *   whether the end of the body may be reached.
+	 */
+	function getReturnedValues(node: ReturnTypedFunction): {
+		readonly bareReturn: boolean;
+		readonly fallsThrough: boolean;
+		readonly values: ReadonlyArray<TSESTree.Expression>;
+	} {
+		if (node.body.type !== AST_NODE_TYPES.BlockStatement) {
+			return { bareReturn: false, fallsThrough: false, values: [node.body] };
+		}
+
+		const values: Array<TSESTree.Expression> = [];
+		let bareReturn = false;
+		someDescendant(node.body, isFunctionNode, (child) => {
+			if (child.type === AST_NODE_TYPES.ReturnStatement) {
+				if (child.argument === null) {
+					bareReturn = true;
+				} else {
+					values.push(child.argument);
+				}
+			}
+
+			return false;
+		});
+
+		// Whether the end is reachable is control flow the rule does not
+		// model, so only a body that ends in `return` or `throw` counts as
+		// closed.
+		const last = node.body.body.at(-1);
+		const fallsThrough =
+			last === undefined ||
+			(last.type !== AST_NODE_TYPES.ReturnStatement &&
+				last.type !== AST_NODE_TYPES.ThrowStatement);
+		return { bareReturn, fallsThrough, values };
+	}
+
+	function unionMembers(type: Type): ReadonlyArray<Type> {
+		return type.isUnion() ? type.types : [type];
+	}
+
+	/**
+	 * Predicts whether the returned types, as inference would combine them,
+	 * are the annotated type.
+	 *
+	 * Every returned member must be identical to an annotated member, and
+	 * every annotated member must be returned. A returned subtype counts as a
+	 * mismatch, although inference may reduce it away; this is a cost filter,
+	 * and the verifier decides.
+	 *
+	 * @param returned - The returned types.
+	 * @param annotated - The annotated type.
+	 * @returns True when the two have the same members.
+	 */
+	function coversSameMembers(returned: ReadonlyArray<Type>, annotated: Type): boolean {
+		const wanted = unionMembers(annotated);
+		const covered = new Set<Type>();
+		for (const type of returned) {
+			for (const member of unionMembers(type)) {
+				const match = wanted.find((candidate) => typesAreIdentical(candidate, member));
+				if (match === undefined) {
+					return false;
+				}
+
+				covered.add(match);
+			}
+		}
+
+		return covered.size === wanted.length;
+	}
+
+	/**
+	 * Unwraps `Promise<T>` to `T` when a type is a promise reference.
+	 *
+	 * @param type - The annotated return type of an `async` function.
+	 * @returns The promised type, or undefined for any other type.
+	 */
+	function getPromisedType(type: Type): Type | undefined {
+		const objectFlags = (type as { objectFlags?: number }).objectFlags ?? 0;
+		if (
+			type.getSymbol()?.getName() !== "Promise" ||
+			(objectFlags & ObjectFlags.Reference) === 0
+		) {
+			return undefined;
+		}
+
+		const [promised, ...rest] = checker.getTypeArguments(type as TypeReference);
+		return rest.length === 0 ? promised : undefined;
+	}
+
+	/**
+	 * Predicts whether the body alone infers the expected return type.
+	 *
+	 * @param node - The function to inspect.
+	 * @param expectedType - The annotated type, unwrapped from `Promise` for an
+	 *   `async` function.
+	 * @returns True when inference likely gives the same type.
+	 */
+	/**
+	 * Reports whether a block body cannot reach its end: it ends in `throw`,
+	 * or in a call that returns `never`.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the last statement never completes.
+	 */
+	function endsInNever({ body }: ReturnTypedFunction): boolean {
+		if (body.type !== AST_NODE_TYPES.BlockStatement) {
+			return false;
+		}
+
+		const last = body.body.at(-1);
+		if (last?.type === AST_NODE_TYPES.ThrowStatement) {
+			return true;
+		}
+
+		return (
+			last?.type === AST_NODE_TYPES.ExpressionStatement &&
+			(services.getTypeAtLocation(last.expression).flags & TypeFlags.Never) !== 0
+		);
+	}
+
+	function predictsReturnType(node: ReturnTypedFunction, expectedType: Type): boolean {
+		const { bareReturn, fallsThrough, values } = getReturnedValues(node);
+
+		// A body that returns no value infers `void`, never `undefined`. A
+		// function expression whose end cannot be reached infers `never`.
+		if (values.length === 0) {
+			return (
+				(expectedType.flags & TypeFlags.Void) !== 0 &&
+				(node.type === AST_NODE_TYPES.FunctionDeclaration || !endsInNever(node))
+			);
+		}
+
+		// From TypeScript 5.5 a single `boolean` return that narrows a
+		// parameter infers a type predicate.
+		if (
+			values.length === 1 &&
+			node.params.length > 0 &&
+			(expectedType.flags & TypeFlags.Boolean) !== 0
+		) {
+			return false;
+		}
+
+		if (fallsThrough || values.some((value) => receivesAnnotationContext(value))) {
+			return false;
+		}
+
+		const returned = values.map((value) => {
+			const type = services.getTypeAtLocation(value);
+			return node.async ? (checker.getAwaitedType(type) ?? type) : type;
+		});
+		if (returned.some((type) => containsAny(type) || hasTemplateType(type))) {
+			return false;
+		}
+
+		if (bareReturn) {
+			returned.push(checker.getUndefinedType());
+		}
+
+		// Inference builds a new union, which does not carry the alias name
+		// unless a returned value already has the aliased type.
+		if (
+			expectedType.aliasSymbol !== undefined &&
+			!returned.some((type) => typesAreIdentical(type, expectedType))
+		) {
+			return false;
+		}
+
+		const [only] = returned;
+		if (returned.length > 1 || only === undefined || !isWideningUnit(only)) {
+			return coversSameMembers(returned, expectedType);
+		}
+
+		// One literal widens to its base type, but only a literal written in
+		// place, and only where no context asks for literals.
+		const [value] = values;
+		if (
+			value === undefined ||
+			!isFreshLiteral(value) ||
+			(node.type !== AST_NODE_TYPES.FunctionDeclaration &&
+				getFunctionContextualType(node) !== undefined)
+		) {
+			return false;
+		}
+
+		return coversSameMembers([checker.getBaseTypeOfLiteralType(only)], expectedType);
+	}
+
+	function checkReturnType(node: ReturnTypedFunction): void {
+		const { async, returnType } = node;
+		if (returnType === undefined || !checksReturnTypeOf(node)) {
+			return;
+		}
+
+		// A type predicate or `asserts` is a claim the body cannot state.
+		if (returnType.typeAnnotation.type === AST_NODE_TYPES.TSTypePredicate) {
+			return;
+		}
+
+		if (hasFixedReturnType(node)) {
+			return;
+		}
+
+		if (declarationsAreIsolated && feedsDeclarationEmit(node)) {
+			return;
+		}
+
+		const annotationType = services.getTypeFromTypeNode(returnType.typeAnnotation);
+		if (containsAny(annotationType) || (annotationType.flags & TypeFlags.Never) !== 0) {
+			return;
+		}
+
+		if (namesAnErasedAlias(returnType.typeAnnotation, annotationType)) {
+			return;
+		}
+
+		const expectedType = async ? getPromisedType(annotationType) : annotationType;
+		if (expectedType === undefined || !predictsReturnType(node, expectedType)) {
+			return;
+		}
+
+		// Last, as it reads every reference to the function.
+		if (isSelfReferencing(node)) {
+			return;
+		}
+
+		collect(returnType, RETURN_MESSAGE_ID, annotationType);
 	}
 
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
@@ -1717,7 +2196,10 @@ function create(
 	}
 
 	return {
-		"ArrowFunctionExpression": checkFunctionParameters,
+		"ArrowFunctionExpression": function (node: TSESTree.ArrowFunctionExpression): void {
+			checkFunctionParameters(node);
+			checkReturnType(node);
+		},
 		"CatchClause": function ({ param }: TSESTree.CatchClause): void {
 			if (!catchVariablesAreUnknown) {
 				return;
@@ -1750,7 +2232,11 @@ function create(
 				node: annotation,
 			});
 		},
-		"FunctionExpression": checkFunctionParameters,
+		"FunctionDeclaration": checkReturnType,
+		"FunctionExpression": function (node: TSESTree.FunctionExpression): void {
+			checkFunctionParameters(node);
+			checkReturnType(node);
+		},
 		"Program:exit": function (node: TSESTree.Program): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
 			const { accepted, unverified } = verifyAnnotations(
@@ -1877,8 +2363,9 @@ export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
+	defaultOptions: [DEFAULT_OPTIONS],
 	meta: {
+		defaultOptions: [DEFAULT_OPTIONS],
 		docs: {
 			description: "Disallow type annotations that restate the initializer's own type",
 			recommended: false,
@@ -1887,7 +2374,23 @@ export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = 
 		fixable: "code",
 		hasSuggestions: false,
 		messages,
-		schema: [],
+		schema: [
+			{
+				additionalProperties: false,
+				properties: {
+					allowExpressions: {
+						description:
+							"Check the return types of function expressions that `explicit-function-return-type` with `allowExpressions` lets omit.",
+						type: "boolean",
+					},
+					checkReturnTypes: {
+						description: "Check the return type of every function.",
+						type: "boolean",
+					},
+				},
+				type: "object",
+			},
+		],
 		type: "suggestion",
 	},
 });

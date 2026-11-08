@@ -21,6 +21,12 @@ export const TYPE_ANNOTATION_CASES = [
 		testPath: "./cases/typed/annotation-parameters.ts",
 	},
 	{
+		expectedIssues: 16,
+		name: "16 return type removals",
+		options: [{ checkReturnTypes: true }],
+		testPath: "./cases/typed/annotation-returns.ts",
+	},
+	{
 		expectedIssues: 0,
 		name: "8 retained loop annotations",
 		testPath: "./cases/typed/annotation-retained.ts",

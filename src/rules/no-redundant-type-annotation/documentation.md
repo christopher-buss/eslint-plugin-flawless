@@ -31,7 +31,8 @@ alone.
 
 Three positions are checked: a variable declaration with an initializer, a
 parameter of a function expression that has a contextual type, and a catch
-clause variable. Return types are not checked.
+clause variable. A function's return type is checked only when an option asks
+for it; see [Return types](#return-types).
 
 ### When an annotation is doing work
 
@@ -274,6 +275,60 @@ The check reads the option from the project the file belongs to. With the option
 off a bare catch variable is `any`, so `: unknown` narrows it and nothing is
 reported.
 
+## Return types
+
+With an option on, a function's return type is reported when the body already
+returns exactly that type:
+
+```ts
+declare const cond: boolean;
+const kinds = new Set<string>();
+
+const classify = (): null | Set<string> => (cond ? kinds : null); // reported
+
+function getKinds(): Set<string> {
+	//              ^^^^^^^^^^^^^ reported
+	return kinds;
+}
+```
+
+Both options are off by default, because
+[`explicit-function-return-type`](https://typescript-eslint.io/rules/explicit-function-return-type)
+may require these same annotations. `checkReturnTypes` checks every function.
+`allowExpressions` checks only the function expressions that
+`explicit-function-return-type` with `allowExpressions: true` lets omit: a
+function expression whose direct parent is not a variable declarator, a class
+method or property, or `export default`. A callback, an object property value,
+and a function directly inside `as` or `satisfies` count as expressions. Set it
+to match that rule.
+
+`checkReturnTypes` costs more. It asks the type checker for the type of every
+annotated function's return values, which can type-check bodies that nothing
+else in the lint would. In a large project that runs no other typed rules, this
+can add seconds to every lint. `allowExpressions` checks far fewer functions and
+has no measurable cost.
+
+A return type is left alone when it is doing work:
+
+| The return type                        | Example                                      |
+| :------------------------------------- | :------------------------------------------- |
+| widens a returned literal              | `const lit = (): "a" => "a"`                 |
+| types a returned literal or `new`      | `const empty = (): Set<string> => new Set()` |
+| breaks a recursion (TS7023)            | `const visit = (n: number): boolean => ...`  |
+| is `undefined` on a body with no value | `const none = (): undefined => {}`           |
+| is a type predicate or `asserts`       | `function isString(v: unknown): v is string` |
+| is `any` or `never`                    | `function fail(): never { throw error; }`    |
+| names an alias TypeScript erases       | `function getId(): UserId { return text; }`  |
+
+Overloads, generators, getters and setters, and a body whose end may be reached
+after a returned value are also left alone. A body that returns no value infers
+`void`, so `function run(): void { log(); }` is reported. An `async` function's
+`Promise<T>` is compared with the awaited returned values.
+
+Under `isolatedDeclarations` the emitter reads an exported function's return
+type, so a function that is exported, that an exported declaration reads, or
+that is a method of an exported class keeps it (TS9007).
+
 ## Exported variables under `isolatedDeclarations`
 
 The `isolatedDeclarations` compiler option makes the declaration emitter work
@@ -377,8 +432,7 @@ fix. Before TypeScript 5.3, `parserOptions.projectService` loads
 ## Known limitations
 
 - Variable declarations are checked for `const` and `let` with a plain
-  identifier only. Destructuring patterns and class properties are out of scope,
-  as are return types.
+  identifier only. Destructuring patterns and class properties are out of scope.
 - Object and array literal initializers are skipped. There the annotation also
   governs excess property checking and literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
@@ -408,11 +462,23 @@ fix. Before TypeScript 5.3, `parserOptions.projectService` loads
   same fix pass are outside this check. Full before-and-after compiler
   diagnostics remain part of the rule's test suite.
 
-This rule has no options.
+## Options
+
+<!-- begin auto-generated rule options list -->
+
+| Name               | Description                                                                                                            | Type    | Default |
+| :----------------- | :--------------------------------------------------------------------------------------------------------------------- | :------ | :------ |
+| `allowExpressions` | Check the return types of function expressions that `explicit-function-return-type` with `allowExpressions` lets omit. | Boolean | `false` |
+| `checkReturnTypes` | Check the return type of every function.                                                                               | Boolean | `false` |
+
+<!-- end auto-generated rule options list -->
 
 ```json
 {
-	"flawless/no-redundant-type-annotation": "error"
+	"flawless/no-redundant-type-annotation": [
+		"error",
+		{ "allowExpressions": true }
+	]
 }
 ```
 

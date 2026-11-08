@@ -5,7 +5,13 @@ import ts from "typescript";
 
 /** An annotation that has already passed the rule's inexpensive checks. */
 export interface Candidate {
-	readonly owner: ts.ParameterDeclaration | ts.VariableDeclaration;
+	readonly owner:
+		| ts.ArrowFunction
+		| ts.FunctionDeclaration
+		| ts.FunctionExpression
+		| ts.MethodDeclaration
+		| ts.ParameterDeclaration
+		| ts.VariableDeclaration;
 	readonly range: readonly [number, number];
 }
 
@@ -344,13 +350,25 @@ function requiredAssertionTargets(
 	}
 
 	for (const { owner } of candidates) {
+		if (owner.name === undefined) {
+			continue;
+		}
+
 		const type = checker.getTypeAtLocation(owner.name);
 		if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).some(asserts)) {
 			// Exported assertion functions can also be called from other files.
 			required.add(owner);
 		}
 
-		for (const name of names(owner.name)) {
+		// A method named by a string or computed key binds no name.
+		let bound: Array<ts.Identifier> = [];
+		if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
+			bound = names(owner.name);
+		} else if (ts.isIdentifier(owner.name)) {
+			bound = [owner.name];
+		}
+
+		for (const name of bound) {
 			const group = bindings.get(name.text) ?? [];
 			group.push({ owner, symbol: checker.getSymbolAtLocation(name) });
 			bindings.set(name.text, group);
@@ -685,9 +703,15 @@ function referencesByOwner(
 	const owners = new Map<ts.Symbol, Candidate["owner"]>();
 	const names = new Set<string>();
 	for (const { owner } of candidates) {
-		const symbol = ts.isIdentifier(owner.name)
-			? checker.getSymbolAtLocation(owner.name)
-			: undefined;
+		const binding =
+			owner.name ??
+			(ts.isVariableDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent)
+				? owner.parent.name
+				: undefined);
+		const symbol =
+			binding !== undefined && ts.isIdentifier(binding)
+				? checker.getSymbolAtLocation(binding)
+				: undefined;
 		if (symbol !== undefined) {
 			owners.set(symbol, owner);
 			names.add(symbol.name);
@@ -746,11 +770,15 @@ function enclosingStatement(node: ts.Node): ts.Node {
  * @returns The node whose types the removal may change.
  */
 function influenceScope(owner: Candidate["owner"]): ts.Node {
-	if (!ts.isParameter(owner)) {
+	if (
+		ts.isVariableDeclaration(owner) ||
+		ts.isFunctionDeclaration(owner) ||
+		ts.isMethodDeclaration(owner)
+	) {
 		return enclosingStatement(owner);
 	}
 
-	let node: ts.Node = owner.parent;
+	let node: ts.Node = ts.isParameter(owner) ? owner.parent : owner;
 	while (
 		ts.isParenthesizedExpression(node.parent) ||
 		ts.isPropertyAssignment(node.parent) ||
@@ -834,6 +862,26 @@ function replay(checker: ts.TypeChecker, root: ts.Node): void {
 	visit(root);
 }
 
+/**
+ * Collects the expressions a function body returns, without entering nested
+ * functions.
+ * @param node - The body, or a node inside it.
+ * @param found - Receives each returned expression.
+ */
+function collectReturns(node: ts.Node, found: Array<ts.Node>): void {
+	if (ts.isFunctionLike(node)) {
+		return;
+	}
+
+	if (ts.isReturnStatement(node) && node.expression !== undefined) {
+		found.push(node.expression);
+	}
+
+	ts.forEachChild(node, (child) => {
+		collectReturns(child, found);
+	});
+}
+
 function observedNodes(
 	candidate: Candidate,
 	references: ReadonlyArray<ts.Identifier>,
@@ -849,7 +897,28 @@ function observedNodes(
 		nodes.push(reference, reference.parent);
 	}
 
-	const root = candidate.owner.initializer;
+	const { owner } = candidate;
+	// A function's printed type is its whole signature. Its return values
+	// lose the return type as their context, like an initializer loses the
+	// variable's annotation.
+	const roots: Array<ts.Node> = [];
+	if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
+		if (owner.initializer !== undefined) {
+			roots.push(owner.initializer);
+		}
+	} else {
+		if (ts.isVariableDeclaration(owner.parent)) {
+			nodes.push(owner.parent);
+		}
+
+		if (owner.body !== undefined && ts.isBlock(owner.body)) {
+			collectReturns(owner.body, roots);
+		} else if (owner.body !== undefined) {
+			roots.push(owner.body);
+		}
+
+		nodes.push(...roots);
+	}
 
 	function visit(node: ts.Node): void {
 		if (ts.isTypeNode(node)) {
@@ -871,7 +940,7 @@ function observedNodes(
 		ts.forEachChild(node, visit);
 	}
 
-	if (root !== undefined) {
+	for (const root of roots) {
 		visit(root);
 	}
 

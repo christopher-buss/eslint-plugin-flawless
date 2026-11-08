@@ -1606,6 +1606,31 @@ const isolatedDeclarationsInvalid: Array<InvalidTestCase> = [
 			export const handler = ((value) => value) as (value: string) => string;
 		`,
 	},
+	{
+		// A function that stays inside the module is out of the option's
+		// reach.
+		code: unindent`
+			const kinds = new Set<string>();
+			function getKinds(): Set<string> {
+				return kinds;
+			}
+			export function use(): void {
+				getKinds();
+			}
+		`,
+		errors: [{ messageId: "redundantReturn" }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		options: [{ checkReturnTypes: true }],
+		output: unindent`
+			const kinds = new Set<string>();
+			function getKinds() {
+				return kinds;
+			}
+			export function use(): void {
+				getKinds();
+			}
+		`,
+	},
 ];
 
 run({
@@ -1682,7 +1707,361 @@ run({
 			`,
 			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
+		// The emitter reads an exported function's return type (TS9007).
+		...[
+			unindent`
+				const kinds = new Set<string>();
+				export function getKinds(): Set<string> {
+					return kinds;
+				}
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				function getKinds(): Set<string> {
+					return kinds;
+				}
+				export { getKinds };
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				export const getKinds = (): Set<string> => kinds;
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				export class Store {
+					read(): Set<string> {
+						return kinds;
+					}
+				}
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				export const store = { read: (): Set<string> => kinds };
+			`,
+		].map((code) => {
+			return {
+				code,
+				filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+				options: [{ checkReturnTypes: true }],
+			};
+		}),
 	],
+});
+
+// Return types are checked only when an option asks for them, since
+// `explicit-function-return-type` may require the same annotations.
+const returnMessageId = "redundantReturn";
+const checkAll = [{ checkReturnTypes: true }];
+const checkExpressions = [{ allowExpressions: true }];
+
+const returnInvalid: Array<InvalidTestCase> = [
+	{
+		code: unindent`
+			declare const cond: boolean;
+			const kinds = new Set<string>();
+			const classify = (): Set<string> | null => (cond ? kinds : null);
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			declare const cond: boolean;
+			const kinds = new Set<string>();
+			const classify = () => (cond ? kinds : null);
+		`,
+	},
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			function getKinds(): Set<string> {
+				return kinds;
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			function getKinds() {
+				return kinds;
+			}
+		`,
+	},
+	{
+		// A union of literals does not widen.
+		code: unindent`
+			declare const cond: boolean;
+			function pick(): "a" | "b" {
+				return cond ? "a" : "b";
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			declare const cond: boolean;
+			function pick() {
+				return cond ? "a" : "b";
+			}
+		`,
+	},
+	{
+		code: unindent`
+			declare const cond: boolean;
+			function pick(): "a" | "b" {
+				if (cond) {
+					return "a";
+				}
+
+				return "b";
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			declare const cond: boolean;
+			function pick() {
+				if (cond) {
+					return "a";
+				}
+
+				return "b";
+			}
+		`,
+	},
+	{
+		// A single literal widens to the annotated base type.
+		code: "const count = (): number => 1;",
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: "const count = () => 1;",
+	},
+	{
+		// A body that returns no value infers `void`.
+		code: unindent`
+			declare function log(): void;
+			function run(): void {
+				log();
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			declare function log(): void;
+			function run() {
+				log();
+			}
+		`,
+	},
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			async function load(): Promise<Set<string>> {
+				return kinds;
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			async function load() {
+				return kinds;
+			}
+		`,
+	},
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			class Store {
+				read(): Set<string> {
+					return kinds;
+				}
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			class Store {
+				read() {
+					return kinds;
+				}
+			}
+		`,
+	},
+	{
+		// `allowExpressions` checks a callback.
+		code: unindent`
+			declare const items: Array<{ name: string }>;
+			const names = items.map((item): string => item.name);
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkExpressions,
+		output: unindent`
+			declare const items: Array<{ name: string }>;
+			const names = items.map((item) => item.name);
+		`,
+	},
+	{
+		// An object property value is an expression to `allowExpressions`.
+		code: unindent`
+			const kinds = new Set<string>();
+			const store = { read: (): Set<string> => kinds };
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkExpressions,
+		output: unindent`
+			const kinds = new Set<string>();
+			const store = { read: () => kinds };
+		`,
+	},
+];
+
+const returnValid: Array<ValidTestCase> = [
+	// Return types are not checked by default.
+	unindent`
+		const kinds = new Set<string>();
+		function getKinds(): Set<string> {
+			return kinds;
+		}
+	`,
+	...[
+		// Without the annotation the function has no type to start from (TS7023).
+		"const visit = (n: number): boolean => (n > 0 ? visit(n - 1) : true);",
+		// Either could go, but not both (TS7023). The rule keeps both.
+		unindent`
+			const isEven = (n: number): boolean => n == 0 || isOdd(n - 1);
+			const isOdd = (n: number): boolean => n != 0 && isEven(n - 1);
+		`,
+		// A literal widens to `string`.
+		"const lit = (): 'a' => 'a';",
+		// Without the annotation, `Set<unknown>`.
+		"const empty = (): Set<string> => new Set();",
+		// Without the annotation, `{ kind: string }`.
+		"const obj = (): { kind: 'a' } => ({ kind: 'a' });",
+		// A body with no value infers `void`, not `undefined`.
+		"const none = (): undefined => {};",
+		unindent`
+			function* items(): Generator<number> {
+				yield 1;
+			}
+		`,
+		"function isString(value: unknown): value is string { return typeof value === 'string'; }",
+		unindent`
+			function assertString(value: unknown): asserts value is string {
+				if (typeof value !== "string") {
+					throw new Error("not a string");
+				}
+			}
+		`,
+		unindent`
+			function parse(text: string): string;
+			function parse(text: string): string {
+				return text;
+			}
+		`,
+		unindent`
+			class Box {
+				get value(): string {
+					return "a";
+				}
+			}
+		`,
+		unindent`
+			declare function getUnknown(): any;
+			function read(): any {
+				return getUnknown();
+			}
+		`,
+		unindent`
+			function fail(): never {
+				throw new Error("fail");
+			}
+		`,
+		// The end of the body may be reached, so `undefined` may join.
+		unindent`
+			declare const cond: boolean;
+			function maybe(): number | undefined {
+				if (cond) {
+					return 1;
+				}
+			}
+		`,
+		// The alias name is kept.
+		unindent`
+			type Point = { x: number; y: number };
+			declare function makePoint(): { x: number; y: number };
+			function origin(): Point {
+				return makePoint();
+			}
+		`,
+		// Inference builds the union again, without the alias name.
+		unindent`
+			type Kind = "file" | "directory";
+			declare const cond: boolean;
+			function classify(): Kind {
+				if (cond) {
+					return "file";
+				}
+
+				return "directory";
+			}
+		`,
+		// Without the annotation, TypeScript 5.5 infers a type predicate.
+		unindent`
+			type Node = { type: "local" } | { type: "call" };
+			function isLocal(node: Node): boolean {
+				return node.type === "local";
+			}
+		`,
+		// A function expression that cannot end infers `never`.
+		unindent`
+			declare function exit(): never;
+			declare function onDone(callback: () => void): void;
+			onDone((): void => {
+				exit();
+			});
+		`,
+		// A method that calls itself through `this`.
+		unindent`
+			class Counter {
+				count(n: number): number {
+					return n > 0 ? this.count(n - 1) : 0;
+				}
+			}
+		`,
+	].map((code) => ({ code, options: checkAll })),
+	// `allowExpressions` leaves the return types that
+	// `explicit-function-return-type` requires.
+	...[
+		unindent`
+			const kinds = new Set<string>();
+			function getKinds(): Set<string> {
+				return kinds;
+			}
+		`,
+		unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): Set<string> => kinds;
+		`,
+		unindent`
+			const kinds = new Set<string>();
+			class Store {
+				read(): Set<string> {
+					return kinds;
+				}
+				field = (): Set<string> => kinds;
+			}
+		`,
+		unindent`
+			const kinds = new Set<string>();
+			export default (): Set<string> => kinds;
+		`,
+	].map((code) => ({ code, options: checkExpressions })),
+];
+
+run({
+	name: `${RULE_NAME}/return-types`,
+	invalid: returnInvalid,
+	rule: noRedundantTypeAnnotation,
+	valid: returnValid,
 });
 
 // The fix-safety oracle checks what every report above promises: type-check
@@ -1778,6 +2157,7 @@ describe(`${RULE_NAME}/fix-safety`, () => {
 			...toFixedSnippets(jsxInvalid, jsxFilename),
 			...toFixedSnippets(looseNullInvalid, "file.ts"),
 			...toFixedSnippets(isolatedDeclarationsInvalid, "file.ts"),
+			...toFixedSnippets(returnInvalid, "file.ts"),
 		]);
 
 		expect(failures).toStrictEqual([]);

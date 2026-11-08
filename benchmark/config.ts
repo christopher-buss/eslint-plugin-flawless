@@ -131,6 +131,10 @@ const floatingTests = FLOATING_CASES.flatMap((fixture) =>
 );
 
 const typedTests = TYPE_ANNOTATION_CASES.flatMap((fixture) => {
+	// The empty baseline rule has no options schema, so only the flawless
+	// runs receive the fixture's options.
+	const options = "options" in fixture ? { options: fixture.options } : {};
+	const flawlessCases = [{ testPath: fixture.testPath, ...options }];
 	const base = {
 		cases: [{ testPath: fixture.testPath }],
 		iterations: 30,
@@ -141,6 +145,7 @@ const typedTests = TYPE_ANNOTATION_CASES.flatMap((fixture) => {
 	return [
 		{
 			...base,
+			cases: flawlessCases,
 			fix: false,
 			name: `${name} [flawless, detection]`,
 			ruleId: TYPE_ANNOTATION_RULE_ID,
@@ -157,6 +162,7 @@ const typedTests = TYPE_ANNOTATION_CASES.flatMap((fixture) => {
 			? [
 					{
 						...base,
+						cases: flawlessCases,
 						fix: true,
 						name: `${name} [flawless, autofix]`,
 						ruleId: TYPE_ANNOTATION_RULE_ID,
@@ -315,7 +321,12 @@ if (isSelected(TYPE_ANNOTATION_RULE_ID)) {
 			files: ["**/*.ts"],
 			languageOptions: { parser: tsParser, parserOptions: typedParserOptions },
 			plugins: { flawless: builtPlugin },
-			rules: { [`flawless/${TYPE_ANNOTATION_RULE_ID}`]: "error" },
+			rules: {
+				[`flawless/${TYPE_ANNOTATION_RULE_ID}`]: [
+					"error",
+					...("options" in fixture ? fixture.options : []),
+				],
+			},
 		};
 		const messages = typedCounter.verify(code, config, absolutePath);
 		if (

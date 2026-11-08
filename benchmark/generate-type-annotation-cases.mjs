@@ -26,6 +26,19 @@ write(
 	8,
 );
 write(
+	"annotation-returns",
+	readImport,
+	`{
+	function get(): string {
+		return read();
+	}
+	const getAgain = (): string => read();
+	void get;
+	void getAgain;
+}`,
+	8,
+);
+write(
 	"annotation-retained",
 	'import type { TreeNode } from "./helpers.js";',
 	`{
