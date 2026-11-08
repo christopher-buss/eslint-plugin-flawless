@@ -225,12 +225,33 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	// Most files have no alias, so the scope work in `Program:exit` is skipped.
 	let hasAlias = false;
 	let reportConflicts = false;
-	// JSX tags that read a binding, found from the AST. The default parser of
-	// ESLint does not record JSX tags as references.
-	let jsxTags: Array<{ name: string; node: TSESTree.JSXOpeningElement }> = [];
+	// Start offsets of the JSX tags that read a binding, by binding name, found
+	// from the AST: the default parser of ESLint does not record JSX tags as
+	// references. The traversal visits tags in source order, so each list is
+	// sorted.
+	let jsxTagStarts = new Map<string, Array<number>>();
 
 	function isUsedAsJsxTag(name: string, scope: Scope): boolean {
-		return jsxTags.some((tag) => tag.name === name && isWithin(tag.node, scope.block));
+		const starts = jsxTagStarts.get(name);
+		if (starts === undefined) {
+			return false;
+		}
+
+		const [blockStart, blockEnd] = scope.block.range;
+		// The first tag at or after the start of the block.
+		let low = 0;
+		let high = starts.length;
+		while (low < high) {
+			const middle = (low + high) >>> 1;
+			if ((starts[middle] ?? 0) < blockStart) {
+				low = middle + 1;
+			} else {
+				high = middle;
+			}
+		}
+
+		const start = starts[low];
+		return start !== undefined && start < blockEnd;
 	}
 
 	/**
@@ -342,13 +363,20 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		"before": function (): void {
 			collector = core.getFunctionComponentCollector(context);
 			hasAlias = false;
-			jsxTags = [];
+			jsxTagStarts = new Map();
 			reportConflicts = context.options[0]?.reportConflicts ?? false;
 		},
 		"JSXOpeningElement": function (node: TSESTree.JSXOpeningElement): void {
 			const name = getJsxTagBinding(node.name);
-			if (name !== undefined) {
-				jsxTags.push({ name, node });
+			if (name === undefined) {
+				return;
+			}
+
+			const starts = jsxTagStarts.get(name);
+			if (starts === undefined) {
+				jsxTagStarts.set(name, [node.range[0]]);
+			} else {
+				starts.push(node.range[0]);
 			}
 		},
 		"ObjectPattern": function (node: TSESTree.ObjectPattern): void {
