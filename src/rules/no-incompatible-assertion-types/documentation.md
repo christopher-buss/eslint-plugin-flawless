@@ -28,10 +28,13 @@ The rule does not report when:
   is not in a family above.
 - An operand has an `object`, `null`, or `undefined` member.
 - An operand reads a variable (directly or through a member chain such as
-  `user.id`) that a write of `any` can change, for example `value = readAny()`.
+  `user.id` or `user?.id`) that another write can change. This is so when a
+  write has a type that is not in a family above (for example
+  `value = readAny()`), or when the write is an increment or decrement
+  (`value++`).
 - An operand calls a method of a variable after the file assigns a function to a
-  property of that variable (`api.get = () => ...`). A test that replaces a
-  method can make the method return a value of a different type.
+  property of that variable with `=` (`api.get = () => ...`). A test that
+  replaces a method can make the method return a value of a different type.
 
 The rule checks these assertions:
 
@@ -46,10 +49,12 @@ The rule checks these assertions:
   takes a single package name and _replaces_ the three built-in sources.
 - Node `strictEqual`, `notStrictEqual`, `deepStrictEqual`, and
   `notDeepStrictEqual` imported from `assert`, `assert/strict`, `node:assert`,
-  or `node:assert/strict`, through a default, namespace, or named import.
-  `deepEqual` and `notDeepEqual` count only from `assert/strict` and
-  `node:assert/strict`: elsewhere they compare loosely. `equal`, `notEqual`, and
-  `ok` are ignored.
+  or `node:assert/strict`, through a default, namespace, or named import. The
+  `strict` object (`import { strict as assert } from "node:assert"` or
+  `assert.strict.deepEqual(...)`) is also checked. `deepEqual` and
+  `notDeepEqual` count only from `assert/strict`, `node:assert/strict`, or the
+  `strict` object: elsewhere they compare loosely. `equal`, `notEqual`, and `ok`
+  are ignored.
 
 The rule needs type information. Without it (for example under oxlint), the rule
 does nothing.
@@ -102,7 +107,8 @@ assert.equal(count, "1");
   checked.
 - An `assert` object that is not imported (for example, a parameter of a test
   callback) is not checked.
-- `const assert = require("node:assert")` is not checked.
+- `const assert = require("node:assert")` and
+  `import assert = require("node:assert")` are not checked.
 - The `.resolves` and `.rejects` modifiers and the `expect.soft` and
   `expect.poll` variants are not checked.
 

@@ -28,8 +28,9 @@ export interface AssertImports {
 	/** The local names of `objects`, for a check without a scope lookup. */
 	readonly objectNames: ReadonlySet<string>;
 	/**
-	 * Default and namespace imports (`import assert from "node:assert"`), keyed
-	 * by variable. The value tells whether the module is a `strict` variant.
+	 * Default and namespace imports (`import assert from "node:assert"`) and
+	 * named imports of `strict`, keyed by variable. The value tells whether the
+	 * object is a `strict` variant.
 	 */
 	readonly objects: ReadonlyMap<TSESLint.Scope.Variable, boolean>;
 }
@@ -77,7 +78,16 @@ export function scanAssertImports(
 			}
 
 			const method = importName(specifier);
-			if (specifier.importKind !== "type" && method !== null && methods.has(method)) {
+			if (specifier.importKind === "type") {
+				continue;
+			}
+
+			// `import { strict as assert } from "node:assert"` is the strict
+			// `assert` object.
+			if (method === "strict") {
+				objects.set(variable, true);
+				objectNames.add(variable.name);
+			} else if (method !== null && methods.has(method)) {
 				functions.set(variable, { method, strict });
 				functionNames.add(variable.name);
 			}

@@ -151,18 +151,31 @@ function isSingleArgument(
 }
 
 /**
- * Walks a member chain (`a.b.c`) to the identifier it starts at.
+ * Walks a member chain (`a.b.c` or `a?.b.c`) to the identifier it starts at.
  *
  * @param node - The expression to walk.
  * @returns The root identifier, or `null` when the chain starts elsewhere.
  */
 function memberRoot(node: TSESTree.Node): null | TSESTree.Identifier {
 	let current = node;
-	while (current.type === AST_NODE_TYPES.MemberExpression) {
-		current = current.object;
+	for (;;) {
+		if (current.type === AST_NODE_TYPES.ChainExpression) {
+			current = current.expression;
+		} else if (current.type === AST_NODE_TYPES.MemberExpression) {
+			current = current.object;
+		} else {
+			return current.type === AST_NODE_TYPES.Identifier ? current : null;
+		}
 	}
+}
 
-	return current.type === AST_NODE_TYPES.Identifier ? current : null;
+function isPropertyNamed(node: TSESTree.Node, name: string): node is TSESTree.MemberExpression {
+	return (
+		node.type === AST_NODE_TYPES.MemberExpression &&
+		!node.computed &&
+		node.property.type === AST_NODE_TYPES.Identifier &&
+		node.property.name === name
+	);
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
@@ -171,11 +184,13 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let checker: TypeChecker;
 	let expectSources: ReadonlySet<string>;
 	let assertImports: AssertImports;
-	let patchedVariables: Set<TSESLint.Scope.Variable>;
+	let patches: Map<string, Array<TSESTree.Identifier>>;
 	let stableVariables: Map<TSESLint.Scope.Variable, boolean>;
 
 	function resolve(identifier: TSESTree.Identifier): null | TSESLint.Scope.Variable {
-		return findVariable(sourceCode.getScope(identifier), identifier);
+		// Pass the name: with a node, `findVariable` searches the child scopes
+		// again, and that costs more for each function in the scope.
+		return findVariable(sourceCode.getScope(identifier), identifier.name);
 	}
 
 	/**
@@ -198,12 +213,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		let received = callee.object;
-		if (
-			received.type === AST_NODE_TYPES.MemberExpression &&
-			!received.computed &&
-			received.property.type === AST_NODE_TYPES.Identifier &&
-			received.property.name === "not"
-		) {
+		if (isPropertyNamed(received, "not")) {
 			received = received.object;
 		}
 
@@ -247,18 +257,32 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			callee.type === AST_NODE_TYPES.MemberExpression &&
 			!callee.computed &&
 			callee.property.type === AST_NODE_TYPES.Identifier &&
-			callee.object.type === AST_NODE_TYPES.Identifier &&
-			ASSERT_METHODS.has(callee.property.name) &&
-			assertImports.objectNames.has(callee.object.name)
+			ASSERT_METHODS.has(callee.property.name)
 		) {
-			const variable = resolve(callee.object);
+			// `assert.strict.deepEqual` is the strict variant of `deepEqual`.
+			const strictMember = isPropertyNamed(callee.object, "strict") ? callee.object : null;
+			const object = strictMember === null ? callee.object : strictMember.object;
+			if (
+				object.type !== AST_NODE_TYPES.Identifier ||
+				!assertImports.objectNames.has(object.name)
+			) {
+				return null;
+			}
+
+			const variable = resolve(object);
 			const strict = variable === null ? undefined : assertImports.objects.get(variable);
-			kind = strict === undefined ? undefined : assertKind(callee.property.name, strict);
+			kind =
+				strict === undefined
+					? undefined
+					: assertKind(callee.property.name, strict || strictMember !== null);
+		}
+
+		if (kind !== "strict") {
+			return null;
 		}
 
 		const [actual, expected] = node.arguments;
 		if (
-			kind !== "strict" ||
 			actual === undefined ||
 			expected === undefined ||
 			actual.type === AST_NODE_TYPES.SpreadElement ||
@@ -319,15 +343,19 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @returns True when the checker type of the operand can be trusted.
 	 */
 	function isTrusted(operand: TSESTree.Expression): boolean {
+		const call = operand.type === AST_NODE_TYPES.ChainExpression ? operand.expression : operand;
 		if (
-			patchedVariables.size > 0 &&
-			operand.type === AST_NODE_TYPES.CallExpression &&
-			operand.callee.type === AST_NODE_TYPES.MemberExpression
+			patches.size > 0 &&
+			call.type === AST_NODE_TYPES.CallExpression &&
+			call.callee.type === AST_NODE_TYPES.MemberExpression
 		) {
-			const root = memberRoot(operand.callee.object);
-			const variable = root === null ? null : resolve(root);
-			if (variable !== null && patchedVariables.has(variable)) {
-				return false;
+			const root = memberRoot(call.callee.object);
+			const patchRoots = root === null ? undefined : patches.get(root.name);
+			if (root !== null && patchRoots !== undefined) {
+				const variable = resolve(root);
+				if (variable !== null && patchRoots.some((patch) => resolve(patch) === variable)) {
+					return false;
+				}
 			}
 		}
 
@@ -371,6 +399,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	return {
 		AssignmentExpression(node: TSESTree.AssignmentExpression): void {
 			if (
+				node.operator !== "=" ||
 				node.left.type !== AST_NODE_TYPES.MemberExpression ||
 				(node.right.type !== AST_NODE_TYPES.ArrowFunctionExpression &&
 					node.right.type !== AST_NODE_TYPES.FunctionExpression)
@@ -378,10 +407,16 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				return;
 			}
 
+			// Record the root by name only. The binding is resolved later, and
+			// only for an assertion operand that calls a method on that name.
 			const root = memberRoot(node.left.object);
-			const variable = root === null ? null : resolve(root);
-			if (variable !== null) {
-				patchedVariables.add(variable);
+			if (root !== null) {
+				const roots = patches.get(root.name);
+				if (roots === undefined) {
+					patches.set(root.name, [root]);
+				} else {
+					roots.push(root);
+				}
 			}
 		},
 		before(): boolean {
@@ -395,7 +430,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			checker = parserServices.program.getTypeChecker();
 			expectSources = getTestGlobalSources(context.settings);
 			assertImports = scanAssertImports(sourceCode, ASSERT_METHOD_NAMES);
-			patchedVariables = new Set();
+			patches = new Map();
 			stableVariables = new Map();
 			return true;
 		},

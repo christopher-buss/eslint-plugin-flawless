@@ -127,12 +127,39 @@ const valid: Array<ValidTestCase> = [
 		}
 	`,
 	unindent`
+		import { it } from "vitest";
 		declare const count: number;
 		function expect(value: unknown) {
 			return { toBe(other: unknown) {} };
 		}
-		expect(count).toBe("1");
+		it("x", () => expect(count).toBe("1"));
 	`,
+	withImport(
+		'import { strictEqual } from "node:assert";',
+		unindent`
+			function check(strictEqual: (a: unknown, b: unknown) => void) {
+				strictEqual(count, "1");
+			}
+		`,
+	),
+	// Stability guard through optional chaining.
+	withExpect(
+		unindent`
+			let holder = { id: 1 };
+			holder = readAny();
+			expect(holder?.id).toBe("1");
+		`,
+	),
+	// Monkey-patch guard through optional chaining.
+	withExpect(
+		unindent`
+			const api = { get: (): number => 1 };
+			api.get = () => "x" as never;
+			expect(api?.get()).toBe("1");
+		`,
+	),
+	// `equal` is ignored, also on the `strict` object.
+	withImport('import assert from "node:assert";', 'assert.strict.equal(count, "1");'),
 	// Out of scope: other assertion libraries.
 	unindent`
 		import { expect } from "@playwright/test";
@@ -278,6 +305,59 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [error("number", "string")],
 		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
+	},
+	{
+		code: withImport(
+			'import { strict as assert } from "node:assert";',
+			'assert.strictEqual(count, "1");',
+		),
+		errors: [error("number", "string")],
+	},
+	{
+		code: withImport(
+			'import { strict as assert } from "node:assert";',
+			'assert.deepEqual(count, "1");',
+		),
+		errors: [error("number", "string")],
+	},
+	{
+		code: withImport(
+			'import assert from "node:assert";',
+			'assert.strict.deepEqual(count, "1");',
+		),
+		errors: [error("number", "string")],
+	},
+	{
+		code: withImport(
+			'import * as assert from "assert";',
+			'assert.strict.strictEqual(count, "1");',
+		),
+		errors: [error("number", "string")],
+	},
+	// Only a plain `=` replaces a method.
+	{
+		code: withExpect(
+			unindent`
+				const api: { get?: () => number } = {};
+				api.get ??= () => 1;
+				expect(api.get!()).toBe("1");
+			`,
+		),
+		errors: [error("number", "string")],
+	},
+	// A patch of a different variable with the same name does not count.
+	{
+		code: withExpect(
+			unindent`
+				function patch() {
+					const api = { get: (): number => 1 };
+					api.get = () => 2;
+				}
+				const api = { get: (): number => 1 };
+				expect(api.get()).toBe("1");
+			`,
+		),
+		errors: [error("number", "string")],
 	},
 ];
 

@@ -31,7 +31,8 @@ The rule reports:
 - Node `strictEqual`, `notStrictEqual`, `deepStrictEqual`, `notDeepStrictEqual`,
   `deepEqual`, and `notDeepEqual` assertions imported from `assert`,
   `assert/strict`, `node:assert`, or `node:assert/strict`. Default, namespace,
-  named, and aliased imports are supported.
+  named, and aliased imports are supported, and so is the `strict` object
+  (`import { strict as assert } from "node:assert"`).
 
 Decimal literals that are exactly representable in binary, such as `0.5`, are
 accepted. Literal arithmetic is constant-folded, and expressions whose result is
