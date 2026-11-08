@@ -1692,7 +1692,7 @@ function create(
 			}
 
 			const annotationType = services.getTypeFromTypeNode(annotation.typeAnnotation);
-			if ((annotationType.flags & TypeFlags.Any) !== 0) {
+			if ((annotationType.flags & (TypeFlags.Any | TypeFlags.Never)) !== 0) {
 				continue;
 			}
 
@@ -1785,6 +1785,17 @@ function create(
 				return;
 			}
 
+			// Other rules read this annotation as the function's signature:
+			// `func-style` allows a function expression only on a typed
+			// variable, and `explicit-function-return-type` counts it as the
+			// return type. Removing it makes them report.
+			if (
+				node.init.type === AST_NODE_TYPES.ArrowFunctionExpression ||
+				node.init.type === AST_NODE_TYPES.FunctionExpression
+			) {
+				return;
+			}
+
 			if (declarationsAreIsolated && (isExported(node) || isReadByEmitter(node))) {
 				return;
 			}
@@ -1797,6 +1808,12 @@ function create(
 			// `any` is the one annotation that can never be redundant: it is
 			// mutually assignable with every type, so identity says nothing.
 			if ((annotationType.flags & TypeFlags.Any) !== 0) {
+				return;
+			}
+
+			// `never` is an exhaustiveness check. It always holds when written;
+			// it exists to fail when a new case is added later.
+			if ((annotationType.flags & TypeFlags.Never) !== 0) {
 				return;
 			}
 

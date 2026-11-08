@@ -40,19 +40,27 @@ clause variable. Return types are not checked.
 | widens a literal                          | `const count: number = 5`                 |
 | narrows away `any`                        | `const value: unknown = JSON.parse(text)` |
 | is `any` itself                           | `const value: any = getUnknown()`         |
+| is `never` (an exhaustiveness check)      | `const unreachable: never = shape`        |
 | supplies a parameter's contextual type    | `const fn: Handler = event => ...`        |
+| types a function-valued variable          | `let onClose: () => void = () => {}`      |
 | types a function's return value or `this` | `const getTag: () => "div" = () => "div"` |
 | pins a generic's type argument            | `const value: string = pick()`            |
 | names an alias TypeScript erases          | `const id: UserId = getString()`          |
 
 Each of these changes meaning if it is removed, so none of them is reported.
 
-A function's return value is checked only where the context can change it.
-Without a context a single returned literal widens (`() => "div"` becomes
-`() => string`), but a union of literals does not, so
-`const fn: () => "a" | "b" = () => (choose ? "a" : "b")` is still reported. A
-returned object or array literal, and any generator, is always skipped, even
-when the annotation really is redundant.
+A variable initialized directly with an arrow function or function expression is
+never reported. Other rules read its annotation as the function's signature:
+`func-style` with `allowTypeAnnotation` allows the function expression only on a
+typed variable, and `explicit-function-return-type` counts the annotation as the
+return type.
+
+In other places, such as a callback argument or a conditional of functions, a
+function's return value is checked only where the context can change it. Without
+a context a single returned literal widens (`() => "div"` becomes
+`() => string`), but a union of literals does not. A returned object or array
+literal, and any generator, is always skipped, even when the annotation really
+is redundant.
 
 ### `any` is never redundant
 

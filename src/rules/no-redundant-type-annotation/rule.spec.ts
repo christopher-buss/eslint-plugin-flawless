@@ -313,6 +313,49 @@ const valid: Array<ValidTestCase> = [
 		const value: { kind: "a" } = choose ? { kind: "a" } : owner;
 	`,
 
+	// --- function-valued variables ---
+
+	// Other rules read the annotation as the function's signature (`func-style`
+	// with `allowTypeAnnotation`, `explicit-function-return-type`).
+	unindent`
+		export function track(): void {
+			let onClose: () => void = () => {};
+			onClose = () => {
+				console.log("closed");
+			};
+			onClose();
+		}
+	`,
+	"const fn: () => number = () => 1;",
+	"const fn: () => void = function () {};",
+	unindent`
+		declare function getNumber(): number;
+		const fn: () => number = () => getNumber();
+	`,
+
+	// --- never annotations ---
+
+	// An exhaustiveness check: it fails when a new case is added later.
+	unindent`
+		type Shape = { kind: "a" } | { kind: "b" };
+		export function area(shape: Shape): number {
+			switch (shape.kind) {
+				case "a": return 1;
+				case "b": return 2;
+				default: {
+					const unreachable: never = shape;
+					throw new Error(String(unreachable));
+				}
+			}
+		}
+	`,
+	unindent`
+		declare function each(callback: (value: never) => void): void;
+		each((value: never) => {
+			void value;
+		});
+	`,
+
 	// --- function return values ---
 
 	// The annotation keeps a returned literal from widening.
@@ -943,88 +986,6 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 	},
 
-	// --- function return values ---
-
-	// A context of `number` gives the literal nothing, so it widens anyway.
-	{
-		code: "const fn: () => number = () => 1;",
-		errors: [{ messageId }],
-		output: "const fn = () => 1;",
-	},
-	{
-		code: unindent`
-			declare function getNumber(): number;
-			const fn: () => number = () => getNumber();
-		`,
-		errors: [{ messageId }],
-		output: unindent`
-			declare function getNumber(): number;
-			const fn = () => getNumber();
-		`,
-	},
-	{
-		code: "const load: () => Promise<number> = async () => 1;",
-		errors: [{ messageId }],
-		output: "const load = async () => 1;",
-	},
-	// A union of literals does not widen.
-	{
-		code: unindent`
-			declare const choose: boolean;
-			const fn: () => "a" | "b" = () => (choose ? "a" : "b");
-		`,
-		errors: [{ messageId }],
-		output: unindent`
-			declare const choose: boolean;
-			const fn = () => (choose ? "a" : "b");
-		`,
-	},
-	{
-		code: unindent`
-			declare const choose: boolean;
-			const fn: () => "a" | "b" = () => {
-				if (choose) {
-					return "a";
-				}
-				return "b";
-			};
-		`,
-		errors: [{ messageId }],
-		output: unindent`
-			declare const choose: boolean;
-			const fn = () => {
-				if (choose) {
-					return "a";
-				}
-				return "b";
-			};
-		`,
-	},
-	// Nothing is returned, so nothing takes the context.
-	{
-		code: "const fn: () => void = () => {};",
-		errors: [{ messageId }],
-		output: "const fn = () => {};",
-	},
-	{
-		code: unindent`
-			const fn: () => never = () => {
-				throw new Error("fail");
-			};
-		`,
-		errors: [{ messageId }],
-		output: unindent`
-			const fn = () => {
-				throw new Error("fail");
-			};
-		`,
-	},
-	// The function's own return type stops the context.
-	{
-		code: "const fn: () => 1 = (): 1 => 1;",
-		errors: [{ messageId }],
-		output: "const fn = (): 1 => 1;",
-	},
 	// A callback passed to a plain call takes its context from the callee, so
 	// what it returns says nothing about the variable's annotation.
 	{
@@ -1553,13 +1514,15 @@ const looseNullInvalid: Array<InvalidTestCase> = [
 		// A returned value that is not `null` does not widen.
 		code: unindent`
 			declare function getNumber(): number;
-			const fn: () => number = () => getNumber();
+			declare const choose: boolean;
+			const fn: () => number = choose ? () => getNumber() : () => 0;
 		`,
 		errors: [{ messageId }],
 		filename: path.join(looseNullDirectory, "case.ts"),
 		output: unindent`
 			declare function getNumber(): number;
-			const fn = () => getNumber();
+			declare const choose: boolean;
+			const fn = choose ? () => getNumber() : () => 0;
 		`,
 	},
 ];
