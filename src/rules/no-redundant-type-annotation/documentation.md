@@ -86,7 +86,9 @@ const value: string = pick(); // NOT reported — without the annotation, `T` is
 The rule skips any call, `new` expression, or tagged template whose signature is
 generic and whose return type involves one of its own type parameters, unless
 the call site writes its type arguments out, or every type parameter appears in
-one of the signature's parameter types. The arguments then infer the type
+one of the signature's parameter types that receives an argument other than an
+object or array literal. Such a literal can leave out what infers the type
+parameter, as `Array.from({ length })` does. The arguments then infer the type
 parameters before the context is consulted, so
 `const value: string = first(items)` is checked. A mention behind an alias, a
 mapped type, or a conditional type is not seen, so such a call is still skipped.
@@ -221,7 +223,9 @@ map([1], () => (text: string) => text.length); // NOT reported — without it, `
 
 A generic callee is left alone unless the function is a direct argument of a
 call with one signature, and each of the callback's parameter types is the same
-before and after the call's type arguments are inferred. That holds for
+before and after the call's type arguments are inferred, and so is its `this`
+type. An array method's callback has a `this` typed by the `thisArg` type
+parameter, so it is left alone. The rule holds for
 `promise.catch((reason: unknown) => reason)`, where `reason` names no type
 parameter, so it is checked; the verifier decides whether the removal is safe.
 

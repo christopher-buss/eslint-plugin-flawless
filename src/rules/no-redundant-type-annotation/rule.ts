@@ -783,11 +783,49 @@ function create(
 		// A type parameter that some parameter mentions is inferred from the
 		// arguments first, and the context only fills in what they leave open.
 		// This is a cost filter, not a proof: the verifier decides.
-		const parameterTypes = declared.parameters.map((parameter) =>
-			checker.getTypeOfSymbol(parameter),
-		);
+		// An object or array literal can leave out what would infer a type
+		// parameter, as `Array.from({ length })` does, so its parameter does
+		// not count. Nor does a parameter that receives no argument.
+		const parameterTypes = declared.parameters
+			.map((parameter, index) => {
+				return receivesInferringArgument(node, declared, index)
+					? checker.getTypeOfSymbol(parameter)
+					: undefined;
+			})
+			.filter((type) => type !== undefined);
 		return (declared.getTypeParameters() ?? []).some((typeParameter) => {
 			return !parameterTypes.some((type) => mentionsType(type, typeParameter));
+		});
+	}
+
+	/**
+	 * Reports whether a parameter receives an argument that can infer a type
+	 * parameter: one that is not an object or array literal.
+	 *
+	 * A tagged template passes its holes, so every parameter counts there.
+	 *
+	 * @param call - The call to inspect.
+	 * @param signature - The callee's declared signature.
+	 * @param index - The parameter position.
+	 * @returns True when some argument at that position can infer.
+	 */
+	function receivesInferringArgument(
+		call: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
+		signature: Signature,
+		index: number,
+	): boolean {
+		if (call.type === AST_NODE_TYPES.TaggedTemplateExpression) {
+			return true;
+		}
+
+		const received = isRestParameter(signature, index)
+			? call.arguments.slice(index)
+			: call.arguments.slice(index, index + 1);
+		return received.some((argument) => {
+			return (
+				argument.type !== AST_NODE_TYPES.ObjectExpression &&
+				argument.type !== AST_NODE_TYPES.ArrayExpression
+			);
 		});
 	}
 
@@ -934,6 +972,19 @@ function create(
 		const before = getCallbackSignature(declared.parameters[index]);
 		const after = getCallbackSignature(resolved?.parameters[index]);
 		if (before === undefined || before.parameters.length !== after?.parameters.length) {
+			return false;
+		}
+
+		// A `this` typed by a type parameter, as in an array method with a
+		// `thisArg`, is inferred too.
+		const thisBefore = before.thisParameter;
+		const thisAfter = after.thisParameter;
+		if (
+			(thisBefore === undefined) !== (thisAfter === undefined) ||
+			(thisBefore !== undefined &&
+				thisAfter !== undefined &&
+				checker.getTypeOfSymbol(thisBefore) !== checker.getTypeOfSymbol(thisAfter))
+		) {
 			return false;
 		}
 

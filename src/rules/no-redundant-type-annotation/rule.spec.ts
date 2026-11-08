@@ -53,6 +53,24 @@ const valid: Array<ValidTestCase> = [
 		declare function wrap<T>(value: T, callback: (value: T) => void): void;
 		wrap("a", (value: string) => {});
 	`,
+	// An object literal argument can leave out what infers `T`.
+	unindent`
+		declare function from<T>(source: { length: number; item?: T }): Array<T>;
+		const items: Array<string> = from({ length: 2 });
+	`,
+	// An array literal argument can be empty.
+	unindent`
+		declare function first<T>(items: Array<T>): T;
+		const value: string = first([]);
+	`,
+	// The callback's `this` is inferred from the call.
+	unindent`
+		declare function map<U, This = undefined>(
+			callback: (this: This, item: string) => U,
+			thisArg?: This,
+		): Array<U>;
+		const lengths = map((item: string) => item.length);
+	`,
 	// No initializer, so inference has nothing to work from.
 	unindent`
 		declare const value: string;
