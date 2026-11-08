@@ -25,6 +25,14 @@ The autofix derives the name from the file's own name:
 Because the export is appended after the file's last token, a trailing comment
 stays where the author put it rather than being pushed below the new export.
 
+TypeScript wrappers (`as`, `satisfies`, `!`, `<T>` assertions, and `<T>`
+instantiations) do not give the arrow a name, so the rule looks through them.
+The autofix replaces only the `export default` keywords, so wrappers,
+parentheses, comments, and the trailing semicolon stay on the new constant.
+
+The autofix is skipped when the generated name is already bound in the module,
+for example by an import of the same name.
+
 ## Examples
 
 Examples of **incorrect** code for this rule:
@@ -40,6 +48,11 @@ export default () => {
 ```tsx
 // File: layout.tsx
 export default () => <div>Layout</div>;
+```
+
+```ts
+// File: handler.ts
+export default (() => 1) satisfies Handler;
 ```
 
 Examples of **correct** code for this rule:
@@ -61,6 +74,13 @@ const Layout = () => {
 };
 
 export default Layout;
+```
+
+```ts
+// File: handler.ts
+const handler = (() => 1) satisfies Handler;
+
+export default handler;
 ```
 
 ## Naming convention

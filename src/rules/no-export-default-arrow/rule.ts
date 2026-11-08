@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
+import { unwrapAssertedExpression } from "../shared/dictionary-types";
 
 export const RULE_NAME = "no-export-default-arrow";
 
@@ -85,43 +86,85 @@ function getArrowReturnValues(
  * @returns `true` when the arrow can return JSX.
  */
 function arrowReturnIsJsxElement(body: TSESTree.ArrowFunctionExpression["body"]): boolean {
-	return getArrowReturnValues(body).some((node) => isJsxElement(node));
+	return getArrowReturnValues(body).some((node) => isJsxElement(unwrapAssertedExpression(node)));
 }
 
 /**
- * Builds the autofix: replaces the `export default` declaration with a named
- * `const` derived from the filename, and appends `export default <name>` after
- * the file's last token (comments included, so a trailing comment keeps its
- * position).
+ * Strips TypeScript expression wrappers (`as`, `satisfies`, `!`, `<T>`, and
+ * `<T>` instantiation) that sit between a default export and its value. None
+ * of them gives the arrow a name. Parentheses are not AST nodes, so they need
+ * no handling.
  *
- * @param options - The reported arrow, its export declaration, and the context
- *   and source code needed to derive the name and locate the file's end.
- * @returns A fixer callback producing both edits.
+ * @param node - The default export's declaration.
+ * @returns The innermost wrapped node.
+ */
+function unwrapTypeExpressions(
+	node: TSESTree.ExportDefaultDeclaration["declaration"],
+): TSESTree.ExportDefaultDeclaration["declaration"] {
+	let current = node;
+	while (
+		current.type === AST_NODE_TYPES.TSAsExpression ||
+		current.type === AST_NODE_TYPES.TSSatisfiesExpression ||
+		current.type === AST_NODE_TYPES.TSNonNullExpression ||
+		current.type === AST_NODE_TYPES.TSTypeAssertion ||
+		current.type === AST_NODE_TYPES.TSInstantiationExpression
+	) {
+		current = current.expression;
+	}
+
+	return current;
+}
+
+/**
+ * Derives the constant name from the filename stem: PascalCase when the arrow
+ * returns JSX, camelCase otherwise.
+ *
+ * @param arrowFunction - The unwrapped default-exported arrow.
+ * @param context - The rule context, for the filename.
+ * @returns The generated name.
+ */
+function getFunctionName(
+	arrowFunction: TSESTree.ArrowFunctionExpression,
+	context: FlawlessRuleContext<MessageIds, Options>,
+): string {
+	const fileName = context.physicalFilename || context.filename || "namedFunction";
+	const { name: stem } = path.parse(fileName);
+	return arrowReturnIsJsxElement(arrowFunction.body) ? toPascalCase(stem) : toCamelCase(stem);
+}
+
+/**
+ * Builds the autofix: replaces the `export default` keywords with
+ * `const <name> =`, and appends `export default <name>` after the file's last
+ * token (comments included, so a trailing comment keeps its position). The
+ * rest of the declaration stays as written, so type wrappers, parentheses,
+ * comments, and the trailing semicolon are kept.
+ *
+ * @param options - The export declaration, the generated name, and the source
+ *   code needed to locate the keywords and the file's end.
+ * @returns A fixer callback producing both edits, or `null` when the keywords
+ *   cannot be found.
  */
 function createFixFunction({
-	arrowFunction,
-	context,
 	exportDeclaration,
+	functionName,
 	sourceCode,
 }: {
-	arrowFunction: TSESTree.ArrowFunctionExpression;
-	context: FlawlessRuleContext<MessageIds, Options>;
 	exportDeclaration: TSESTree.ExportDefaultDeclaration;
+	functionName: string;
 	sourceCode: Readonly<TSESLint.SourceCode>;
-}): TSESLint.ReportFixFunction {
+}): null | TSESLint.ReportFixFunction {
+	const defaultToken = sourceCode.getFirstToken(exportDeclaration, { skip: 1 });
+	if (defaultToken?.value !== "default") {
+		return null;
+	}
+
 	return (fixer) => {
-		const program = sourceCode.ast;
-		const lastToken = sourceCode.getLastToken(program, { includeComments: true });
-		const fileName = context.physicalFilename || context.filename || "namedFunction";
-		const { name: stem } = path.parse(fileName);
-		const functionName = arrowReturnIsJsxElement(arrowFunction.body)
-			? toPascalCase(stem)
-			: toCamelCase(stem);
+		const lastToken = sourceCode.getLastToken(sourceCode.ast, { includeComments: true });
 
 		return [
-			fixer.replaceText(
-				exportDeclaration,
-				`const ${functionName} = ${sourceCode.getText(arrowFunction)}`,
+			fixer.replaceTextRange(
+				[exportDeclaration.range[0], defaultToken.range[1]],
+				`const ${functionName} =`,
 			),
 			fixer.insertTextAfter(
 				lastToken ?? exportDeclaration,
@@ -133,28 +176,31 @@ function createFixFunction({
 
 /**
  * Reports anonymous arrow functions used as `export default`, which surface as
- * unnamed functions in stack traces and devtools.
+ * unnamed functions in stack traces and devtools. Type wrappers around the
+ * arrow do not give it a name, so the rule looks through them. The autofix is
+ * skipped when the generated name is already bound in the module.
  *
  * @param context - The rule context.
  * @returns The rule listener.
  */
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		ArrowFunctionExpression(node: TSESTree.ArrowFunctionExpression): void {
-			const { parent } = node;
-			if (parent.type !== AST_NODE_TYPES.ExportDefaultDeclaration) {
+		ExportDefaultDeclaration(node: TSESTree.ExportDefaultDeclaration): void {
+			const arrowFunction = unwrapTypeExpressions(node.declaration);
+			if (arrowFunction.type !== AST_NODE_TYPES.ArrowFunctionExpression) {
 				return;
 			}
 
+			const { sourceCode } = context;
+			const functionName = getFunctionName(arrowFunction, context);
+			const isNameTaken = sourceCode.getScope(node).set.has(functionName);
+
 			context.report({
-				fix: createFixFunction({
-					arrowFunction: node,
-					context,
-					exportDeclaration: parent,
-					sourceCode: context.sourceCode,
-				}),
+				fix: isNameTaken
+					? null
+					: createFixFunction({ exportDeclaration: node, functionName, sourceCode }),
 				messageId: MESSAGE_ID,
-				node,
+				node: arrowFunction,
 			});
 		},
 	};
