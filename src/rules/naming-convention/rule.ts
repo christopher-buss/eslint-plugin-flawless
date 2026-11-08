@@ -184,8 +184,19 @@ function create(
 		}
 	}
 
-	const { unusedVariables } = collectVariables(context);
+	// The unused-variable analysis is costly and only feeds `Modifier.unused`,
+	// so skip it when no selector can match on that modifier.
+	const usesUnusedModifier = context.options.some(
+		(option) => option.modifiers?.includes("unused") === true,
+	);
+	const unusedVariables = usesUnusedModifier
+		? collectVariables(context).unusedVariables
+		: undefined;
 	function isUnused(name: string, initialScope: null | TSESLint.Scope.Scope): boolean {
+		if (unusedVariables === undefined) {
+			return false;
+		}
+
 		let variable: null | TSESLint.Scope.Variable = null;
 		let scope = initialScope;
 		while (scope) {
@@ -539,7 +550,10 @@ function create(
 								modifiers.add(Modifier.destructured);
 							}
 
-							if (isUnused(index.name, context.sourceCode.getScope(index))) {
+							if (
+								unusedVariables !== undefined &&
+								isUnused(index.name, context.sourceCode.getScope(index))
+							) {
 								modifiers.add(Modifier.unused);
 							}
 
@@ -746,9 +760,11 @@ function create(
 		"TSTypeParameterDeclaration > TSTypeParameter": {
 			handler: (node: TSESTree.TSTypeParameter, validator): void => {
 				const modifiers = new Set<ModifierType>();
-				const scope = context.sourceCode.getScope(node);
 
-				if (isUnused(node.name.name, scope)) {
+				if (
+					unusedVariables !== undefined &&
+					isUnused(node.name.name, context.sourceCode.getScope(node))
+				) {
 					modifiers.add(Modifier.unused);
 				}
 

@@ -119,10 +119,6 @@ export const TypeModifier = {
 	array: 4194304,
 } as const;
 
-export const TypeModifierValueToKey = Object.fromEntries(
-	Object.entries(TypeModifier).map(([key, value]) => [value, key]),
-) as Record<TypeModifierType, keyof typeof TypeModifier>;
-
 export type TypeModifierString = keyof typeof TypeModifier;
 export type TypeModifierType = (typeof TypeModifier)[keyof typeof TypeModifier];
 
