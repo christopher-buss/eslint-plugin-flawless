@@ -21,6 +21,12 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 		},
 		type: "array",
 	},
+	componentPropConfig: {
+		description:
+			"Restricts the selector to members of a type that a React component takes as its props: typed component parameters, `React.FC<Props>`-style declarations, `memo` / `forwardRef`, and class components, anywhere in the program. Only `typeProperty` and `typeMethod` names can match. Shapes nested inside a prop's type are not props.",
+		enum: [true],
+		type: "boolean",
+	},
 	// repeated types
 	formatOptionsConfig: {
 		oneOf: [
@@ -150,6 +156,14 @@ const MATCH_REGEX_SCHEMA: JSONSchema.JSONSchema4 = {
 	$ref: "#/$defs/matchRegexConfig",
 };
 type JSONSchemaProperties = Record<string, JSONSchema.JSONSchema4>;
+const COMPONENT_PROP_SELECTORS: ReadonlySet<IndividualAndMetaSelectorsString> = new Set([
+	"default",
+	"memberLike",
+	"method",
+	"property",
+	"typeMethod",
+	"typeProperty",
+]);
 const FORMAT_OPTIONS_PROPERTIES: JSONSchemaProperties = {
 	allowedWords: {
 		$ref: "#/$defs/allowedWordsConfig",
@@ -192,6 +206,14 @@ function selectorSchema(
 		},
 	};
 
+	// a role constraint that only interface and type-literal members can meet,
+	// so only the selectors that cover them offer it
+	if (COMPONENT_PROP_SELECTORS.has(selectorString)) {
+		selector["componentProp"] = {
+			$ref: "#/$defs/componentPropConfig",
+		};
+	}
+
 	if (modifiers && modifiers.length > 0) {
 		selector["modifiers"] = {
 			additionalItems: false,
@@ -233,6 +255,9 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 		description: "Multiple selectors in one config",
 		properties: {
 			...FORMAT_OPTIONS_PROPERTIES,
+			componentProp: {
+				$ref: "#/$defs/componentPropConfig",
+			},
 			filter: {
 				oneOf: [
 					{

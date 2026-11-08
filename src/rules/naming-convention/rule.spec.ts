@@ -5,6 +5,7 @@ import tsParser from "@typescript-eslint/parser";
 
 import { Linter } from "eslint";
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, it } from "vitest";
 
@@ -4459,6 +4460,569 @@ it.each([
 ])("accepts a `typeArgumentOf` config with %s", (_label, typeArgumentOf) => {
 	expect(() => {
 		verifyWithOptions({ format: ["camelCase"], selector: "typeProperty", typeArgumentOf });
+	}).not.toThrow();
+});
+
+// `componentProp` constrains a selector to the members of types that React
+// components take as props. Finding components needs React's types, so these
+// cases run against the `component-prop` fixture project, which ships minimal
+// stand-ins for `react` and `@rbxts/react`.
+const componentPropertyDirectory = path.resolve(
+	__dirname,
+	"../../../fixtures/naming-convention/component-prop",
+);
+const componentPropertyCase = path.join(componentPropertyDirectory, "case.tsx");
+const componentPropertySharedProps = path.join(componentPropertyDirectory, "src/shared-props.ts");
+
+// Component-valued props are PascalCase, other props strictCamelCase, and any
+// other member keeps the broad policy that also allows PascalCase.
+const componentPropertyOptions: Options = [
+	{
+		componentProp: true,
+		format: ["StrictPascalCase"],
+		selector: ["typeProperty", "typeMethod"],
+		types: [
+			{ name: "ComponentType" },
+			{ name: "FunctionComponent" },
+			{ name: "ComponentClass" },
+		],
+	},
+	{
+		componentProp: true,
+		format: ["strictCamelCase"],
+		selector: ["typeProperty", "typeMethod"],
+	},
+	{
+		format: ["strictCamelCase", "StrictPascalCase"],
+		selector: ["typeProperty", "typeMethod"],
+	},
+];
+
+function propertyError(
+	name: string,
+	formats = "strictCamelCase",
+	type = "Type Property",
+): Array<{ data: Record<string, string>; messageId: "doesNotMatchFormat" }> {
+	return [{ data: { name, formats, type }, messageId: "doesNotMatchFormat" }];
+}
+
+/**
+ * Adds the fixture file name and the shared options to a test case, unless the
+ * case gives its own.
+ *
+ * @template T - The test case type.
+ * @param testCase - A valid or invalid case of the `componentProp` suite.
+ * @returns The test case with the defaults.
+ */
+function withComponentPropertyDefaults<T extends object>(testCase: T): T {
+	return { filename: componentPropertyCase, options: componentPropertyOptions, ...testCase };
+}
+
+const panelProps = unindent`
+	interface PanelProps {
+		readonly Size: number;
+		readonly Content: React.ComponentType;
+		readonly onStateChange?: () => void;
+	}
+`;
+
+/**
+ * Appends the shared `PanelProps` interface. `unindent` drops interpolated
+ * text, so the interface cannot be written inside the template.
+ *
+ * @param code - The test case code.
+ * @returns The code followed by the interface.
+ */
+function withPanelProps(code: string): string {
+	return `${code}
+
+${panelProps}`;
+}
+
+const componentPropertyInvalid: Array<Exclude<InvalidTestCase, string>> = [
+	{
+		// typed function component parameter: `Size` is a prop and must be
+		// camelCase, `Content` is component-valued and stays PascalCase
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// arrow component with an inferred JSX return type and a destructured
+		// parameter
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			export const Panel = ({ Size }: PanelProps) => <div className={String(Size)} />;
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// a component declared through `React.FC`
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			export const Panel: React.FC<PanelProps> = () => <div />;
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// a component declared through `ComponentType`, behind a project alias
+		code: withPanelProps(unindent`
+			import type { ComponentType } from "react";
+			import * as React from "react";
+
+			type PanelComponent = ComponentType<PanelProps>;
+
+			export const Panel: PanelComponent = () => <div />;
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// `memo` marks its argument as a component, so there is no return type
+		// check
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			export const Panel = React.memo((props: PanelProps) => null);
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// `forwardRef` explicit type arguments: the props type is second
+		code: withPanelProps(unindent`
+			import { forwardRef } from "react";
+			import * as React from "react";
+
+			export default forwardRef<object, PanelProps>((props, ref) => <div />);
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// class component
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			export class Panel extends React.Component<PanelProps> {
+				public render(): React.ReactNode {
+					return <div />;
+				}
+			}
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// props through an alias, an intersection, an `extends` clause, and
+		// `PropsWithChildren` all count
+		code: unindent`
+			import * as React from "react";
+
+			interface LayoutProps {
+				readonly Visible: boolean;
+			}
+
+			interface SizedProps extends LayoutProps {
+				readonly Size: number;
+			}
+
+			type PanelProps = SizedProps & { readonly Title: string };
+
+			export function Panel(props: React.PropsWithChildren<PanelProps>): React.JSX.Element {
+				return <div />;
+			}
+		`,
+		errors: [...propertyError("Visible"), ...propertyError("Size"), ...propertyError("Title")],
+	},
+	{
+		// a component-valued prop must be PascalCase, also through an alias
+		code: unindent`
+			import * as React from "react";
+
+			type Slot = React.ComponentType<{ readonly label: string }>;
+
+			interface PanelProps {
+				readonly header: Slot;
+			}
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+		errors: propertyError("header", "StrictPascalCase"),
+	},
+	{
+		// a render callback returns JSX but is not a component, so it takes the
+		// camelCase prop policy
+		code: unindent`
+			import * as React from "react";
+
+			interface ListProps {
+				readonly RenderItem: (index: number) => React.JSX.Element;
+			}
+
+			export function List(props: ListProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+		errors: propertyError("RenderItem", "strictCamelCase", "Type Method"),
+	},
+	{
+		// `@rbxts/react` uses the same type names
+		code: unindent`
+			import * as React from "@rbxts/react";
+
+			interface PanelProps {
+				readonly Size: number;
+				readonly Content: React.ComponentType;
+			}
+
+			export function Panel(props: PanelProps): React.ReactElement {
+				return React.createElement("Frame");
+			}
+
+			export const Card: React.FC<{ readonly Title: string }> = () => undefined;
+		`,
+		errors: [...propertyError("Size"), ...propertyError("Title")],
+	},
+	{
+		// a generic alias of a component type: `P` is bound to `PanelProps`
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			type View<P> = React.FC<P>;
+
+			export const Panel: View<PanelProps> = () => <div />;
+		`),
+		errors: propertyError("Size"),
+	},
+	{
+		// generic props aliases: the argument and the alias body are both props
+		code: withPanelProps(unindent`
+			import * as React from "react";
+
+			type Identity<P> = P;
+
+			type WithExtra<P> = Identity<P> & { readonly Extra: number };
+
+			export function Panel(props: WithExtra<PanelProps>): React.JSX.Element {
+				return <div />;
+			}
+		`),
+		errors: [...propertyError("Extra"), ...propertyError("Size")],
+	},
+	{
+		// renamed imports resolve to React's declarations
+		code: withPanelProps(unindent`
+			import type { FC as View } from "react";
+			import { memo as remember } from "react";
+			import * as React from "react";
+
+			interface CardProps {
+				readonly Title: string;
+			}
+
+			export const Panel: View<PanelProps> = () => <div />;
+
+			export const Card = remember((props: CardProps) => null);
+		`),
+		errors: [...propertyError("Title"), ...propertyError("Size")],
+	},
+	{
+		// the `react-x` `importSource` setting adds its package to React's
+		code: unindent`
+			import { memo } from "other-lib";
+
+			interface Shape {
+				readonly Width: number;
+			}
+
+			export const Measure = memo((shape: Shape) => shape.Width);
+		`,
+		errors: propertyError("Width"),
+		settings: { "react-x": { importSource: "other-lib" } },
+	},
+	{
+		// a `componentProp` selector outranks an unconstrained one, whatever
+		// the declaration order
+		code: unindent`
+			import * as React from "react";
+
+			interface PanelProps {
+				readonly Size: number;
+			}
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+		errors: propertyError("Size"),
+		options: [
+			{ format: ["strictCamelCase", "StrictPascalCase"], selector: "typeProperty" },
+			{ componentProp: true, format: ["strictCamelCase"], selector: "typeProperty" },
+		],
+	},
+	{
+		// props declared in a file without a component: `src/card.tsx` takes
+		// `CardProps`, and `CardProps` inherits `BaseProps`
+		code: unindent`
+			export interface BaseProps {
+				readonly Visible?: boolean;
+			}
+
+			export interface CardProps extends BaseProps {
+				readonly Title: string;
+			}
+
+			export interface CardHookResult {
+				readonly InputBegan?: () => void;
+			}
+		`,
+		errors: [...propertyError("Visible"), ...propertyError("Title")],
+		filename: componentPropertySharedProps,
+	},
+];
+
+const componentPropertyValid: Array<Exclude<ValidTestCase, string>> = [
+	{
+		// the hook result from the issue: its fields are not props, so the
+		// broad policy applies
+		code: unindent`
+			type OnInput = (input: unknown) => void;
+
+			interface GuiInputEvents {
+				readonly InputBegan?: OnInput;
+				readonly InputChanged?: OnInput;
+				readonly InputEnded?: OnInput;
+			}
+
+			interface GuiHoverStateResult {
+				readonly guiEvents: GuiInputEvents;
+				readonly isHovered: boolean;
+			}
+
+			export function useGuiHoverState(): GuiHoverStateResult {
+				return { guiEvents: {}, isHovered: false };
+			}
+		`,
+	},
+	{
+		// a `Props` suffix alone does not make a props type
+		code: withPanelProps(unindent`
+			import type * as React from "react";
+
+			export function usePanel(props: PanelProps): number {
+				return props.Size;
+			}
+		`),
+	},
+	{
+		// correct props: camelCase, with PascalCase component-valued props, an
+		// ordinary callback, and a render callback
+		code: unindent`
+			import * as React from "react";
+
+			interface PanelProps {
+				readonly size: number;
+				readonly Content: React.ComponentType;
+				readonly Footer?: React.FC<{ readonly note: string }>;
+				readonly onStateChange?: () => void;
+				readonly renderItem?: (index: number) => React.JSX.Element;
+			}
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+	},
+	{
+		// nested shapes are not props: `native`, event maps, and service bags
+		// keep the broad policy
+		code: unindent`
+			import * as React from "react";
+
+			interface GuiInputEvents {
+				readonly InputBegan?: () => void;
+			}
+
+			interface Services {
+				readonly DataStore: object;
+			}
+
+			interface PanelProps {
+				readonly native: { readonly BackgroundColor3: number };
+				readonly events: GuiInputEvents;
+				readonly services: Services;
+			}
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+	},
+	{
+		// members picked from another shape keep that shape's names
+		code: unindent`
+			import * as React from "react";
+
+			interface GuiInputEvents {
+				readonly InputBegan?: () => void;
+				readonly InputEnded?: () => void;
+			}
+
+			type PanelProps = Pick<GuiInputEvents, "InputBegan"> & { readonly size: number };
+
+			export function Panel(props: PanelProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+	},
+	{
+		// a lowercase render function is not a component
+		code: unindent`
+			import * as React from "react";
+
+			interface RowData {
+				readonly Label: string;
+			}
+
+			export function renderRow(row: RowData): React.JSX.Element {
+				return <div className={row.Label} />;
+			}
+		`,
+	},
+	{
+		// a capitalized function that does not render is not a component
+		code: unindent`
+			interface VectorArgs {
+				readonly X: number;
+			}
+
+			export function Vector(args: VectorArgs): number {
+				return args.X;
+			}
+		`,
+	},
+	{
+		// a local function named `memo` is not React's wrapper
+		code: unindent`
+			interface Shape {
+				readonly Width: number;
+			}
+
+			function memo<T>(value: T): T {
+				return value;
+			}
+
+			export const Measure = memo((shape: Shape) => shape.Width);
+		`,
+	},
+	{
+		// another library's `memo` is not React's wrapper
+		code: unindent`
+			import { memo } from "other-lib";
+
+			interface Shape {
+				readonly Width: number;
+			}
+
+			export const Measure = memo((shape: Shape) => shape.Width);
+		`,
+	},
+	{
+		// a project type named `ComponentType` is not React's
+		code: unindent`
+			interface ComponentType<P> {
+				create(props: P): void;
+			}
+
+			interface FactoryInput {
+				readonly Seed: number;
+			}
+
+			export const Factory: ComponentType<FactoryInput> = { create: () => undefined };
+		`,
+	},
+	{
+		// a project class named `Component` is not React's
+		code: unindent`
+			class Component<P> {
+				public constructor(public readonly props: P) {}
+			}
+
+			interface StoreState {
+				readonly Count: number;
+			}
+
+			export class Store extends Component<StoreState> {}
+		`,
+	},
+	{
+		// `Omit` takes members that another shape owns, like `Pick`: the
+		// members of `BaseButtonProps` keep the broad policy
+		code: unindent`
+			import * as React from "react";
+
+			interface BaseButtonProps {
+				readonly Label: string;
+				readonly OnClick: () => void;
+			}
+
+			interface ButtonProps extends Omit<BaseButtonProps, "OnClick"> {
+				readonly size: number;
+			}
+
+			export function Button(props: ButtonProps): React.JSX.Element {
+				return <div />;
+			}
+		`,
+	},
+	{
+		// the cross-file hook result stays on the broad policy
+		code: readFileSync(componentPropertySharedProps, "utf8"),
+		filename: componentPropertySharedProps,
+	},
+];
+
+run({
+	name: `${RULE_NAME}/component-prop`,
+	invalid: componentPropertyInvalid.map(withComponentPropertyDefaults),
+	parserOptions: {
+		ecmaVersion: "latest",
+		project: path.join(componentPropertyDirectory, "tsconfig.json"),
+		sourceType: "module",
+		tsconfigRootDir: componentPropertyDirectory,
+	},
+	rule: namingConvention,
+	valid: componentPropertyValid.map(withComponentPropertyDefaults),
+});
+
+it.each([
+	["false", false],
+	["a string", "yes"],
+])("rejects a `componentProp` config set to %s", (_label, componentProperty) => {
+	expect(() => {
+		verifyWithOptions({
+			componentProp: componentProperty,
+			format: ["camelCase"],
+			selector: "typeProperty",
+		});
+	}).toThrow();
+});
+
+it("rejects `componentProp` on a selector that cannot match it", () => {
+	expect(() => {
+		verifyWithOptions({ componentProp: true, format: ["camelCase"], selector: "parameter" });
+	}).toThrow();
+});
+
+it("accepts a `componentProp` config set to true", () => {
+	expect(() => {
+		verifyWithOptions({ componentProp: true, format: ["camelCase"], selector: "typeProperty" });
 	}).not.toThrow();
 });
 

@@ -1,0 +1,5 @@
+# Intentional: `componentProp` in `naming-convention` reads React's types, and
+# the fixture ships minimal stand-ins for them. Override the root
+# `node_modules` exclusion for this fixture.
+!node_modules/
+!node_modules/**

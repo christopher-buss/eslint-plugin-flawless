@@ -135,6 +135,11 @@ export const TYPE_REFERENCE_STRICT_WEIGHT: number = 1 << 24;
 export const TYPE_ARGUMENT_LOOSE_WEIGHT: number = 1 << 25;
 export const TYPE_ARGUMENT_STRICT_WEIGHT: number = 1 << 26;
 
+// weight for `componentProp`. It narrows a selector to the members of props
+// types, a role rather than a type, so it sorts ahead of every matcher above:
+// a general `typeProperty` policy never shadows the props policy.
+export const COMPONENT_PROP_WEIGHT: number = 1 << 27;
+
 export const UnderscoreOption = {
 	forbid: 1,
 	allow: 2,

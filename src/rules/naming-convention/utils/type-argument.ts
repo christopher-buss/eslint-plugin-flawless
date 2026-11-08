@@ -3,9 +3,9 @@ import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type ts from "typescript";
-import { SymbolFlags, SyntaxKind } from "typescript";
+import { SyntaxKind } from "typescript";
 
-import { moduleSpecifierMatches } from "./module-specifier";
+import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
 import type { Context, TypeArgumentReference } from "./types";
 
 /**
@@ -104,11 +104,10 @@ function resolveCalleeSymbol(callee: TSESTree.Expression, context: Context): ts.
 	}
 
 	const services = getParserServices(context);
-	const symbol = services.getSymbolAtLocation(callee);
-	const resolved =
-		symbol !== undefined && (symbol.flags & SymbolFlags.Alias) !== 0
-			? services.program.getTypeChecker().getAliasedSymbol(symbol)
-			: symbol;
+	const resolved = resolveAliasedSymbol(
+		services.getSymbolAtLocation(callee),
+		services.program.getTypeChecker(),
+	);
 
 	calleeSymbolCache.set(callee, resolved ?? null);
 
@@ -173,18 +172,7 @@ function symbolMatchesReference(symbol: ts.Symbol, { name, from }: TypeArgumentR
 		return false;
 	}
 
-	if (from === undefined) {
-		return true;
-	}
-
-	const { declarations } = symbol;
-	if (!declarations || declarations.length === 0) {
-		return false;
-	}
-
-	return declarations.some((declaration) => {
-		return moduleSpecifierMatches(declaration.getSourceFile().fileName, from);
-	});
+	return from === undefined || symbolDeclaredIn(symbol, from);
 }
 
 /**
