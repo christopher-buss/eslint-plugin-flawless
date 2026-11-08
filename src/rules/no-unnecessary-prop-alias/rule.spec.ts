@@ -177,6 +177,16 @@ const valid: Array<ValidTestCase> = [
 		`,
 		filename,
 	},
+	// With reportConflicts, aliases that renaming another binding cannot remove.
+	{
+		code: tsx`
+			function Field({ label: Label, for: htmlFor }: FieldProps) {
+				return <Label htmlFor={htmlFor} />;
+			}
+		`,
+		filename,
+		options: [{ reportConflicts: true }],
+	},
 	// Render callbacks are not components.
 	{
 		code: tsx`
@@ -343,6 +353,44 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ messageId }],
 		filename,
 	},
+	// With reportConflicts, an alias that avoids a name conflict.
+	{
+		code: tsx`
+			import { value } from "./store";
+			function Input({ value: inputValue }: InputProps) {
+				return <input value={inputValue} defaultValue={value} />;
+			}
+		`,
+		errors: [{ data: { key: "value", alias: "inputValue" }, messageId: "conflictingAlias" }],
+		filename,
+		options: [{ reportConflicts: true }],
+	},
+	{
+		code: tsx`
+			function Row(props: RowProps) {
+				const { id: rowId, title: heading } = props;
+				const { id } = useContext(RowContext);
+				return <div data-row={rowId} data-id={id}>{heading}</div>;
+			}
+		`,
+		errors: [
+			{ data: { key: "id", alias: "rowId" }, messageId: "conflictingAlias" },
+			{ data: { key: "title", alias: "heading" }, messageId },
+		],
+		filename,
+		options: [{ reportConflicts: true }],
+	},
+	{
+		code: tsx`
+			function Input({ value: initialValue }: InputProps) {
+				const [value, setValue] = useState(initialValue);
+				return <input value={value} onChange={(event) => setValue(event.target.value)} />;
+			}
+		`,
+		errors: [{ messageId: "conflictingAlias" }],
+		filename,
+		options: [{ reportConflicts: true }],
+	},
 	// memo and forwardRef components.
 	{
 		code: tsx`
@@ -380,6 +428,12 @@ void runDefaultParser({
 			code: "function Panel({ title: heading }) { return <h1>{heading}</h1>; }",
 			errors: [{ messageId }],
 			filename: "file.jsx",
+		},
+		{
+			code: 'import { Icon } from "./icons"; function Field({ Icon: I }) { return <><Icon /><I /></>; }',
+			errors: [{ messageId: "conflictingAlias" }],
+			filename: "file.jsx",
+			options: [{ reportConflicts: true }],
 		},
 	],
 	languageOptions: {

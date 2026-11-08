@@ -8,13 +8,24 @@ import { RESERVED_WORDS } from "../../utils/reserved-words";
 export const RULE_NAME = "no-unnecessary-prop-alias";
 
 const MESSAGE_ID = "unnecessaryAlias";
+const MESSAGE_ID_CONFLICT = "conflictingAlias";
 
-export type MessageIds = typeof MESSAGE_ID;
+export type MessageIds = typeof MESSAGE_ID | typeof MESSAGE_ID_CONFLICT;
 
-export type Options = [];
+export interface NoUnnecessaryPropertyAliasOptions {
+	/**
+	 * Also report an alias that avoids a name conflict, and ask to rename the
+	 * other binding instead.
+	 */
+	readonly reportConflicts?: boolean;
+}
+
+export type Options = [NoUnnecessaryPropertyAliasOptions?];
 
 const messages = {
 	[MESSAGE_ID]: "Prop '{{key}}' is aliased to '{{alias}}'. Use the prop name '{{key}}' instead.",
+	[MESSAGE_ID_CONFLICT]:
+		"Prop '{{key}}' is aliased to '{{alias}}' because another binding is named '{{key}}'. Rename that binding and use the prop name '{{key}}'.",
 };
 
 type Scope = TSESLint.Scope.Scope;
@@ -213,6 +224,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	const selectorKeys = Object.keys(collector.visitor);
 	// Most files have no alias, so the scope work in `Program:exit` is skipped.
 	let hasAlias = false;
+	let reportConflicts = false;
 	// JSX tags that read a binding, found from the AST. The default parser of
 	// ESLint does not record JSX tags as references.
 	let jsxTags: Array<{ name: string; node: TSESTree.JSXOpeningElement }> = [];
@@ -280,13 +292,14 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				continue;
 			}
 
-			if (hasNameConflict(alias, key)) {
+			const hasConflict = hasNameConflict(alias, key);
+			if (hasConflict && !reportConflicts) {
 				continue;
 			}
 
 			context.report({
 				data: { key, alias: aliasName },
-				messageId: MESSAGE_ID,
+				messageId: hasConflict ? MESSAGE_ID_CONFLICT : MESSAGE_ID,
 				node: property,
 			});
 		}
@@ -330,6 +343,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			collector = core.getFunctionComponentCollector(context);
 			hasAlias = false;
 			jsxTags = [];
+			reportConflicts = context.options[0]?.reportConflicts ?? false;
 		},
 		"JSXOpeningElement": function (node: TSESTree.JSXOpeningElement): void {
 			const name = getJsxTagBinding(node.name);
@@ -386,8 +400,9 @@ export const noUnnecessaryPropertyAlias: FlawlessRuleModule<Options, MessageIds>
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
+		defaultOptions: [{ reportConflicts: false }],
 		meta: {
+			defaultOptions: [{ reportConflicts: false }],
 			docs: {
 				description: "Disallow unnecessary aliases when destructuring component props",
 				recommended: false,
@@ -395,7 +410,19 @@ export const noUnnecessaryPropertyAlias: FlawlessRuleModule<Options, MessageIds>
 			},
 			hasSuggestions: false,
 			messages,
-			schema: [],
+			schema: [
+				{
+					additionalProperties: false,
+					properties: {
+						reportConflicts: {
+							description:
+								"Also report an alias that avoids a name conflict, and ask to rename the other binding instead.",
+							type: "boolean",
+						},
+					},
+					type: "object",
+				},
+			],
 			type: "suggestion",
 		},
 	});

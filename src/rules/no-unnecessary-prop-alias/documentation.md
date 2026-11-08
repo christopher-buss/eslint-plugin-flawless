@@ -92,4 +92,58 @@ function Row({ id: rowId }: RowProps): ReactNode {
 
 ## Options
 
-This rule has no options.
+<!-- begin auto-generated rule options list -->
+
+| Name              | Description                                                                                    | Type    | Default |
+| :---------------- | :--------------------------------------------------------------------------------------------- | :------ | :------ |
+| `reportConflicts` | Also report an alias that avoids a name conflict, and ask to rename the other binding instead. | Boolean | `false` |
+
+<!-- end auto-generated rule options list -->
+
+### `reportConflicts`
+
+When `true`, the rule also reports an alias that avoids a name conflict. The
+message asks you to rename the other binding, so that the prop keeps its public
+name. The default is `false`.
+
+The option does not change these cases, because a rename of another binding
+cannot remove the alias:
+
+- an alias that renders a component-valued prop as JSX (`label: Label`);
+- a key that cannot be a binding name (`for`, `"aria-label"`, a computed key).
+
+Examples of **incorrect** code with `{ "reportConflicts": true }`:
+
+```tsx
+import { value } from "./store";
+
+function Input({ value: inputValue }: InputProps): ReactNode {
+	return <input defaultValue={value} value={inputValue} />;
+}
+
+function Row({ id: rowId }: RowProps): ReactNode {
+	const { id } = useContext(RowContext);
+	return <div data-id={id} data-row={rowId} />;
+}
+```
+
+Examples of **correct** code with `{ "reportConflicts": true }`:
+
+```tsx
+import { value as storedValue } from "./store";
+
+function Input({ value }: InputProps): ReactNode {
+	return <input defaultValue={storedValue} value={value} />;
+}
+
+function Row({ id }: RowProps): ReactNode {
+	const { id: contextId } = useContext(RowContext);
+	return <div data-id={contextId} data-row={id} />;
+}
+```
+
+```json
+{
+	"flawless/no-unnecessary-prop-alias": ["error", { "reportConflicts": true }]
+}
+```
