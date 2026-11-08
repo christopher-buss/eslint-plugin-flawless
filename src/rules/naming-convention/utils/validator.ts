@@ -13,7 +13,6 @@ import {
 	PredefinedFormatValueToKey,
 	Selector,
 	TypeModifier,
-	TypeModifierValueToKey,
 	UnderscoreOption,
 } from "./enums";
 import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format";
@@ -21,6 +20,14 @@ import { moduleSpecifierMatches } from "./module-specifier";
 import { isMetaSelector, isMethodOrPropertySelector, selectorTypeToMessageString } from "./shared";
 import { isInMatchingTypeArgument } from "./type-argument";
 import type { Context, NormalizedSelector, TypeReference } from "./types";
+
+// Flag tests avoid `checker.typeToString`, which prints the full structure of
+// object types only to compare the text against a primitive name.
+const PRIMITIVE_FLAG = {
+	[TypeModifier.boolean]: TypeFlags.Boolean,
+	[TypeModifier.number]: TypeFlags.Number,
+	[TypeModifier.string]: TypeFlags.String,
+} as const;
 
 type ValidatorNode = TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier;
 
@@ -695,13 +702,12 @@ function isCorrectType(
 			case TypeModifier.boolean:
 			case TypeModifier.number:
 			case TypeModifier.string: {
+				const flag = PRIMITIVE_FLAG[allowedType];
 				predicates.push((inner) => {
-					const typeString = checker.typeToString(
-						// this will resolve things like true => boolean, 'a' =>
-						// string and 1 => number
-						checker.getWidenedType(checker.getBaseTypeOfLiteralType(inner)),
-					);
-					return typeString === TypeModifierValueToKey[allowedType];
+					// this will resolve things like true => boolean, 'a' =>
+					// string and 1 => number
+					const base = checker.getWidenedType(checker.getBaseTypeOfLiteralType(inner));
+					return (base.flags & flag) !== 0;
 				});
 				break;
 			}

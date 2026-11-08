@@ -184,8 +184,19 @@ function create(
 		}
 	}
 
-	const { unusedVariables } = collectVariables(context);
+	// The unused-variable analysis is costly and only feeds `Modifier.unused`,
+	// so skip it when no selector can match on that modifier.
+	const usesUnusedModifier = context.options.some(
+		(option) => option.modifiers?.includes("unused") === true,
+	);
+	const unusedVariables = usesUnusedModifier
+		? collectVariables(context).unusedVariables
+		: undefined;
 	function isUnused(name: string, initialScope: null | TSESLint.Scope.Scope): boolean {
+		if (unusedVariables === undefined) {
+			return false;
+		}
+
 		let variable: null | TSESLint.Scope.Variable = null;
 		let scope = initialScope;
 		while (scope) {

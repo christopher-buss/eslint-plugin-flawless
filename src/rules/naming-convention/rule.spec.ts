@@ -3853,6 +3853,74 @@ run({
 	valid,
 });
 
+/**
+ * Options that make a lower-case variable report only when its type matches
+ * the given primitive, so "invalid" means the `types` selector matched.
+ *
+ * @param type - The primitive type modifier under test.
+ * @returns The rule options.
+ */
+function primitiveTypeOptions(type: "boolean" | "number" | "string"): Options {
+	return [{ format: ["UPPER_CASE"], selector: "variable", types: [type] }];
+}
+
+const unusedOnlyOptions: Options = [
+	{ format: ["UPPER_CASE"], modifiers: ["unused"], selector: "variable" },
+];
+
+run({
+	name: `${RULE_NAME}/primitive-types-and-unused`,
+	invalid: [
+		{
+			code: "const unusedValue = 1;",
+			errors: [{ messageId: "doesNotMatchFormat" }],
+			options: unusedOnlyOptions,
+		},
+		...[
+			'const a = "x";',
+			// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal type.
+			'const b: `id-${string}` = "id-1";',
+			'const c: Uppercase<string> = "X";',
+			'type Id = string; const d: Id = "x";',
+		].map((code) => {
+			return {
+				code,
+				errors: [{ messageId: "doesNotMatchFormat" as const }],
+				options: primitiveTypeOptions("string"),
+			};
+		}),
+		...["const e: boolean = Math.random() > 0.5;", "const f = true;"].map((code) => {
+			return {
+				code,
+				errors: [{ messageId: "doesNotMatchFormat" as const }],
+				options: primitiveTypeOptions("boolean"),
+			};
+		}),
+		{
+			code: "const g: 1 | 2 = 1;",
+			errors: [{ messageId: "doesNotMatchFormat" }],
+			options: primitiveTypeOptions("number"),
+		},
+	],
+	rule: namingConvention,
+	valid: [
+		{
+			code: "const usedValue = 1; console.log(usedValue);",
+			options: unusedOnlyOptions,
+		},
+		...[
+			'enum S { A = "a" } const h = S.A;',
+			'const i: string & { __brand: "x" } = "x" as never;',
+			'const j = new String("x");',
+			"function k<T extends string>(value: T) { const l = value; return l; }",
+		].map((code) => {
+			return { code, options: primitiveTypeOptions("string") };
+		}),
+		{ code: "enum N { A } const m = N.A;", options: primitiveTypeOptions("number") },
+		{ code: "const n = { flag: true };", options: primitiveTypeOptions("boolean") },
+	],
+});
+
 // `from` positive matches (bare package + relative path) need a project whose
 // module resolution can reach a real `/node_modules/<pkg>/` directory, so they
 // run against the dedicated fixture at `fixtures/naming-convention/from-match`.
