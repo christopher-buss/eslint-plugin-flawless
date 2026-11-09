@@ -79,7 +79,11 @@ interface Service {
 	handle17(value: number): void;
 	handle18(value: number): void;
 	handle19(value: number): void;
+	at(index: number): void;
 	emit(event: string): void;
+	get(key: string): void;
+	has(key: string): void;
+	keys(): void;
 	map(callback: () => void): void;
 	push(value: number): void;
 	set(key: string, value: number): void;
@@ -174,6 +178,51 @@ export function busy(): void {
 	service.push(19);
 	service.emit("e19");
 	service.set("k19", 19);
+}
+
+// Common names that the readonly collection interfaces also have (`get`, `has`,
+// `keys`, `at`) on a large non-builtin type: each pays the type lookup.
+export function common(): void {
+	service.get("k0");
+	service.has("k0");
+	service.keys();
+	service.at(0);
+	service.get("k1");
+	service.has("k1");
+	service.keys();
+	service.at(1);
+	service.get("k2");
+	service.has("k2");
+	service.keys();
+	service.at(2);
+	service.get("k3");
+	service.has("k3");
+	service.keys();
+	service.at(3);
+	service.get("k4");
+	service.has("k4");
+	service.keys();
+	service.at(4);
+	service.get("k5");
+	service.has("k5");
+	service.keys();
+	service.at(5);
+	service.get("k6");
+	service.has("k6");
+	service.keys();
+	service.at(6);
+	service.get("k7");
+	service.has("k7");
+	service.keys();
+	service.at(7);
+	service.get("k8");
+	service.has("k8");
+	service.keys();
+	service.at(8);
+	service.get("k9");
+	service.has("k9");
+	service.keys();
+	service.at(9);
 }
 
 // A table name on a large non-builtin type pays the type lookup, then passes.
