@@ -4,5 +4,6 @@
 		"jsx": "preserve"
 	},
 	"files": ["./file.ts", "./file.tsx"],
-	"include": ["**/*"]
+	"include": ["**/*"],
+	"exclude": ["no-ignored-return/no-lib"]
 }

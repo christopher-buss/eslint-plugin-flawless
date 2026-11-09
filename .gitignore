@@ -12,3 +12,6 @@ temp
 .eslintcache
 
 .claude/worktrees
+
+# A fixture that stands in for an installed type package.
+!fixtures/no-ignored-return/no-lib/node_modules
