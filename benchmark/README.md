@@ -59,7 +59,9 @@ fixtures by hand. The coarse fixtures under `cases/all/` are hand-written.
 `config.ts` walks a `COARSE` manifest, one entry per rule, each pointing at a
 hand-written fixture in `cases/all/<rule>.tsx` sized so its median lifts clear of
 sub-millisecond noise. A rule that only reports with options (naming-convention,
-…) passes them through the manifest, mirroring its eslint config shape.
+…) passes them through the manifest, mirroring its eslint config shape. A typed
+rule (no-ignored-return) points at a fixture in `cases/typed/` instead, so it
+gets a program; `scaling.ts` builds one for every fixture there.
 
 Coverage is enforced: `config.ts` cross-checks the manifest against the built
 plugin's rule list and, if a rule is neither profiled in detail, present in

@@ -131,6 +131,14 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 		) {
 			throw new Error(`${subject.ruleId} x${copies}: expected 10 verified removals`);
 		}
+		if ("expectedReports" in subject && subject.expectedReports !== undefined) {
+			const reports = messages.filter((message) => message.ruleId === ruleKey).length;
+			if (reports !== subject.expectedReports * copies) {
+				throw new Error(
+					`${subject.ruleId} x${copies}: expected ${subject.expectedReports * copies} reports, received ${reports}`,
+				);
+			}
+		}
 
 		if (
 			subject.ruleId === "no-incompatible-assertion-types" &&
