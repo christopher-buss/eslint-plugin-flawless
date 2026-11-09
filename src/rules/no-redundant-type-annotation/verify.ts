@@ -131,18 +131,23 @@ export function verifyAnnotations<C extends Candidate>(
 		// printed.
 		const snapshots = new Map(
 			selected.map((candidate) => {
+				const thisFree = thisFreeCall(candidate.owner);
 				return [
 					candidate,
-					observedNodes(candidate, references.get(candidate.owner) ?? []).map((node) => {
-						let type: string | undefined;
-						return {
-							node,
-							original: (): string => {
-								type ??= print(checker, node, declarationKey);
-								return type;
-							},
-						};
-					}),
+					observedNodes(candidate, references.get(candidate.owner) ?? [], thisFree).map(
+						(node) => {
+							let type: string | undefined;
+							const omitThis = thisFree?.arrows.has(node) === true;
+							return {
+								node,
+								omitThis,
+								original: (): string => {
+									type ??= print(checker, node, declarationKey, omitThis);
+									return type;
+								},
+							};
+						},
+					),
 				];
 			}),
 		);
@@ -213,12 +218,12 @@ export function verifyAnnotations<C extends Candidate>(
 					}
 				}
 
-				for (const { node, original } of snapshots.get(candidate) ?? []) {
+				for (const { node, omitThis, original } of snapshots.get(candidate) ?? []) {
 					const replacement = mapped(node);
 					const inferred =
 						replacement === undefined
 							? undefined
-							: print(fresh, replacement, originalKey);
+							: print(fresh, replacement, originalKey, omitThis);
 					const type = original();
 					if (inferred !== type) {
 						problems.set(
@@ -445,6 +450,13 @@ function fileKey(name: string): string {
 // Project references come from the parser's resolution; a reference it could
 // not resolve stays unresolved in speculative programs as well.
 const sharedHosts = new WeakMap<ts.Program, SharedHost>();
+
+/** A call whose arrow arguments are compared without `this`. */
+interface ThisFreeCall {
+	/** The call's arguments that are arrows, without their parentheses. */
+	readonly arrows: ReadonlySet<ts.Node>;
+	readonly call: ts.CallExpression | ts.NewExpression;
+}
 
 function memoize<T>(read: (name: string) => T): (name: string) => T {
 	const cache = new Map<string, T>();
@@ -882,13 +894,61 @@ function collectReturns(node: ts.Node, found: Array<ts.Node>): void {
 	});
 }
 
+function skipParentheses(node: ts.Expression): ts.Expression {
+	return ts.isParenthesizedExpression(node) ? skipParentheses(node.expression) : node;
+}
+
+/**
+ * Finds the call that receives the arrow whose parameter a candidate
+ * annotates. Without the annotation, the arrow's signature takes `this` from
+ * its context, but an arrow never reads that `this`, so the call's arrow
+ * arguments are compared without it. The call observes a `this` that
+ * escapes.
+ * @param owner - The candidate's owner.
+ * @returns The call and its arrow arguments, or undefined.
+ */
+function thisFreeCall(owner: Candidate["owner"]): ThisFreeCall | undefined {
+	if (!ts.isParameter(owner) || !ts.isArrowFunction(owner.parent)) {
+		return undefined;
+	}
+
+	let argument: ts.Expression = owner.parent;
+	while (ts.isParenthesizedExpression(argument.parent)) {
+		argument = argument.parent;
+	}
+
+	const call = argument.parent;
+	if (
+		(!ts.isCallExpression(call) && !ts.isNewExpression(call)) ||
+		call.arguments?.includes(argument) !== true
+	) {
+		return undefined;
+	}
+
+	const arrows = new Set<ts.Node>(call.arguments.map(skipParentheses).filter(ts.isArrowFunction));
+	return { arrows, call };
+}
+
 function observedNodes(
 	candidate: Candidate,
 	references: ReadonlyArray<ts.Identifier>,
+	thisFree: ThisFreeCall | undefined,
 ): Array<ts.Node> {
 	const nodes: Array<ts.Node> = [candidate.owner];
 	if (ts.isParameter(candidate.owner)) {
 		nodes.push(candidate.owner.parent);
+	}
+
+	// The `this` left out of the arrows' types can still escape through the
+	// call's inference, as in `wrap<F>(callback: F): F`. The call and its
+	// other arguments observe that.
+	if (thisFree !== undefined) {
+		const { call } = thisFree;
+		const self = candidate.owner.parent;
+		nodes.push(
+			call,
+			...(call.arguments ?? []).map(skipParentheses).filter((node) => node !== self),
+		);
 	}
 
 	// A use site's parent observes its contextual typing and overload choice,
@@ -948,6 +1008,30 @@ function observedNodes(
 }
 
 /**
+ * Drops the `this` parameter from a function type.
+ * @param factory - The node factory.
+ * @param node - The type node.
+ * @returns The function type without `this`, or the node unchanged.
+ */
+function withoutThis(factory: ts.NodeFactory, node: ts.TypeNode): ts.TypeNode {
+	if (!ts.isFunctionTypeNode(node)) {
+		return node;
+	}
+
+	const [first] = node.parameters;
+	if (first === undefined || !ts.isIdentifier(first.name) || first.name.text !== "this") {
+		return node;
+	}
+
+	return factory.updateFunctionTypeNode(
+		node,
+		node.typeParameters,
+		factory.createNodeArray(node.parameters.slice(1)),
+		node.type,
+	);
+}
+
+/**
  * Normalize property ordering, preserving every overload and intersection.
  * Names are qualified with their declarations, so two types that print the
  * same, such as a shadowed `Options`, compare as different.
@@ -957,6 +1041,7 @@ function createTypePrinter(): (
 	checker: ts.TypeChecker,
 	node: ts.Node,
 	locate: (declaration: ts.Node) => string,
+	omitThis?: boolean,
 ) => string {
 	const cache = new Map<string, string>();
 	const printer = ts.createPrinter({ removeComments: true });
@@ -964,6 +1049,7 @@ function createTypePrinter(): (
 		checker: ts.TypeChecker,
 		type: ts.Type,
 		locate: (declaration: ts.Node) => string,
+		omitThis: boolean,
 	): string {
 		const keys = new Set<string>();
 		function add(name: ts.EntityName): void {
@@ -988,21 +1074,22 @@ function createTypePrinter(): (
 
 		const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
 		if (node !== undefined) {
-			visit(node);
+			visit(omitThis ? withoutThis(ts.factory, node) : node);
 		}
 
 		return [...keys].sort().join(", ");
 	}
 
-	return (checker, node, locate) => {
+	return (checker, node, locate, omitThis = false) => {
 		const target =
 			ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
 				? node.name
 				: node;
 		const type = checker.getTypeAtLocation(target);
 		const text = checker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation);
-		const suffix = ` [${declarations(checker, type, locate)}]`;
-		const cached = cache.get(text);
+		const suffix = ` [${declarations(checker, type, locate, omitThis)}]`;
+		const key = omitThis ? `omit-this ${text}` : text;
+		const cached = cache.get(key);
 		if (cached !== undefined) {
 			return cached + suffix;
 		}
@@ -1049,7 +1136,22 @@ function createTypePrinter(): (
 					return updated;
 				}
 
-				return (root) => ts.visitNode(root, visit) as ts.SourceFile;
+				return (root) => {
+					const [alias] = root.statements;
+					const stripped =
+						omitThis && alias !== undefined && ts.isTypeAliasDeclaration(alias)
+							? context.factory.updateSourceFile(root, [
+									context.factory.updateTypeAliasDeclaration(
+										alias,
+										alias.modifiers,
+										alias.name,
+										alias.typeParameters,
+										withoutThis(context.factory, alias.type),
+									),
+								])
+							: root;
+					return ts.visitNode(stripped, visit) as ts.SourceFile;
+				};
 			},
 		]);
 		try {
@@ -1059,7 +1161,7 @@ function createTypePrinter(): (
 			}
 
 			const result = printer.printFile(resultFile).trim();
-			cache.set(text, result);
+			cache.set(key, result);
 			return result + suffix;
 		} finally {
 			transformed.dispose();

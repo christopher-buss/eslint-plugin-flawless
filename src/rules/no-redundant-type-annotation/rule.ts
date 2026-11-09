@@ -989,6 +989,23 @@ function create(
 	}
 
 	/**
+	 * Reports whether two signatures give `this` the same type.
+	 *
+	 * @param before - The signature before inference.
+	 * @param after - The signature after inference.
+	 * @returns True when both lack a `this` or both type it the same.
+	 */
+	function hasSameThisType(before: Signature, after: Signature): boolean {
+		const thisBefore = before.thisParameter;
+		const thisAfter = after.thisParameter;
+		if (thisBefore === undefined || thisAfter === undefined) {
+			return thisBefore === thisAfter;
+		}
+
+		return checker.getTypeOfSymbol(thisBefore) === checker.getTypeOfSymbol(thisAfter);
+	}
+
+	/**
 	 * Reports whether a generic call types a callback argument's parameters
 	 * without inference.
 	 *
@@ -1027,14 +1044,11 @@ function create(
 		}
 
 		// A `this` typed by a type parameter, as in an array method with a
-		// `thisArg`, is inferred too.
-		const thisBefore = before.thisParameter;
-		const thisAfter = after.thisParameter;
+		// `thisArg`, is inferred too. An arrow cannot bind `this`, so it ignores
+		// that type.
 		if (
-			(thisBefore === undefined) !== (thisAfter === undefined) ||
-			(thisBefore !== undefined &&
-				thisAfter !== undefined &&
-				checker.getTypeOfSymbol(thisBefore) !== checker.getTypeOfSymbol(thisAfter))
+			callback.type !== AST_NODE_TYPES.ArrowFunctionExpression &&
+			!hasSameThisType(before, after)
 		) {
 			return false;
 		}
