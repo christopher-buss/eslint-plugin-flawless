@@ -63,13 +63,15 @@ const valid: Array<ValidTestCase> = [
 		declare function first<T>(items: Array<T>): T;
 		const value: string = first([]);
 	`,
-	// The callback's `this` is inferred from the call.
+	// A function callback's `this` is inferred from the call.
 	unindent`
 		declare function map<U, This = undefined>(
 			callback: (this: This, item: string) => U,
 			thisArg?: This,
 		): Array<U>;
-		const lengths = map((item: string) => item.length);
+		const lengths = map(function (item: string) {
+			return item.length;
+		});
 	`,
 	// No initializer, so inference has nothing to work from.
 	unindent`
@@ -731,6 +733,39 @@ const invalid: Array<InvalidTestCase> = [
 		output: unindent`
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason) => String(reason));
+		`,
+	},
+	// An arrow callback ignores an inferred `this`.
+	{
+		code: unindent`
+			declare function map<U, This = undefined>(
+				callback: (this: This, item: string) => U,
+				thisArg?: This,
+			): Array<U>;
+			const lengths = map((item: string) => item.length);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function map<U, This = undefined>(
+				callback: (this: This, item: string) => U,
+				thisArg?: This,
+			): Array<U>;
+			const lengths = map((item) => item.length);
+		`,
+	},
+	{
+		code: unindent`
+			declare const items: ReadonlyArray<unknown>;
+			declare const list: Array<string>;
+			const flat = items.flatMap((item: unknown) => [item]);
+			const flatList = list.flatMap((item: string) => [item]);
+		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
+		output: unindent`
+			declare const items: ReadonlyArray<unknown>;
+			declare const list: Array<string>;
+			const flat = items.flatMap((item) => [item]);
+			const flatList = list.flatMap((item) => [item]);
 		`,
 	},
 	// An object literal method takes its context from the property it fills.

@@ -293,6 +293,25 @@ function hasBody(node: ts.Node): boolean {
 }
 
 /**
+ * Reports whether a node is a call argument, inside any parentheses.
+ *
+ * @param node - The node to test.
+ * @returns True when a call or `new` receives the node as an argument.
+ */
+function isCallArgument(node: ts.Expression): boolean {
+	let argument: ts.Expression = node;
+	while (ts.isParenthesizedExpression(argument.parent)) {
+		argument = argument.parent;
+	}
+
+	const { parent } = argument;
+	return (
+		(ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+		parent.arguments?.includes(argument) === true
+	);
+}
+
+/**
  * Records a file's diagnostics and the printed types of what it declares, in
  * document order.
  *
@@ -328,8 +347,47 @@ function takeSnapshot(program: ts.Program, fileName: string): Snapshot {
 		types.push(`${label}: ${type}`);
 	}
 
-	function visit(node: ts.Node): void {
+	const printer = ts.createPrinter({ removeComments: true });
+	/**
+	 * Records the type of an arrow call argument without `this`. An arrow
+	 * never reads `this`, so the contextual `this` it gains without
+	 * annotations is left out. The call still records a `this` that escapes.
+	 *
+	 * @param node - The arrow function.
+	 */
+	function recordArrowArgument(node: ts.ArrowFunction): void {
+		const type = checker.typeToTypeNode(
+			checker.getTypeAtLocation(node),
+			undefined,
+			ts.NodeBuilderFlags.NoTruncation,
+		);
+		const [first] = type !== undefined && ts.isFunctionTypeNode(type) ? type.parameters : [];
 		if (
+			type === undefined ||
+			!ts.isFunctionTypeNode(type) ||
+			first === undefined ||
+			!ts.isIdentifier(first.name) ||
+			first.name.text !== "this"
+		) {
+			record("function", node);
+			return;
+		}
+
+		const stripped = ts.factory.updateFunctionTypeNode(
+			type,
+			type.typeParameters,
+			ts.factory.createNodeArray(type.parameters.slice(1)),
+			type.type,
+		);
+		types.push(
+			`function: ${printer.printNode(ts.EmitHint.Unspecified, stripped, node.getSourceFile())}`,
+		);
+	}
+
+	function visit(node: ts.Node): void {
+		if (ts.isArrowFunction(node) && isCallArgument(node)) {
+			recordArrowArgument(node);
+		} else if (
 			ts.isVariableDeclaration(node) ||
 			ts.isPropertyDeclaration(node) ||
 			(ts.isParameter(node) && hasBody(node.parent))

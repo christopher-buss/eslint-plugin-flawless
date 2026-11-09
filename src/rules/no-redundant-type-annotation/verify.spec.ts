@@ -297,6 +297,36 @@ pair({ make: (value: string) => value, use: (value: string) => {} });`;
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
+	it("ignores the contextual this an arrow callback gains", () => {
+		const code = `declare const list: Array<string>;
+const flat = list.flatMap((item: string) => [item]);`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
+	});
+
+	it("keeps an arrow annotation when the contextual this escapes", () => {
+		const code = `declare function wrap<F extends (this: Date, item: string) => number>(callback: F): F;
+const read = wrap((item: string) => item.length);`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toStrictEqual([]);
+	});
+
+	it("accepts sibling arrow callbacks that both gain a contextual this", () => {
+		const code = `declare function pair<T = undefined>(a: (this: T, x: string) => void, b: (this: T, y: string) => void): void;
+pair((x: string) => {}, (y: string) => {});`;
+		const { candidates, program, source } = project(code);
+		const { accepted } = verifyAnnotations(program, source, candidates);
+		expect(accepted).toHaveLength(2);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("ignores the contextual this of a parenthesized arrow callback", () => {
+		const code = `declare const list: Array<string>;
+const flat = list.flatMap(((item: string) => [item]));`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
+	});
+
 	it("does not verify a source from another copy of TypeScript", () => {
 		const { candidates, program, source } = project(
 			"declare function read(): string; const value: string = read();",
