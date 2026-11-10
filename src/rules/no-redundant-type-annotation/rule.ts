@@ -92,6 +92,8 @@ interface Removal {
 	readonly annotation: TSESTree.TSTypeAnnotation;
 	/** The report's message identifier. */
 	readonly messageId: MessageIds;
+	/** Report only when the verifier accepts the removal. */
+	readonly requiresProof?: boolean;
 	/** The annotated type to show in the report. */
 	readonly type: Type;
 }
@@ -886,15 +888,14 @@ function create(
 	let exportedNames: Set<string> | undefined;
 	let isScriptFile: boolean | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
-	const candidates: Array<Candidate & Removal & { readonly requiresProof: boolean }> = [];
+	const candidates: Array<Candidate & Removal> = [];
 
 	/**
 	 * Save a potential removal for verification after visiting the file.
 	 * @param removal - The removal to verify.
-	 * @param requiresProof - Report only when the verifier accepts the removal.
 	 */
-	function collect(removal: Removal, requiresProof = false): void {
-		const { annotation } = removal;
+	function collect(removal: Removal): void {
+		const { annotation, requiresProof } = removal;
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (
 			isVariableDeclaration(owner) ||
@@ -904,13 +905,13 @@ function create(
 			isArrowFunction(owner) ||
 			isMethodDeclaration(owner)
 		) {
-			candidates.push({ ...removal, owner, range: annotation.range, requiresProof });
+			candidates.push({ ...removal, owner, range: annotation.range });
 			return;
 		}
 
 		// The verifier cannot model this owner. Report without a fix rather
 		// than dropping the report, unless only a proof can justify it.
-		if (!requiresProof) {
+		if (requiresProof !== true) {
 			report(removal, false);
 		}
 	}
@@ -2599,8 +2600,8 @@ function create(
 			// The verifier checks a limited number of candidates. A candidate
 			// that needs proof goes first, so other candidates cannot hide it.
 			const { accepted, unverified } = verifyAnnotations(services.program, source, [
-				...candidates.filter(({ requiresProof }) => requiresProof),
-				...candidates.filter(({ requiresProof }) => !requiresProof),
+				...candidates.filter(({ requiresProof }) => requiresProof === true),
+				...candidates.filter(({ requiresProof }) => requiresProof !== true),
 			]);
 			for (const candidate of accepted) {
 				report(candidate, true);
@@ -2610,7 +2611,7 @@ function create(
 			// never autofix it. A candidate that needs proof stays silent: a
 			// later fix pass can verify it.
 			for (const { candidate } of unverified) {
-				if (candidate.requiresProof) {
+				if (candidate.requiresProof === true) {
 					continue;
 				}
 
@@ -2716,10 +2717,12 @@ function create(
 				return;
 			}
 
-			collect(
-				{ annotation, messageId: MESSAGE_ID, type: annotationType },
-				dependence === "unproven",
-			);
+			collect({
+				annotation,
+				messageId: MESSAGE_ID,
+				requiresProof: dependence === "unproven",
+				type: annotationType,
+			});
 		},
 	};
 }
