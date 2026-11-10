@@ -277,7 +277,9 @@ must then reach an anchor:
 - a function's written return type;
 - an argument of a call, `new`, `super`, tagged template, or JSX element whose
   callee has exactly one signature and no type parameters to infer, or whose
-  type arguments are written out.
+  type arguments are written out;
+- a direct argument of a call or `new` whose callee has overloads, as described
+  below.
 
 Any other position ends the search without an anchor, and the parameter is not
 reported. An unfamiliar shape costs a missed report, never a wrong fix.
@@ -305,9 +307,9 @@ wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 
 An overloaded callee gives the callback the context of the overload that the
 call resolves to. The parameter types can be what picks that overload. When no
-overload is generic, and the callback is a direct argument of the call, the rule
-reports a parameter only when the verifier proves that its removal alone is safe
-(see below):
+overload is generic, and the callback is a direct argument of the call, the
+parameter needs proof (see
+[Verification before reporting](#verification-before-reporting)):
 
 ```ts
 interface Emitter {
