@@ -306,9 +306,8 @@ wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 ```
 
 An overloaded callee gives the callback the context of the overload that the
-call resolves to. The parameter types can be what picks that overload. When no
-overload is generic, and the callback is a direct argument of the call, the
-parameter needs proof (see
+call resolves to. The parameter types can be what picks that overload. When the
+callback is a direct argument of the call, the parameter needs proof (see
 [Verification before reporting](#verification-before-reporting)):
 
 ```ts
@@ -330,7 +329,28 @@ on((payload: string) => report(payload)); // NOT reported — without it, the fi
 
 An overload that types the parameter as `any`, such as a catch-all
 `(...args: Array<any>) => void`, gives no type to compare, so a callback that
-resolves to it is not reported. A generic overloaded callee is left alone.
+resolves to it is not reported.
+
+When an overload is generic, such as the type predicate overload of `find`,
+`filter` or `every`, inference can change a parameter's type. So a parameter is
+checked only when each overload gives its position the same type, and that type
+does not depend on a type parameter of the overload. Other positions of the same
+callback can differ:
+
+```ts
+interface Item {
+	ok: boolean;
+}
+
+declare const items: Array<Item>;
+
+items.find((item: Item) => item.ok); // reported — each overload gives `item` the type `Item`
+
+declare function each<T>(items: Array<T>, callback: (item: T) => void): void;
+declare function each(items: string, callback: (item: string) => void): void;
+
+each([1], (item: number) => report(item)); // NOT reported — `T` types `item`
+```
 
 A function that a callback returns is also left alone:
 
