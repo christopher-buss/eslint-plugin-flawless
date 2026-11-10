@@ -1654,15 +1654,20 @@ function create(
 			return false;
 		}
 
-		const resolved = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
+		const location = services.esTreeNodeToTSNodeMap.get(call);
+		const resolved = checker.getResolvedSignature(location);
 		const parameter = declared.parameters[index];
 		const target = resolved?.parameters[index];
 		if (parameter === undefined || target === undefined) {
 			return false;
 		}
 
-		const parameterType = checker.getNonNullableType(checker.getTypeOfSymbol(parameter));
-		const targetType = checker.getNonNullableType(checker.getTypeOfSymbol(target));
+		const parameterType = checker.getNonNullableType(
+			checker.getTypeOfSymbolAtLocation(parameter, location),
+		);
+		const targetType = checker.getNonNullableType(
+			checker.getTypeOfSymbolAtLocation(target, location),
+		);
 		if (parameterType === targetType) {
 			return true;
 		}
@@ -1692,7 +1697,10 @@ function create(
 				return from === to;
 			}
 
-			return checker.getTypeOfSymbol(from) === checker.getTypeOfSymbol(to);
+			return (
+				checker.getTypeOfSymbolAtLocation(from, location) ===
+				checker.getTypeOfSymbolAtLocation(to, location)
+			);
 		});
 
 		return (
