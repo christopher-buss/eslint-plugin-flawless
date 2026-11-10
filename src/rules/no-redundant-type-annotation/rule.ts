@@ -126,7 +126,8 @@ const messages = {
 
 /**
  * How an expression depends on the annotation's context: not at all, surely,
- * or through an untyped callback argument that only the verifier can clear.
+ * or through a callback that takes context from a call, which only the
+ * verifier can clear.
  */
 type ContextDependence = "dependent" | "independent" | "unproven";
 
@@ -1783,9 +1784,9 @@ function create(
 	 * `contextForwardedOperands` finds, and call arguments.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns `"unproven"` when only an untyped callback argument, whose
-	 *   context the call may take from the annotation, makes the expression
-	 *   depend on its context.
+	 * @returns `"unproven"` when only a callback that takes context from a
+	 *   call, whose context the call may take from the annotation, makes the
+	 *   expression depend on its context.
 	 */
 	function contextDependence(node: TSESTree.Node): ContextDependence {
 		// A function here is not a call argument, so its context cannot be
