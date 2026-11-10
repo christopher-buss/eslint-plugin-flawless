@@ -1378,13 +1378,14 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 	},
 
-	// Past the verification work limit, a removal is not verified. A variable
-	// that needs proof is then not reported, and one that does not is
-	// reported without a fix. The next fix pass verifies and removes it.
+	// Past the verification work limit, a removal is not verified. It is
+	// reported without a fix, and the next fix pass verifies and removes it.
+	// A variable that needs proof is verified first, so other candidates do
+	// not hide it.
 	...[
 		{
 			code: "const last: Array<Item> = items.filter((item) => item.ok);",
-			errors: 10,
+			errors: 11,
 			fixed: "const last = items.filter((item) => item.ok);",
 		},
 		{

@@ -2594,11 +2594,12 @@ function create(
 		},
 		"Program:exit": function (node: TSESTree.Program): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
-			const { accepted, unverified } = verifyAnnotations(
-				services.program,
-				source,
-				candidates,
-			);
+			// The verifier checks a limited number of candidates. A candidate
+			// that needs proof goes first, so other candidates cannot hide it.
+			const { accepted, unverified } = verifyAnnotations(services.program, source, [
+				...candidates.filter(({ requiresProof }) => requiresProof),
+				...candidates.filter(({ requiresProof }) => !requiresProof),
+			]);
 			for (const candidate of accepted) {
 				report(candidate, true);
 			}

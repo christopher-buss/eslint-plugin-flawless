@@ -463,14 +463,16 @@ parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
 
 Verification is bounded to twelve speculative programs per lint of a file. At
-most ten candidate annotations are verified in that pass. Candidates past that
-limit are still reported but carry no fix, except a variable whose callback
-argument needs the verifier (see above), which is not reported; `eslint --fix`
-repeats its fix passes, and each pass verifies further candidates after earlier
-fixes have been applied. If the compiler fails during verification, the
-annotations are left alone and not reported. Files with no candidates create no
-speculative program. Speculative programs reuse the parser program's resolved
-project references, module resolution cache, and file system lookups.
+most ten candidate annotations are verified in that pass. A variable whose
+callback argument needs the verifier (see above) is verified before the other
+candidates, so other candidates do not change whether it is reported. Candidates
+past that limit are still reported but carry no fix, except such a variable,
+which is not reported; `eslint --fix` repeats its fix passes, and each pass
+verifies further candidates after earlier fixes have been applied. If the
+compiler fails during verification, the annotations are left alone and not
+reported. Files with no candidates create no speculative program. Speculative
+programs reuse the parser program's resolved project references, module
+resolution cache, and file system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,
