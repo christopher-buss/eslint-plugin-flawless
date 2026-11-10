@@ -1499,6 +1499,22 @@ function create(
 	}
 
 	/**
+	 * Reports whether a function takes something from its contextual type:
+	 * the type of an untyped parameter, an untyped `this`, or the type of a
+	 * returned value, such as a literal.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the function depends on its context.
+	 */
+	function takesContext(node: ContextualFunction): boolean {
+		return (
+			node.params.some(isUntypedParameter) ||
+			usesContextualThis(node) ||
+			returnsContextTypedValue(node)
+		);
+	}
+
+	/**
 	 * Reports whether a function's return value takes its type from the
 	 * function's contextual type.
 	 *
@@ -1570,11 +1586,7 @@ function create(
 	 */
 	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter) ||
-				usesContextualThis(node) ||
-				returnsContextTypedValue(node)
-				? "dependent"
-				: "independent";
+			return takesContext(node) ? "dependent" : "independent";
 		}
 
 		// A template expression is a template type only because the context
@@ -1744,14 +1756,7 @@ function create(
 					return contextDependence(argument);
 				}
 
-				// A callback takes its context through untyped parameters, an
-				// untyped `this`, or a returned value whose type the context
-				// shapes, such as a literal.
-				const takesContext =
-					argument.params.some(isUntypedParameter) ||
-					usesContextualThis(argument) ||
-					returnsContextTypedValue(argument);
-				return !takesContext || isCallbackContextFixed(node, index, argument)
+				return !takesContext(argument) || isCallbackContextFixed(node, index, argument)
 					? "independent"
 					: "unproven";
 			});
