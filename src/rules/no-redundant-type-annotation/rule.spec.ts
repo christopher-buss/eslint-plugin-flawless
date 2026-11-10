@@ -596,6 +596,27 @@ const valid: Array<ValidTestCase> = [
 		declare const stream: Stream;
 		stream.on("end", (chunk: Uint8Array) => {});
 	`,
+	// The annotation fails the type predicate overload, so the second
+	// overload resolves. Without it, `value` is `string`.
+	unindent`
+		declare function first<S extends string>(predicate: (value: string) => value is S): S;
+		declare function first(predicate: (value: number) => unknown): number;
+		first((value: number) => value > 0);
+	`,
+	// The generic overload types `item` by its type parameter, which
+	// inference can change.
+	unindent`
+		declare function each<T>(items: Array<T>, callback: (item: T) => void): void;
+		declare function each(items: string, callback: (item: string) => void): void;
+		each([1], (item: number) => {});
+	`,
+	// With a generic overload, overloads that give `value` different types
+	// are left alone.
+	unindent`
+		declare function on<K extends string>(key: K, callback: (value: string) => void): void;
+		declare function on(key: number, callback: (value: number) => void): void;
+		on(1, (value: number) => {});
+	`,
 	// A function the callback returns infers the generic's return type, so its
 	// annotation is the only source of the context it would appear to restate.
 	unindent`
@@ -1064,6 +1085,73 @@ const invalid: Array<InvalidTestCase> = [
 			declare const stream: Stream;
 			stream.on("data", (chunk) => {});
 		`,
+	},
+	// Both overloads of `find` give `item` the element type, and the generic
+	// one does not give it the type parameter `S`.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const first = items.find((item: Item) => item.ok);
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const first = items.find((item) => item.ok);
+		`,
+	},
+	{
+		code: unindent`
+			declare const values: Array<string | undefined>;
+			const present = values.filter((value: string | undefined, index: number) => value !== undefined && index > 0);
+		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
+		output: unindent`
+			declare const values: Array<string | undefined>;
+			const present = values.filter((value, index) => value !== undefined && index > 0);
+		`,
+	},
+	{
+		code: unindent`
+			declare const values: Array<number | string>;
+			const allStrings = values.every((value: number | string) => typeof value === "string");
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare const values: Array<number | string>;
+			const allStrings = values.every((value) => typeof value === "string");
+		`,
+	},
+	// Both overloads give `value` the type `Item`, but `index` gets a different
+	// type from each, so only `value` is reported.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare function pick<S extends Item>(predicate: (value: Item, index: number) => value is S): S;
+			declare function pick(predicate: (value: Item, index: string) => unknown): Item;
+			pick((value: Item, index: string) => value.ok);
+		`,
+		errors: [{ column: 12, messageId: parameterMessageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare function pick<S extends Item>(predicate: (value: Item, index: number) => value is S): S;
+			declare function pick(predicate: (value: Item, index: string) => unknown): Item;
+			pick((value, index: string) => value.ok);
+		`,
+	},
+	// Past the work limit, a parameter of a generic overload pick is not
+	// verified, so it is not reported. The next fix pass verifies it.
+	{
+		code: [
+			"declare const items: Array<string>;",
+			...Array.from({ length: 11 }, () => "items.find((item: string) => item.length);"),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
+		output: [
+			"declare const items: Array<string>;",
+			...Array.from({ length: 11 }, () => "items.find((item) => item.length);"),
+		].join("\n"),
 	},
 	// Past the work limit, a parameter of an overload pick is not verified, so
 	// it is not reported. The next fix pass verifies it.

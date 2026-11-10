@@ -360,18 +360,19 @@ function isGeneric(signature: Signature): boolean {
 
 /**
  * Reports whether a call passes a callback to a callee with more than one
- * signature, none of them generic.
+ * signature.
  *
  * Then the callback takes its context from the overload that the call
- * resolves to, and inference takes no part in that choice. This is a cost
- * filter, not a proof: the callback's parameter types can be what picks
- * the overload, so the verifier decides.
+ * resolves to. This is a cost filter, not a proof: the callback's parameter
+ * types can be what picks the overload, so the verifier decides. When an
+ * overload is generic, `isSharedByOverloads` also limits which parameters
+ * can count.
  *
  * @param callbackCall - The call that receives the callback.
- * @returns True when the callee has overloads, and none is generic.
+ * @returns True when the callee has overloads.
  */
-function hasPlainOverloads({ signatures }: CallbackCall): boolean {
-	return signatures.length > 1 && !signatures.some(isGeneric);
+function hasOverloads({ signatures }: CallbackCall): boolean {
+	return signatures.length > 1;
 }
 
 /**
@@ -1512,6 +1513,62 @@ function create(
 	}
 
 	/**
+	 * Reports whether a parameter of a callback that an overloaded callee
+	 * types has a type that no overload's inference can change.
+	 *
+	 * Without a generic overload, inference takes no part, so every position
+	 * counts. Otherwise, each overload must give the position the same type
+	 * object, before inference, as the resolved overload gives it after
+	 * inference. Instantiation gives back the same object for a type that
+	 * names no inferred type parameter, so this proves that the type does not
+	 * depend on them, as `value` in `find`'s type predicate overload does
+	 * not. A false answer only means "not proven".
+	 *
+	 * @param callbackCall - The overloaded call that receives the callback.
+	 * @param position - The parameter's position, after any `this` parameter.
+	 * @returns True when every overload gives the position the same type.
+	 */
+	function isSharedByOverloads(
+		{ call, index, resolved, signatures }: CallbackCall,
+		position: number,
+	): boolean {
+		if (!signatures.some(isGeneric)) {
+			return true;
+		}
+
+		const spread = call.arguments
+			.slice(0, index)
+			.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement);
+		if (spread) {
+			return false;
+		}
+
+		function getTypeAt(signature: Signature | undefined): Type | undefined {
+			if (
+				signature === undefined ||
+				index >= signature.parameters.length ||
+				isRestParameter(signature, index)
+			) {
+				return undefined;
+			}
+
+			const callbackSignature = getCallbackSignature(signature.parameters[index]);
+			if (callbackSignature === undefined || isRestParameter(callbackSignature, position)) {
+				return undefined;
+			}
+
+			const parameter = callbackSignature.parameters[position];
+			return parameter && checker.getTypeOfSymbol(parameter);
+		}
+
+		const resolvedType = getTypeAt(resolved);
+		return (
+			resolvedType !== undefined &&
+			signatures.every((signature) => getTypeAt(signature) === resolvedType)
+		);
+	}
+
+	/**
 	 * Finds the node that fixes a function expression's contextual type,
 	 * independent of any annotation this rule could remove.
 	 *
@@ -1528,7 +1585,7 @@ function create(
 	 * search does not know, finds no anchor, so an unknown context costs a
 	 * report rather than a wrong fix.
 	 *
-	 * A callback that a call passes to an overload (see `hasPlainOverloads`) is
+	 * A callback that a call passes to an overload (see `hasOverloads`) is
 	 * anchored to the call, but only the verifier can prove a removal safe.
 	 *
 	 * @param node - The function expression to locate.
@@ -1579,7 +1636,7 @@ function create(
 				(callbackCall !== undefined && hasSettledCallbackParameters(callbackCall, node))
 			) {
 				anchor = { node: call };
-			} else if (callbackCall !== undefined && hasPlainOverloads(callbackCall)) {
+			} else if (callbackCall !== undefined && hasOverloads(callbackCall)) {
 				anchor = { node: call, overloadedCall: callbackCall };
 			}
 
@@ -2885,6 +2942,11 @@ function create(
 				index,
 			);
 			if (contextualParameterType === undefined) {
+				continue;
+			}
+
+			const { overloadedCall } = anchor;
+			if (overloadedCall !== undefined && !isSharedByOverloads(overloadedCall, index)) {
 				continue;
 			}
 

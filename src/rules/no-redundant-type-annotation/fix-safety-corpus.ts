@@ -2357,4 +2357,28 @@ export const corpus: ReadonlyArray<CorpusCase> = [
 			on((a: string) => a.length);
 		`,
 	},
+	{
+		name: "overload pick: array methods with a type predicate overload",
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			declare const values: Array<number | string | undefined>;
+			export const first: Item | undefined = items.find((item: Item) => item.ok);
+			export const present = values.filter((value: number | string | undefined, index: number) => value !== undefined && index > 0);
+			export const strings: Array<string> = values.filter((value: number | string | undefined) => typeof value === "string");
+			export const all: boolean = values.every((value: number | string | undefined) => value !== undefined);
+		`,
+	},
+	{
+		name: "overload pick: generic overload",
+		code: unindent`
+			interface Item { ok: boolean }
+			declare function pick<S extends Item>(predicate: (value: Item, index: number) => value is S): S;
+			declare function pick(predicate: (value: Item, index: string) => unknown): Item;
+			pick((value: Item, index: string) => value.ok);
+			declare function first<S extends string>(predicate: (value: string) => value is S): S;
+			declare function first(predicate: (value: number) => unknown): number;
+			first((value: number) => value > 0);
+		`,
+	},
 ];
