@@ -161,6 +161,58 @@ const invalid: Array<InvalidTestCase> = [
 			- name: item10
 		`,
 	},
+	// Natural order matches the natural-compare package used by yml.
+	{
+		code: unindent`
+			- name: a1
+			- name: a-1
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		output: unindent`
+			- name: a-1
+			- name: a1
+		`,
+	},
+	{
+		code: unindent`
+			- name: x10
+			- name: x 2
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		output: unindent`
+			- name: x 2
+			- name: x10
+		`,
+	},
+	{
+		code: unindent`
+			- name: a1
+			- name: a_b
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		output: unindent`
+			- name: a_b
+			- name: a1
+		`,
+	},
+	// pathPattern has no `u` flag, so an identity escape is valid.
+	{
+		code: unindent`
+			a-b:
+			  - name: b
+			  - name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: String.raw`^\["a\-b"\]$` }],
+		output: unindent`
+			a-b:
+			  - name: a
+			  - name: b
+		`,
+	},
 	// Case sensitive by default: uppercase sorts first.
 	{
 		code: unindent`

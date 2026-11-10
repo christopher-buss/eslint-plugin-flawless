@@ -1,6 +1,7 @@
 import type { JSONSchema, TSESLint } from "@typescript-eslint/utils";
 
 import type { YAMLSourceCode } from "eslint-plugin-yml";
+import naturalCompare from "natural-compare";
 import type { AST } from "yaml-eslint-parser";
 
 import type { EslintRuleModule } from "../../util";
@@ -25,20 +26,22 @@ interface SortSpec {
 	pathPattern: string;
 }
 
+type ResolvedOrder = Required<SortOrderObject>;
+
 type Context = YamlContext<MessageIds, Options>;
 
-type Entry = AST.YAMLContent | AST.YAMLWithMeta;
+type EntryNode = AST.YAMLContent | AST.YAMLWithMeta;
 
-interface Item {
+interface SortableEntry {
 	aliases: Set<string>;
 	anchors: Set<string>;
-	node: Entry;
+	node: EntryNode;
 	value: number | string;
 }
 
-interface Block {
+interface EntrySpan {
 	end: number;
-	item: Item;
+	item: SortableEntry;
 	start: number;
 }
 
@@ -72,39 +75,6 @@ const schema: JSONSchema.JSONSchema4 = {
 };
 
 /**
- * Compares two strings so that runs of digits compare by numeric value
- * (`item2` before `item10`); other characters compare by code unit.
- *
- * @param a - The first string.
- * @param b - The second string.
- * @returns A negative, zero, or positive number.
- */
-function naturalCompare(a: string, b: string): number {
-	const pattern = /\d+|\D+/gu;
-	const aParts = a.match(pattern) ?? [];
-	const bParts = b.match(pattern) ?? [];
-	const length = Math.min(aParts.length, bParts.length);
-	for (let index = 0; index < length; index += 1) {
-		const aPart = aParts[index] ?? "";
-		const bPart = bParts[index] ?? "";
-		if (aPart === bPart) {
-			continue;
-		}
-
-		if (/^\d/u.test(aPart) && /^\d/u.test(bPart)) {
-			const difference = Number(aPart) - Number(bPart);
-			if (difference !== 0) {
-				return difference;
-			}
-		}
-
-		return aPart < bPart ? -1 : 1;
-	}
-
-	return aParts.length - bParts.length;
-}
-
-/**
  * Builds the pairwise order check, with the same semantics as the order object
  * of `yml/sort-sequence-values`: strings compare by code unit (or naturally),
  * numbers numerically, and values of mixed types are always in order.
@@ -113,10 +83,10 @@ function naturalCompare(a: string, b: string): number {
  * @returns Whether `a` may come before `b`.
  */
 function makeIsValidOrder({
-	caseSensitive = true,
-	natural = false,
-	type = "asc",
-}: SortOrderObject): (a: Item, b: Item) => boolean {
+	caseSensitive,
+	natural,
+	type,
+}: ResolvedOrder): (a: SortableEntry, b: SortableEntry) => boolean {
 	return (a, b): boolean => {
 		const [first, second] = type === "desc" ? [b.value, a.value] : [a.value, b.value];
 		if (typeof first === "string" && typeof second === "string") {
@@ -133,15 +103,11 @@ function makeIsValidOrder({
 	};
 }
 
-function orderText({
-	caseSensitive = true,
-	natural = false,
-	type = "asc",
-}: SortOrderObject): string {
+function orderText({ caseSensitive, natural, type }: ResolvedOrder): string {
 	return `${natural ? "natural " : ""}${caseSensitive ? "" : "insensitive "}${type}ending`;
 }
 
-function unwrap(node: Entry | null): AST.YAMLContent | null {
+function unwrap(node: EntryNode | null): AST.YAMLContent | null {
 	return node?.type === "YAMLWithMeta" ? node.value : node;
 }
 
@@ -151,7 +117,10 @@ function unwrap(node: Entry | null): AST.YAMLContent | null {
  * @param node - The entry (or a descendant).
  * @param item - The anchor and alias sets to fill.
  */
-function collectAnchors(node: Entry | null, item: Pick<Item, "aliases" | "anchors">): void {
+function collectAnchors(
+	node: EntryNode | null,
+	item: Pick<SortableEntry, "aliases" | "anchors">,
+): void {
 	if (node === null) {
 		return;
 	}
@@ -198,7 +167,7 @@ function collectAnchors(node: Entry | null, item: Pick<Item, "aliases" | "anchor
  * @param next - The later entry.
  * @returns Whether the two entries must not swap.
  */
-function shouldKeepOrder(previous: Item, next: Item): boolean {
+function shouldKeepOrder(previous: SortableEntry, next: SortableEntry): boolean {
 	for (const alias of next.aliases) {
 		if (previous.anchors.has(alias)) {
 			return true;
@@ -215,9 +184,9 @@ function shouldKeepOrder(previous: Item, next: Item): boolean {
 }
 
 function bubbleSort(
-	items: ReadonlyArray<Item>,
-	isValidOrder: (a: Item, b: Item) => boolean,
-): Array<Item> {
+	items: ReadonlyArray<SortableEntry>,
+	isValidOrder: (a: SortableEntry, b: SortableEntry) => boolean,
+): Array<SortableEntry> {
 	const result = [...items];
 	let swapped = true;
 	while (swapped) {
@@ -249,7 +218,7 @@ function bubbleSort(
  * @param values - The target index of each entry, in source order.
  * @returns The source indices that do not need to move.
  */
-function longestIncreasing(values: ReadonlyArray<number>): Set<number> {
+function keptIndices(values: ReadonlyArray<number>): Set<number> {
 	const lengths = values.map(() => 1);
 	const previous = values.map(() => -1);
 	let best = -1;
@@ -275,6 +244,35 @@ function longestIncreasing(values: ReadonlyArray<number>): Set<number> {
 	}
 
 	return kept;
+}
+
+/**
+ * Picks what an out-of-place entry is reported against: the first earlier
+ * entry that should follow it, else the last later entry that should precede
+ * it.
+ *
+ * @param items - The entries in source order.
+ * @param positions - The sorted index of each entry.
+ * @param index - The source index of the out-of-place entry.
+ * @returns The other entry and the message to use, if any.
+ */
+function findTarget(
+	items: ReadonlyArray<SortableEntry>,
+	positions: ReadonlyArray<number>,
+	index: number,
+): undefined | { entry: SortableEntry; messageId: MessageIds } {
+	const position = positions[index] ?? 0;
+	const before = items.find(
+		(_other, otherIndex) => otherIndex < index && (positions[otherIndex] ?? 0) > position,
+	);
+	if (before !== undefined) {
+		return { entry: before, messageId: "shouldBeBefore" };
+	}
+
+	const after = items.findLast(
+		(_other, otherIndex) => otherIndex > index && (positions[otherIndex] ?? 0) < position,
+	);
+	return after === undefined ? undefined : { entry: after, messageId: "shouldBeAfter" };
 }
 
 /**
@@ -304,7 +302,7 @@ function pathOf(node: AST.YAMLSequence, text: string): string {
 				? `.${name}${path}`
 				: `[${JSON.stringify(name)}]${path}`;
 		} else if (parent.type === "YAMLSequence") {
-			path = `[${parent.entries.indexOf(current as Entry)}]${path}`;
+			path = `[${parent.entries.indexOf(current as EntryNode)}]${path}`;
 		}
 
 		current = parent;
@@ -314,7 +312,7 @@ function pathOf(node: AST.YAMLSequence, text: string): string {
 	return path.startsWith(".") ? path.slice(1) : path;
 }
 
-function toItem(entry: Entry | null, key: string): Item | undefined {
+function toItem(entry: EntryNode | null, key: string): SortableEntry | undefined {
 	const mapping = unwrap(entry);
 	if (entry === null || mapping?.type !== "YAMLMapping") {
 		return undefined;
@@ -332,7 +330,7 @@ function toItem(entry: Entry | null, key: string): Item | undefined {
 		return undefined;
 	}
 
-	const item: Item = {
+	const item: SortableEntry = {
 		aliases: new Set(),
 		anchors: new Set(),
 		node: entry,
@@ -349,7 +347,10 @@ function create(context: Context): TSESLint.RuleListener {
 	}
 
 	const specs = options.map((spec) => {
-		return { ...spec, order: spec.order ?? {}, pattern: new RegExp(spec.pathPattern, "u") };
+		const { caseSensitive = true, natural = false, type = "asc" } = spec.order ?? {};
+		const order: ResolvedOrder = { caseSensitive, natural, type };
+		// No `u` flag, matching yml: patterns such as `^a\-b$` stay valid.
+		return { ...spec, order, pattern: new RegExp(spec.pathPattern) };
 	});
 	if (specs.length === 0) {
 		return {};
@@ -393,12 +394,12 @@ function create(context: Context): TSESLint.RuleListener {
 
 	function buildFix(
 		sequence: AST.YAMLSequence,
-		items: ReadonlyArray<Item>,
-		sorted: ReadonlyArray<Item>,
+		items: ReadonlyArray<SortableEntry>,
+		sorted: ReadonlyArray<SortableEntry>,
 	): TSESLint.ReportFixFunction | undefined {
 		const text = sourceCode.getText();
 		const isBlock = sequence.style === "block";
-		const blocks: Array<Block> = items.map((item) => {
+		const blocks: Array<EntrySpan> = items.map((item) => {
 			return isBlock
 				? { end: trailingEnd(item.node), item, start: leadingStart(item.node) }
 				: { end: item.node.range[1], item, start: item.node.range[0] };
@@ -443,7 +444,7 @@ function create(context: Context): TSESLint.RuleListener {
 				return;
 			}
 
-			const items: Array<Item> = [];
+			const items: Array<SortableEntry> = [];
 			for (const entry of sequence.entries) {
 				const item = toItem(entry, spec.key);
 				if (item === undefined) {
@@ -455,7 +456,7 @@ function create(context: Context): TSESLint.RuleListener {
 
 			const sorted = bubbleSort(items, makeIsValidOrder(spec.order));
 			const positions = items.map((item) => sorted.indexOf(item));
-			const kept = longestIncreasing(positions);
+			const kept = keptIndices(positions);
 			if (kept.size === items.length) {
 				return;
 			}
@@ -466,16 +467,7 @@ function create(context: Context): TSESLint.RuleListener {
 					continue;
 				}
 
-				const position = positions[index] ?? 0;
-				const before = items.find(
-					(_other, otherIndex) =>
-						otherIndex < index && (positions[otherIndex] ?? 0) > position,
-				);
-				const after = items.findLast(
-					(_other, otherIndex) =>
-						otherIndex > index && (positions[otherIndex] ?? 0) < position,
-				);
-				const target = before ?? after;
+				const target = findTarget(items, positions, index);
 				if (target === undefined) {
 					continue;
 				}
@@ -484,12 +476,12 @@ function create(context: Context): TSESLint.RuleListener {
 					data: {
 						key: spec.key,
 						orderText: orderText(spec.order),
-						targetValue: String(target.value),
+						targetValue: String(target.entry.value),
 						thisValue: String(item.value),
 					},
 					fix,
 					loc: item.node.loc,
-					messageId: before === undefined ? "shouldBeAfter" : "shouldBeBefore",
+					messageId: target.messageId,
 				});
 			}
 		},

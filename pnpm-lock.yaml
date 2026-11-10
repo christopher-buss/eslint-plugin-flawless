@@ -70,6 +70,9 @@ catalogs:
     jsonc-eslint-parser:
       specifier: ^3.1.0
       version: 3.1.0
+    natural-compare:
+      specifier: ^1.4.0
+      version: 1.4.0
     synckit:
       specifier: ^0.11.13
       version: 0.11.13
@@ -114,6 +117,9 @@ catalogs:
     '@isentinel/tsconfig':
       specifier: 3.0.0
       version: 3.0.0
+    '@types/natural-compare':
+      specifier: 1.4.3
+      version: 1.4.3
     '@types/node':
       specifier: 24.0.13
       version: 24.0.13
@@ -151,6 +157,9 @@ importers:
       jsonc-eslint-parser:
         specifier: catalog:runtime
         version: 3.1.0
+      natural-compare:
+        specifier: catalog:runtime
+        version: 1.4.0
       synckit:
         specifier: catalog:runtime
         version: 0.11.13
@@ -170,6 +179,9 @@ importers:
       '@isentinel/tsconfig':
         specifier: catalog:types
         version: 3.0.0(typescript@6.0.3)
+      '@types/natural-compare':
+        specifier: catalog:types
+        version: 1.4.3
       '@types/node':
         specifier: catalog:types
         version: 24.0.13
@@ -2155,6 +2167,9 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
+
+  '@types/natural-compare@1.4.3':
+    resolution: {integrity: sha512-XCAxy+Gg6+S6VagwzcknnvCKujj/bVv1q+GFuCrFEelqaZPqJoC+FeXLwc2dp+oLP7qDZQ4ZfQiTJQ9sIUmlLw==}
 
   '@types/node@24.0.13':
     resolution: {integrity: sha512-Qm9OYVOFHFYg3wJoTSrz80hoec5Lia/dPp84do3X7dZvLikQvM1YpmvTBEdIr/e+U8HTkFjLHLnl78K/qjf+jQ==}
@@ -6113,6 +6128,8 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/ms@2.1.0': {}
+
+  '@types/natural-compare@1.4.3': {}
 
   '@types/node@24.0.13':
     dependencies:

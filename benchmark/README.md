@@ -75,10 +75,9 @@ The remaining `UNSUPPORTED` exemptions are:
 - `prefer-read-only-props`, `no-materialized-filter-map`, and `no-unknown-returns`
   still need dedicated typed fixtures. The harness now supports real paths and
   typed projects; these rules have not yet been added to the typed manifest.
-- `toml-sort-keys`, `yaml-block-key-blank-lines`, and `yaml-sort-sequence-by-key`
-  lint TOML/YAML, whose
-  extensions are absent from the tool's `SUPPORTED_EXTENSIONS` (js/ts/jsx/tsx,
-  plus astro/svelte/vue).
+- `toml-sort-keys`, `yaml-block-key-blank-lines`, and
+  `yaml-sort-sequence-by-key` lint TOML/YAML, whose extensions are absent from
+  the tool's `SUPPORTED_EXTENSIONS` (js/ts/jsx/tsx, plus astro/svelte/vue).
 - `no-redundant-tsconfig-options` lints JSON, also outside those extensions.
 
 ## Typed annotation benchmarks

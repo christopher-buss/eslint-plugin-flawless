@@ -47,6 +47,7 @@ catalogs:
     "@typescript-eslint/scope-manager": ^8.62.1
     "@typescript-eslint/utils": ^8.62.1
     jsonc-eslint-parser: ^3.1.0
+    natural-compare: ^1.4.0
     synckit: ^0.11.13
     toml-eslint-parser: ^1.0.3
   testing:
@@ -64,6 +65,7 @@ catalogs:
     yaml-eslint-parser: 2.0.0
   types:
     "@isentinel/tsconfig": 3.0.0
+    "@types/natural-compare": 1.4.3
     "@types/node": 24.0.13
   utils:
     eslint-doc-generator: 3.6.0

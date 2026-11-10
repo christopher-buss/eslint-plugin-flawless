@@ -59,6 +59,7 @@
 		"@typescript-eslint/scope-manager": "catalog:runtime",
 		"@typescript-eslint/utils": "catalog:runtime",
 		"jsonc-eslint-parser": "catalog:runtime",
+		"natural-compare": "catalog:runtime",
 		"synckit": "catalog:runtime",
 		"toml-eslint-parser": "catalog:runtime"
 	},
@@ -67,6 +68,7 @@
 		"@eslint/markdown": "catalog:testing",
 		"@isentinel/eslint-config": "catalog:cli",
 		"@isentinel/tsconfig": "catalog:types",
+		"@types/natural-compare": "catalog:types",
 		"@types/node": "catalog:types",
 		"@typescript-eslint/eslint-plugin": "catalog:cli",
 		"@typescript-eslint/parser": "catalog:cli",
