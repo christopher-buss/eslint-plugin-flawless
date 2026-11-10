@@ -271,6 +271,37 @@ function getMaxArguments(signature: Signature, tuple: RestTuple | undefined): nu
 }
 
 /**
+ * Reports whether a parameter receives an argument that can infer a type
+ * parameter: one that is not an object or array literal.
+ *
+ * A tagged template passes its holes, so every parameter counts there.
+ *
+ * @param call - The call to inspect.
+ * @param signature - The callee's declared signature.
+ * @param index - The parameter position.
+ * @returns True when some argument at that position can infer.
+ */
+function receivesInferringArgument(
+	call: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
+	signature: Signature,
+	index: number,
+): boolean {
+	if (call.type === AST_NODE_TYPES.TaggedTemplateExpression) {
+		return true;
+	}
+
+	const received = isRestParameter(signature, index)
+		? call.arguments.slice(index)
+		: call.arguments.slice(index, index + 1);
+	return received.some((argument) => {
+		return (
+			argument.type !== AST_NODE_TYPES.ObjectExpression &&
+			argument.type !== AST_NODE_TYPES.ArrayExpression
+		);
+	});
+}
+
+/**
  * Counts the parameters a caller must pass, up to the first optional, default,
  * or rest parameter.
  *
@@ -1229,37 +1260,6 @@ function create(
 			.filter((type) => type !== undefined);
 		return (declared.getTypeParameters() ?? []).some((typeParameter) => {
 			return !parameterTypes.some((type) => mentionsType(type, typeParameter));
-		});
-	}
-
-	/**
-	 * Reports whether a parameter receives an argument that can infer a type
-	 * parameter: one that is not an object or array literal.
-	 *
-	 * A tagged template passes its holes, so every parameter counts there.
-	 *
-	 * @param call - The call to inspect.
-	 * @param signature - The callee's declared signature.
-	 * @param index - The parameter position.
-	 * @returns True when some argument at that position can infer.
-	 */
-	function receivesInferringArgument(
-		call: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
-		signature: Signature,
-		index: number,
-	): boolean {
-		if (call.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return true;
-		}
-
-		const received = isRestParameter(signature, index)
-			? call.arguments.slice(index)
-			: call.arguments.slice(index, index + 1);
-		return received.some((argument) => {
-			return (
-				argument.type !== AST_NODE_TYPES.ObjectExpression &&
-				argument.type !== AST_NODE_TYPES.ArrayExpression
-			);
 		});
 	}
 
