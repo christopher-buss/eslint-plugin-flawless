@@ -126,12 +126,9 @@ export function verifyAnnotations<C extends Candidate>(
 		});
 		const selected = eligible.slice(0, MAX_PROGRAMS - 2);
 		const references = referencesByOwner(checker, source, selected);
-		const narrowed = new Map(
-			selected.map((candidate) => {
-				const ownerReferences = references.get(candidate.owner) ?? [];
-				return [candidate, aliasNarrowedNodes(checker, candidate.owner, ownerReferences)];
-			}),
-		);
+		// The uses each candidate can narrow as an aliased condition. They are
+		// observed, and they couple the candidate with other removals.
+		const narrowed = new Map<C, ReadonlyArray<ts.Node>>();
 		// Original types are printed on first comparison. A rejected removal
 		// usually differs at its declaration, so its other uses are never
 		// printed.
@@ -139,23 +136,24 @@ export function verifyAnnotations<C extends Candidate>(
 			selected.map((candidate) => {
 				const thisFree = thisFreeCall(candidate.owner);
 				const ownerReferences = references.get(candidate.owner) ?? [];
+				const aliasNodes = aliasNarrowedNodes(checker, candidate.owner, ownerReferences);
+				narrowed.set(candidate, aliasNodes);
 				return [
 					candidate,
-					[
-						...observedNodes(candidate, ownerReferences, thisFree),
-						...(narrowed.get(candidate) ?? []),
-					].map((node) => {
-						let type: string | undefined;
-						const omitThis = thisFree?.arrows.has(node) === true;
-						return {
-							node,
-							omitThis,
-							original: (): string => {
-								type ??= print(checker, node, declarationKey, omitThis);
-								return type;
-							},
-						};
-					}),
+					[...observedNodes(candidate, ownerReferences, thisFree), ...aliasNodes].map(
+						(node) => {
+							let type: string | undefined;
+							const omitThis = thisFree?.arrows.has(node) === true;
+							return {
+								node,
+								omitThis,
+								original: (): string => {
+									type ??= print(checker, node, declarationKey, omitThis);
+									return type;
+								},
+							};
+						},
+					),
 				];
 			}),
 		);
