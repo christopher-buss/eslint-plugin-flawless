@@ -16,6 +16,22 @@ export interface CorpusCase {
 export const corpus: ReadonlyArray<CorpusCase> = [
 	...regressions,
 	{
+		name: "callback: context from the receiver",
+		code: unindent`
+			type Option = "a" | "b";
+			declare const options: ReadonlyArray<{ value: Option }>;
+			const values: Array<Option> = options.map(({ value }) => value);
+		`,
+	},
+	{
+		name: "callback: overloaded call, verified",
+		code: unindent`
+			interface Item { name: string; ok: boolean }
+			declare const items: Array<Item>;
+			const kept: Array<Item> = items.filter((item) => item.ok);
+		`,
+	},
+	{
 		name: "issue: arrow body fn",
 		code: unindent`
 			declare function map<T, R>(items: T[], fn: (item: T) => R): R[];

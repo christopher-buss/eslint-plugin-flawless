@@ -746,6 +746,41 @@ const valid: Array<ValidTestCase> = [
 			read(n: number): void {}
 		};
 	`,
+	// The annotation gives a callback argument its context, so the verifier
+	// keeps it.
+	...[
+		'const v1: Array<"a"> = items.map(() => "a");',
+		'const v2: Array<{ k: "a" }> = items.map(() => ({ k: "a" }));',
+		unindent`
+			declare function wrap<F>(f: F): F;
+			const h: (x: number) => number = wrap((x) => x);
+		`,
+		unindent`
+			declare function make<T>(cb: (x: T) => void): T;
+			const v3: string = make((x) => {});
+		`,
+		unindent`
+			declare function pick<T>(cb: (x: T) => void): T;
+			declare function pick(cb: (x: number) => void, n: number): number;
+			const v4: string = pick((x) => {});
+		`,
+		"const p1: Promise<number> = new Promise((resolve) => resolve(1));",
+		unindent`
+			declare function id<T>(x: T): T;
+			const v5: Array<"a"> = id(items.map(() => "a"));
+		`,
+		unindent`
+			declare function on2<E = string>(cb: (e: E) => void): E;
+			const v6: number = on2((e) => {});
+		`,
+	].map((code) => {
+		const prefix = unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const items: Array<Item>;
+		`;
+		return `${prefix}\n${code}`;
+	}),
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -1163,6 +1198,213 @@ const invalid: Array<InvalidTestCase> = [
 			});
 		`,
 	},
+
+	// An untyped callback takes its parameters from the receiver, not from
+	// the variable's annotation.
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			declare const options: ReadonlyArray<{ value: Option }>;
+			const values: Array<Option> = options.map(({ value }) => value);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			declare const options: ReadonlyArray<{ value: Option }>;
+			const values = options.map(({ value }) => value);
+		`,
+	},
+
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const v: Array<string> = items.map((i) => { return i.name; });
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const v = items.map((i) => { return i.name; });
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const v: Array<"a" | "b"> = items.map((i) => (i.ok ? "a" : "b"));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const v = items.map((i) => (i.ok ? "a" : "b"));
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const s: Set<string> = new Set(items.map((i) => i.name));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const s = new Set(items.map((i) => i.name));
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function run(cb: (x: number) => string): string;
+			const s: string = run((x) => String(x));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function run(cb: (x: number) => string): string;
+			const s = run((x) => String(x));
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function on(cb: (x: string) => void): 1;
+			declare function on(cb: (x: number) => void, n: number): 2;
+			const v: 1 = on((x) => {});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function on(cb: (x: string) => void): 1;
+			declare function on(cb: (x: number) => void, n: number): 2;
+			const v = on((x) => {});
+		`,
+	},
+	// A generic or overloaded call can take the callback's context from the
+	// annotation, so these are reported only when the removal is verified.
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const f: Array<Item> = items.filter((i) => i.ok);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const f = items.filter((i) => i.ok);
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const total: number = nums.reduce((a, b) => a + b, 0);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			const total = nums.reduce((a, b) => a + b, 0);
+		`,
+	},
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function pipe<T>(x: T, f: (v: T) => T): T;
+			const r: number = pipe(1, (v) => v);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			interface Item { name: string; ok: boolean; value: Option }
+			declare const options: ReadonlyArray<{ value: Option }>;
+			declare const items: Array<Item>;
+			declare const nums: Array<number>;
+			declare function pipe<T>(x: T, f: (v: T) => T): T;
+			const r = pipe(1, (v) => v);
+		`,
+	},
+
+	// Past the verification work limit, a removal is not verified. A variable
+	// that needs proof is then not reported, and one that does not is
+	// reported without a fix. The next fix pass verifies and removes it.
+	...[
+		{
+			code: "const last: Array<Item> = items.filter((item) => item.ok);",
+			errors: 10,
+			fixed: "const last = items.filter((item) => item.ok);",
+		},
+		{
+			code: "const last: Array<string> = items.map((item) => item.name);",
+			errors: 11,
+			fixed: "const last = items.map((item) => item.name);",
+		},
+	].map(({ code, errors, fixed }) => {
+		const prefix = unindent`
+			interface Item { name: string; ok: boolean }
+			declare const items: Array<Item>;
+			declare function read(): number;
+		`;
+		const reads = Array.from({ length: 10 }, (_, index) => `const n${index}`);
+		return {
+			code: [prefix, ...reads.map((name) => `${name}: number = read();`), code].join("\n"),
+			errors: Array.from({ length: errors }, () => ({ messageId })),
+			output: [prefix, ...reads.map((name) => `${name} = read();`), fixed].join("\n"),
+		};
+	}),
 
 	// --- parameters ---
 

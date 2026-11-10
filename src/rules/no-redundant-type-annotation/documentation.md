@@ -63,6 +63,22 @@ a context a single returned literal widens (`() => "div"` becomes
 literal, and any generator, is always skipped, even when the annotation really
 is redundant.
 
+A variable whose initializer passes a callback with untyped parameters is
+reported when the callback gets its context from the receiver or from a
+signature that is not generic:
+
+```ts
+type Option = "a" | "b";
+declare const options: ReadonlyArray<{ value: Option }>;
+
+const values: Array<Option> = options.map(({ value }) => value); // reported
+```
+
+When a generic or overloaded call can give the callback its context from the
+annotation, as `filter` and `reduce` can, the variable is reported only if the
+verifier accepts the removal. Such a variable is not reported when the removal
+is not verified (see below).
+
 ### `any` is never redundant
 
 `any` is mutually assignable with every type, so a structural comparison alone
@@ -448,18 +464,20 @@ when the inferred callable type would otherwise be identical.
 
 Verification is bounded to twelve speculative programs per lint of a file. At
 most ten candidate annotations are verified in that pass. Candidates past that
-limit are still reported but carry no fix; `eslint --fix` repeats its fix
-passes, and each pass verifies further candidates after earlier fixes have been
-applied. If the compiler fails during verification, the annotations are left
-alone and not reported. Files with no candidates create no speculative program.
-Speculative programs reuse the parser program's resolved project references,
-module resolution cache, and file system lookups.
+limit are still reported but carry no fix, except a variable whose callback
+argument needs the verifier (see above), which is not reported; `eslint --fix`
+repeats its fix passes, and each pass verifies further candidates after earlier
+fixes have been applied. If the compiler fails during verification, the
+annotations are left alone and not reported. Files with no candidates create no
+speculative program. Speculative programs reuse the parser program's resolved
+project references, module resolution cache, and file system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,
 so a second copy would corrupt the parser's checker. With two copies, candidates
-are reported without a fix. Install a single TypeScript version to enable the
-fix. Before TypeScript 5.3, `parserOptions.projectService` loads
+are reported without a fix, and a variable whose callback argument needs the
+verifier is not reported. Install a single TypeScript version to enable the fix.
+Before TypeScript 5.3, `parserOptions.projectService` loads
 `typescript/lib/tsserverlibrary`, which is a separate copy of the compiler; use
 `parserOptions.project` there to enable the fix.
 

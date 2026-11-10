@@ -812,13 +812,19 @@ function create(
 	let exportedNames: Set<string> | undefined;
 	let isScriptFile: boolean | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
-	const candidates: Array<Candidate & Removal> = [];
+	const candidates: Array<Candidate & Removal & { readonly requiresProof: boolean }> = [];
+
+	// Set while the rule reads a variable's initializer. A callback whose
+	// context is not proven fixed marks the variable here instead of skipping
+	// it, so only a verified removal is reported.
+	let proofSink: undefined | { required: boolean };
 
 	/**
 	 * Save a potential removal for verification after visiting the file.
 	 * @param removal - The removal to verify.
+	 * @param requiresProof - Report only when the verifier accepts the removal.
 	 */
-	function collect(removal: Removal): void {
+	function collect(removal: Removal, requiresProof = false): void {
 		const { annotation } = removal;
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (
@@ -829,13 +835,15 @@ function create(
 			isArrowFunction(owner) ||
 			isMethodDeclaration(owner)
 		) {
-			candidates.push({ ...removal, owner, range: annotation.range });
+			candidates.push({ ...removal, owner, range: annotation.range, requiresProof });
 			return;
 		}
 
 		// The verifier cannot model this owner. Report without a fix rather
-		// than dropping the report.
-		report(removal, false);
+		// than dropping the report, unless only a proof can justify it.
+		if (!requiresProof) {
+			report(removal, false);
+		}
 	}
 
 	/**
@@ -1540,6 +1548,102 @@ function create(
 	}
 
 	/**
+	 * Reports whether a callback argument gets the same context from its call
+	 * with or without the variable's annotation.
+	 *
+	 * The context is fixed when the call has explicit type arguments, or no
+	 * callee signature is generic: then overload choice and the callback's
+	 * parameter type do not use the contextual type. With one generic
+	 * signature, the context is fixed when each type the callback takes from
+	 * it is the same type object before and after inference. Instantiation
+	 * gives back the same object for a type that names no inferred type
+	 * parameter, so a false answer only means "not proven".
+	 *
+	 * @param call - The call that receives the callback.
+	 * @param index - The callback's argument position.
+	 * @param callback - The function passed at that position.
+	 * @returns True when the annotation cannot change the callback's context.
+	 */
+	function isCallbackContextFixed(
+		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		index: number,
+		callback: ContextualFunction,
+	): boolean {
+		if (call.typeArguments !== undefined) {
+			return true;
+		}
+
+		const signatures = getCalleeSignatures(call);
+		if (!signatures.some(isGeneric)) {
+			return true;
+		}
+
+		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
+		const spread = call.arguments
+			.slice(0, index + 1)
+			.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement);
+		if (
+			declared === undefined ||
+			spread ||
+			index >= declared.parameters.length ||
+			isRestParameter(declared, index)
+		) {
+			return false;
+		}
+
+		const resolved = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
+		const parameter = declared.parameters[index];
+		const target = resolved?.parameters[index];
+		if (parameter === undefined || target === undefined) {
+			return false;
+		}
+
+		const parameterType = checker.getNonNullableType(checker.getTypeOfSymbol(parameter));
+		const targetType = checker.getNonNullableType(checker.getTypeOfSymbol(target));
+		if (parameterType === targetType) {
+			return true;
+		}
+
+		const before = getCallbackSignature(parameter);
+		const after = getCallbackSignature(target);
+		if (before === undefined || after === undefined) {
+			return false;
+		}
+
+		// A `this` parameter is not a signature parameter.
+		const { params }: { params: ReadonlyArray<ContextualParameter> } = callback;
+		const parameters = hasThisParameter(callback) ? params.slice(1) : params;
+		// A rest parameter is last, and it types every position from its own.
+		const last = before.parameters.length - 1;
+		const restStart = isRestParameter(before, last) ? last : Number.POSITIVE_INFINITY;
+		const parametersFixed = parameters.every((node, position) => {
+			if (!isUntypedParameter(node)) {
+				return true;
+			}
+
+			if (node.type === AST_NODE_TYPES.RestElement || position >= restStart) {
+				return false;
+			}
+
+			const from = before.parameters[position];
+			const to = after.parameters[position];
+			if (from === undefined || to === undefined) {
+				return from === to;
+			}
+
+			return checker.getTypeOfSymbol(from) === checker.getTypeOfSymbol(to);
+		});
+
+		return (
+			parametersFixed &&
+			(!usesContextualThis(callback) || hasSameThisType(before, after)) &&
+			(!returnsContextTypedValue(callback) ||
+				checker.getReturnTypeOfSignature(before) ===
+					checker.getReturnTypeOfSignature(after))
+		);
+	}
+
+	/**
 	 * Reports whether removing the annotation could change what the initializer
 	 * means, because some part of it is typed by its context rather than by
 	 * itself.
@@ -1561,7 +1665,28 @@ function create(
 			node.type === AST_NODE_TYPES.CallExpression ||
 			node.type === AST_NODE_TYPES.NewExpression
 		) {
-			return isInferenceSensitiveCall(node) || node.arguments.some(isContextDependent);
+			return (
+				isInferenceSensitiveCall(node) ||
+				node.arguments.some((argument, index) => {
+					if (!isContextualFunction(argument)) {
+						return isContextDependent(argument);
+					}
+
+					if (
+						!argument.params.some(isUntypedParameter) ||
+						isCallbackContextFixed(node, index, argument)
+					) {
+						return false;
+					}
+
+					if (proofSink === undefined) {
+						return true;
+					}
+
+					proofSink.required = true;
+					return false;
+				})
+			);
 		}
 
 		// A tagged template calls its tag, so a generic tag infers the same way.
@@ -2446,8 +2571,13 @@ function create(
 			}
 
 			// Unverified is not proven unsafe. Keep the report visible, but
-			// never autofix it.
+			// never autofix it. A candidate that needs proof stays silent: a
+			// later fix pass can verify it.
 			for (const { candidate } of unverified) {
+				if (candidate.requiresProof) {
+					continue;
+				}
+
 				report(candidate, false);
 			}
 		},
@@ -2481,7 +2611,16 @@ function create(
 				return;
 			}
 
-			if (receivesAnnotationContext(node.init)) {
+			const proof = { required: false };
+			proofSink = proof;
+			let dependent: boolean;
+			try {
+				dependent = receivesAnnotationContext(node.init);
+			} finally {
+				proofSink = undefined;
+			}
+
+			if (dependent) {
 				return;
 			}
 
@@ -2547,7 +2686,7 @@ function create(
 				return;
 			}
 
-			collect({ annotation, messageId: MESSAGE_ID, type: annotationType });
+			collect({ annotation, messageId: MESSAGE_ID, type: annotationType }, proof.required);
 		},
 	};
 }
