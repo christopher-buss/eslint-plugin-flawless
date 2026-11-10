@@ -1351,6 +1351,26 @@ const invalid: Array<InvalidTestCase> = [
 		};
 	}),
 
+	// Past the work limit, a variable that needs proof is not verified, so it
+	// is not reported. The next fix pass verifies it.
+	{
+		code: [
+			"interface Item { ok: boolean }",
+			"declare const items: Array<Item>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const kept${index}: Array<Item> = items.filter((item) => item.ok);`;
+			}),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
+		output: [
+			"interface Item { ok: boolean }",
+			"declare const items: Array<Item>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const kept${index} = items.filter((item) => item.ok);`;
+			}),
+		].join("\n"),
+	},
+
 	// --- parameters ---
 
 	// The callback's parameter type comes from the signature it is passed to.
