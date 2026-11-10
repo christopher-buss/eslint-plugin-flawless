@@ -1,0 +1,11 @@
+{
+	"version": 1,
+	"skills": {
+		"lint-rule-review-skill": {
+			"source": "JoshuaKGoldberg/lint-rule-review-skill",
+			"sourceType": "github",
+			"skillPath": "skills/lint-rule-review-skill/SKILL.md",
+			"computedHash": "557605cfbe4301b09dfcb133e454dad8685392ab8f5a6a2b90084ba5cc7d3d38"
+		}
+	}
+}
