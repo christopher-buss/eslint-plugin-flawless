@@ -1449,6 +1449,12 @@ const invalid: Array<InvalidTestCase> = [
 			 = getS();
 		`,
 	},
+	// The line comment keeps the line break of the source.
+	{
+		code: "declare function getS(): string;\r\nconst x: // keep me\r\n\tstring = getS();\r\n",
+		errors: [{ messageId }],
+		output: "declare function getS(): string;\r\nconst x // keep me\r\n = getS();\r\n",
+	},
 	// A comment in the type itself is kept too.
 	{
 		code: unindent`
@@ -2064,6 +2070,44 @@ const returnInvalid: Array<InvalidTestCase> = [
 			const kinds = new Set<string>();
 			const getKinds = () /* keep me */ => kinds;
 		`,
+	},
+	// A line break before `=>` is a syntax error, so a line comment moves
+	// after the arrow.
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): // keep me
+				Set<string> => kinds;
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			const getKinds = () => // keep me
+			 kinds;
+		`,
+	},
+	// A block comment with a line break moves after the arrow too.
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): /* keep
+				me */ Set<string> => kinds;
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			const getKinds = () => /* keep
+				me */ kinds;
+		`,
+	},
+	// A kept line comment ends with the line break of the source.
+	{
+		code: "const kinds = new Set<string>();\r\nconst getKinds = (): // keep me\r\n\tSet<string> => kinds;\r\n",
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: "const kinds = new Set<string>();\r\nconst getKinds = () => // keep me\r\n kinds;\r\n",
 	},
 ];
 

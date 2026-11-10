@@ -436,6 +436,8 @@ fix. Before TypeScript 5.3, `parserOptions.projectService` loads
 
 The fix keeps the comments inside an annotation:
 `const x: /* note */ string = getS();` becomes `const x /* note */ = getS();`.
+On an arrow function's return type, a comment that spans a line break moves
+after the `=>`, because a line break before `=>` is a syntax error.
 
 ## Known limitations
 

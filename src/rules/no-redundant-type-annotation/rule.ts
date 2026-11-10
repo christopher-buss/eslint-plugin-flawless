@@ -724,19 +724,47 @@ function create(
 	function removeAnnotation(
 		fixer: TSESLint.RuleFixer,
 		annotation: TSESTree.TSTypeAnnotation,
-	): TSESLint.RuleFix {
-		const comments = context.sourceCode.getCommentsInside(annotation);
+	): Array<TSESLint.RuleFix> | TSESLint.RuleFix {
+		const { sourceCode } = context;
+		const comments = sourceCode.getCommentsInside(annotation);
 		if (comments.length === 0) {
 			return fixer.remove(annotation);
 		}
 
 		// A line comment ends at the line break, so the code after it must
-		// start on a new line.
-		const kept = comments.map((comment) => {
-			const text = context.sourceCode.getText(comment);
-			return comment.type === AST_TOKEN_TYPES.Line ? `${text}\n` : text;
-		});
-		return fixer.replaceText(annotation, ` ${kept.join(" ")}`);
+		// start on a new line. Use the line break of the source.
+		const kept = comments
+			.map((comment) => {
+				const text = sourceCode.getText(comment);
+				if (comment.type !== AST_TOKEN_TYPES.Line) {
+					return text;
+				}
+
+				const lineBreak = /^\r?\n|^\r/.exec(sourceCode.text.slice(comment.range[1]));
+				return `${text}${lineBreak?.[0] ?? "\n"}`;
+			})
+			.join(" ");
+
+		// A line break between `)` and `=>` is a syntax error, so comments
+		// that span a line break move after the arrow.
+		const arrow = annotation.parent;
+		if (
+			arrow.type === AST_NODE_TYPES.ArrowFunctionExpression &&
+			arrow.returnType === annotation &&
+			comments.some((comment) => {
+				return (
+					comment.loc.start.line !== comment.loc.end.line ||
+					comment.type === AST_TOKEN_TYPES.Line
+				);
+			})
+		) {
+			const arrowToken = sourceCode.getTokenAfter(annotation);
+			if (arrowToken !== null) {
+				return [fixer.remove(annotation), fixer.insertTextAfter(arrowToken, ` ${kept}`)];
+			}
+		}
+
+		return fixer.replaceText(annotation, ` ${kept}`);
 	}
 
 	/**
