@@ -1814,9 +1814,9 @@ function create(
 	 * An exported declaration can still mention it: through `typeof`, a
 	 * computed key of a type member, `export default`, `export =`, an export
 	 * list, an enum member initializer, or a class `extends` clause. Any type
-	 * that names a class counts too. The
-	 * emitter prints none of the other reads, such as a top-level call, and
-	 * nothing inside a function body or static block.
+	 * that names a class counts too. The emitter prints none of the other
+	 * reads, such as a top-level call, and nothing inside a function body or
+	 * static block.
 	 *
 	 * @param node - The declaration to inspect.
 	 * @returns True when the emitter may need the declaration's type.
