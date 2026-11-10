@@ -728,6 +728,24 @@ const valid: Array<ValidTestCase> = [
 		declare function each<T>(cases: ReadonlyArray<T>): void;
 		each([((n: number) => n)!]);
 	`,
+	// A class member takes no parameter types from a context, not even from
+	// an interface the class implements.
+	unindent`
+		interface Handler {
+			handle(value: string): void;
+		}
+		class Impl implements Handler {
+			handle(value: string): void {}
+		}
+	`,
+	// The same holds for a class expression with a written context, and for a
+	// constructor's parameter property.
+	unindent`
+		const Make: new (value: string) => { value: string; read(n: number): void } = class {
+			constructor(public value: string) {}
+			read(n: number): void {}
+		};
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
