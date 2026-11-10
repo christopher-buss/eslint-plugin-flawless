@@ -15,8 +15,9 @@ export interface Candidate {
 	readonly range: readonly [number, number];
 	/**
 	 * The removal is reported only when it is proven safe alone. It is
-	 * selected first, and a coupled one is checked alone, apart from the
-	 * work limit of the other checks.
+	 * selected first. A coupled one is checked alone before the combined
+	 * check, and an uncoupled one when a combined check finds a problem with
+	 * it. These checks are apart from the work limit of the other checks.
 	 */
 	readonly requiresProof?: boolean;
 }
@@ -63,9 +64,10 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
-// The check alone of a coupled removal that requires proof is not in this
-// budget. Each selected removal uses at most one check alone and one combined
-// check, so one lint creates at most 2 * (MAX_PROGRAMS - 2) programs.
+// The check alone of a removal that requires proof is not in this budget.
+// Each selected removal gets at most one check alone, and each combined check
+// restores at least one removal, so one lint creates at most
+// 2 * (MAX_PROGRAMS - 2) programs.
 const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
@@ -318,7 +320,8 @@ export function verifyAnnotations<C extends Candidate>(
 			}
 
 			// The coupled removals use at most ten programs above, so this
-			// check runs at least once. It decides each uncoupled removal.
+			// check runs at least once. An uncoupled removal without a problem
+			// here is safe alone.
 			for (const candidate of accepted) {
 				if (
 					candidate.requiresProof === true &&
@@ -329,10 +332,36 @@ export function verifyAnnotations<C extends Candidate>(
 				}
 			}
 
-			// No other removal can cause an uncoupled candidate's problem, so
-			// restore all of those at once. Among coupled candidates, restore
-			// one annotation first: restoring a context provider can make the
-			// other removals safe.
+			// The coupling analysis does not follow all data flow, so another
+			// removal can cause the problem of an uncoupled removal that
+			// requires proof. Check such a removal alone before it is
+			// rejected. A removal that requires proof thus gets at most one
+			// check alone: here, or above when it is coupled.
+			const unchecked = accepted.filter((candidate) => {
+				return (
+					problems.has(candidate) &&
+					candidate.requiresProof === true &&
+					!safeAlone.has(candidate)
+				);
+			});
+			for (const candidate of unchecked) {
+				const reason = check([candidate]).get(candidate);
+				if (reason === undefined) {
+					safeAlone.add(candidate);
+					acceptedAlone.push(candidate);
+				} else {
+					recordRejection(candidate, reason);
+				}
+
+				problems.delete(candidate);
+			}
+
+			accepted = accepted.filter((candidate) => !unchecked.includes(candidate));
+
+			// Other removals cannot cause the problem of an uncoupled
+			// candidate, so restore all of those at once. Among coupled
+			// candidates, restore one annotation first: restoring a context
+			// provider can make the other removals safe.
 			const independent = accepted.filter((candidate) => {
 				return problems.has(candidate) && !coupled.has(candidate);
 			});

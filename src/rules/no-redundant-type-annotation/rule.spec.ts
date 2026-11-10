@@ -1464,6 +1464,23 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 	},
 
+	// The removal of q widens w, which is not a candidate, so the static
+	// coupling does not see that p reads it. The combined check gives the
+	// problem of q to p. p is then checked alone, and its removal alone is
+	// safe, so it is reported without a fix.
+	{
+		code: unindent`
+			declare function use(...values: Array<unknown>): void;
+			const q: "a" = "a";
+			let w = q;
+			const p: Array<"a"> = [w].filter((x) => x.length > 0);
+			use(p, w);
+			export {};
+		`,
+		errors: [{ line: 4, messageId }],
+		output: null,
+	},
+
 	// --- parameters ---
 
 	// The callback's parameter type comes from the signature it is passed to.
