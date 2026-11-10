@@ -198,8 +198,8 @@ const incompatibleTests = INCOMPATIBLE_ASSERTION_CASES.flatMap((fixture) => {
 //   - prefer-read-only-props, no-materialized-filter-map, and no-unknown-returns
 //     still need typed fixtures. Real paths now make typed benchmarks possible;
 //     no-redundant-type-annotation has dedicated fixtures above.
-//   - toml-sort-keys / yaml-block-key-blank-lines lint non-JS languages, whose
-//     extensions are absent from the tool's SUPPORTED_EXTENSIONS.
+//   - toml-sort-keys / yaml-block-key-blank-lines / yaml-sort-sequence-by-key
+//     lint non-JS languages, whose extensions are absent from the tool's SUPPORTED_EXTENSIONS.
 //   - no-redundant-tsconfig-options lints JSON (also unsupported) and resolves
 //     the tsconfig `extends` chain from sibling files on disk.
 const UNSUPPORTED = new Set([
@@ -209,6 +209,7 @@ const UNSUPPORTED = new Set([
 	"prefer-read-only-props",
 	"toml-sort-keys",
 	"yaml-block-key-blank-lines",
+	"yaml-sort-sequence-by-key",
 ]);
 
 // Fail the run when a new rule ships without a benchmark: every built rule must

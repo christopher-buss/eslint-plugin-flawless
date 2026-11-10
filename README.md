@@ -248,6 +248,7 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 | [react-namespace](src/rules/react-namespace/documentation.md)                                       | Prefer named imports for React runtime values and the React namespace for React types                                               | 🔧  |     |     |
 | [toml-sort-keys](src/rules/toml-sort-keys/documentation.md)                                         | Enforce a configured sort order for TOML keys and tables                                                                            | 🔧  |     |     |
 | [yaml-block-key-blank-lines](src/rules/yaml-block-key-blank-lines/documentation.md)                 | Enforce blank lines around top-level YAML block collection keys                                                                     | 🔧  |     |     |
+| [yaml-sort-sequence-by-key](src/rules/yaml-sort-sequence-by-key/documentation.md)                   | Enforce sorted YAML sequences of mappings by a key                                                                                  | 🔧  |     |     |
 
 <!-- end auto-generated rules list -->
 

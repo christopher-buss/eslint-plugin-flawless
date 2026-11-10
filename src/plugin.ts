@@ -46,6 +46,7 @@ import { purity } from "./rules/purity/rule";
 import { reactNamespace } from "./rules/react-namespace/rule";
 import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
 import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
+import { yamlSortSequenceByKey } from "./rules/yaml-sort-sequence-by-key/rule";
 
 export const PLUGIN_NAME: string = packageName.replace(/^eslint-plugin-/, "");
 
@@ -97,6 +98,7 @@ export type PluginRules = {
 	"react-namespace": typeof reactNamespace;
 	"toml-sort-keys": typeof tomlSortKeys;
 	"yaml-block-key-blank-lines": typeof yamlBlockKeyBlankLines;
+	"yaml-sort-sequence-by-key": typeof yamlSortSequenceByKey;
 };
 
 /** The ESLint plugin object: metadata plus every rule. */
@@ -176,6 +178,7 @@ export const plugin: FlawlessPlugin = {
 		"react-namespace": reactNamespace,
 		"toml-sort-keys": tomlSortKeys,
 		"yaml-block-key-blank-lines": yamlBlockKeyBlankLines,
+		"yaml-sort-sequence-by-key": yamlSortSequenceByKey,
 	},
 } satisfies TSESLint.FlatConfig.Plugin;
 
