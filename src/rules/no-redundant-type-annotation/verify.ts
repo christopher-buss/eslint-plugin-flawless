@@ -690,14 +690,18 @@ function loopScope(node: ts.Node): ts.Node {
 
 /**
  * Whether declaration emit can print the candidate's type. Declarations in a
- * function body, and parameters of functions there, never reach a `.d.ts`.
+ * function body or a static block, and parameters of functions there, never
+ * reach a `.d.ts`.
  * @param owner - The candidate's declaration.
- * @returns False when the owner is inside a function body.
+ * @returns False when the owner is inside a function body or static block.
  */
 function affectsDeclarationEmit(owner: Candidate["owner"]): boolean {
 	for (let node: ts.Node = owner; !ts.isSourceFile(node.parent); node = node.parent) {
 		const { parent } = node;
-		if (ts.isFunctionLike(parent) && "body" in parent && parent.body === node) {
+		if (
+			ts.isClassStaticBlockDeclaration(parent) ||
+			(ts.isFunctionLike(parent) && "body" in parent && parent.body === node)
+		) {
 			return false;
 		}
 	}

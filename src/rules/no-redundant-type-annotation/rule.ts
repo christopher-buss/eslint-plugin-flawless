@@ -1937,27 +1937,6 @@ function create(
 	}
 
 	/**
-	 * Reports whether a function sits where the declaration emitter can read
-	 * it. Inside a function body it never can.
-	 *
-	 * @param node - The function to inspect.
-	 * @returns True when the function is outside every function body.
-	 */
-	function isVisibleToEmitter(node: ReturnTypedFunction): boolean {
-		let current: TSESTree.Node = node;
-		while (current.type !== AST_NODE_TYPES.Program) {
-			const parent: TSESTree.Node = current.parent;
-			if (isFunctionNode(parent) && parent.body === current) {
-				return false;
-			}
-
-			current = parent;
-		}
-
-		return true;
-	}
-
-	/**
 	 * Reports whether the declaration emitter reads a function's return type.
 	 * Under `isolatedDeclarations` it reads the written type only, so there
 	 * the annotation is required.
@@ -1966,7 +1945,7 @@ function create(
 	 * @returns True when the emitter may need the return type.
 	 */
 	function feedsDeclarationEmit(node: ReturnTypedFunction): boolean {
-		if (!isVisibleToEmitter(node)) {
+		if (isHiddenFromEmitter(node)) {
 			return false;
 		}
 

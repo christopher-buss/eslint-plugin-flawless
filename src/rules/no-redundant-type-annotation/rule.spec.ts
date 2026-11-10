@@ -1999,6 +1999,35 @@ const isolatedDeclarationsInvalid: Array<InvalidTestCase> = [
 				export {};
 			`,
 		},
+		{
+			// The emitter prints nothing inside a static block.
+			code: unindent`
+				const kinds = new Set<string>();
+				export class C {
+					static {
+						const K = class {
+							m(): Set<string> {
+								return kinds;
+							}
+						};
+						void K;
+					}
+				}
+			`,
+			output: unindent`
+				const kinds = new Set<string>();
+				export class C {
+					static {
+						const K = class {
+							m() {
+								return kinds;
+							}
+						};
+						void K;
+					}
+				}
+			`,
+		},
 	].map(({ code, output }): InvalidTestCase => {
 		return {
 			code,

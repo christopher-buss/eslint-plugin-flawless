@@ -361,7 +361,8 @@ declaration mentions, in a position the emitter prints:
 - a class `extends` clause
 
 The emitter prints no other read. A variable read only by top-level code, such
-as `start(config)`, or only inside function bodies, is still reported:
+as `start(config)`, or only inside function bodies or static blocks, is still
+reported:
 
 ```ts
 const config: Config = loadConfig();
@@ -429,9 +430,9 @@ their outermost loop before type comparison, to expose control-flow inference
 cycles. Loop replay is enabled for TypeScript 5.9 and 6.0; other supported
 versions retain loop annotations because their checker query order has not been
 validated. Under `declaration` or `composite`, serialized inferred types outside
-function bodies are checked for references to inaccessible or shadowed names.
-These targeted checks supplement the existing conservative guards; they do not
-run complete compiler diagnostics or declaration emit.
+function bodies and static blocks are checked for references to inaccessible or
+shadowed names. These targeted checks supplement the existing conservative
+guards; they do not run complete compiler diagnostics or declaration emit.
 
 TypeScript narrows through a `const` used as a condition only when the `const`
 has no annotation, as in `const ok = typeof v === "string"; if (ok) v.length`.

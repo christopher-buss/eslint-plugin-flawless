@@ -242,6 +242,26 @@ export function inner(): void {
 		).toStrictEqual(["outer"]);
 	});
 
+	it("skips the declaration naming check inside static blocks", () => {
+		const dependency = path.join(directory, "dependency.ts");
+		const extra = new Map([
+			[
+				dependency,
+				"export interface Hidden { a: string }\nexport declare function make(): Hidden;",
+			],
+		]);
+		const code = `import { make } from "./dependency.js";
+export class C {
+	static {
+		const value: ReturnType<typeof make> = make();
+		void value;
+	}
+}`;
+		const { candidates, program, source } = project(code, extra, { declaration: true });
+		const { accepted } = verifyAnnotations(program, source, candidates);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
+	});
+
 	it("leaves annotations alone when the edit cannot be verified", () => {
 		const { candidates, program, source } = project(
 			"declare function read(): string; const value: string = read();",
