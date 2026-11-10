@@ -1080,7 +1080,8 @@ function canActAsCondition(reference: ts.Node): boolean {
  * narrows an aliased condition, as in `const ok = typeof v === "string";
  * if (ok) v.length`, only when the `const` has no annotation. Removing the
  * annotation therefore changes the types of `v`, `this`, and property
- * accesses on them after the declaration, to the end of the enclosing function or file.
+ * accesses on them after the declaration, to the end of the enclosing
+ * function or file.
  * @param checker - The original checker.
  * @param owner - The candidate's declaration.
  * @param references - The referencing identifiers of the owner.
