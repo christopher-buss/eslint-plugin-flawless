@@ -397,10 +397,11 @@ editors that apply a single fix. Two removals are coupled when their regions
 overlap or one statement uses both bindings. A variable's region is its
 statement. A parameter's region is its function, or the call or JSX element that
 receives the function, because that call can infer its type arguments from the
-parameter. If combined removals fail, every failing removal that is not coupled
-is restored at once. Among coupled removals, one annotation is restored first,
-since restoring a context provider can make the others safe; the remaining
-removals are then checked again.
+parameter. A `const` that aliases a condition also uses each later reference
+that it can narrow (see below). If combined removals fail, every failing removal
+that is not coupled is restored at once. Among coupled removals, one annotation
+is restored first, since restoring a context provider can make the others safe;
+the remaining removals are then checked again.
 
 Arbitrary subsets of several fixes are not exhaustively checked.
 

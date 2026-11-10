@@ -285,6 +285,22 @@ const second: string = json();`;
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
+	it("couples a const with the uses that its condition narrows", () => {
+		// Only the removal of isNum narrows v in the second block. The
+		// narrowing of ok observes that use too, so the two are coupled.
+		const code = `declare const v: string | number;
+const ok: boolean = typeof v === "string";
+if (ok) {}
+const isNum: boolean = typeof v === "number";
+if (isNum) { console.log(v); }`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["ok"]);
+		expect(
+			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
+		).toStrictEqual(["isNum"]);
+	});
+
 	it("checks parameters that share generic inference one at a time", () => {
 		const code = `declare function pair<T>(handlers: { make: (value: T) => T; use: (value: T) => void }): T;
 pair({ make: (value: string) => value, use: (value: string) => {} });`;

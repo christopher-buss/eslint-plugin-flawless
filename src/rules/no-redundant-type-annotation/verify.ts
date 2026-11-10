@@ -126,6 +126,12 @@ export function verifyAnnotations<C extends Candidate>(
 		});
 		const selected = eligible.slice(0, MAX_PROGRAMS - 2);
 		const references = referencesByOwner(checker, source, selected);
+		const narrowed = new Map(
+			selected.map((candidate) => {
+				const ownerReferences = references.get(candidate.owner) ?? [];
+				return [candidate, aliasNarrowedNodes(checker, candidate.owner, ownerReferences)];
+			}),
+		);
 		// Original types are printed on first comparison. A rejected removal
 		// usually differs at its declaration, so its other uses are never
 		// printed.
@@ -137,7 +143,7 @@ export function verifyAnnotations<C extends Candidate>(
 					candidate,
 					[
 						...observedNodes(candidate, ownerReferences, thisFree),
-						...aliasNarrowedNodes(checker, candidate.owner, ownerReferences),
+						...(narrowed.get(candidate) ?? []),
 					].map((node) => {
 						let type: string | undefined;
 						const omitThis = thisFree?.arrows.has(node) === true;
@@ -251,7 +257,7 @@ export function verifyAnnotations<C extends Candidate>(
 		// An editor applies one fix at a time. Removals that cannot influence
 		// one another are safe alone when they are safe together, so only
 		// coupled removals need a program of their own.
-		const coupled = coupledCandidates(selected, references);
+		const coupled = coupledCandidates(selected, references, narrowed);
 		if (coupled.size > 0) {
 			accepted = accepted.filter((candidate) => {
 				if (!coupled.has(candidate)) {
@@ -825,15 +831,19 @@ function contains(outer: ts.Node, inner: ts.Node): boolean {
 
 /**
  * Finds candidates whose removal may change another candidate's types: their
- * influence scopes overlap, or one statement uses both bindings.
+ * influence scopes overlap, or one statement uses both bindings. A use that
+ * a `const` can narrow through its initializer counts as a use of it.
  * @template C - The rule's candidate, including its report metadata.
  * @param candidates - The candidates selected for verification.
  * @param references - The referencing identifiers of each candidate owner.
+ * @param narrowed - The uses each candidate can narrow as an aliased
+ *   condition.
  * @returns The candidates that need an individual check.
  */
 function coupledCandidates<C extends Candidate>(
 	candidates: ReadonlyArray<C>,
 	references: ReadonlyMap<ts.Node, ReadonlyArray<ts.Identifier>>,
+	narrowed: ReadonlyMap<C, ReadonlyArray<ts.Node>>,
 ): Set<C> {
 	const scoped = candidates.map((candidate) => {
 		return {
@@ -841,6 +851,7 @@ function coupledCandidates<C extends Candidate>(
 			scopes: [
 				influenceScope(candidate.owner),
 				...(references.get(candidate.owner) ?? []).map(enclosingStatement),
+				...(narrowed.get(candidate) ?? []).map(enclosingStatement),
 			],
 		};
 	});
