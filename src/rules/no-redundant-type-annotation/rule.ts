@@ -1432,7 +1432,11 @@ function create(
 			return false;
 		}
 
-		const symbol = checker.getSymbolAtLocation(tsTypeNode.typeName);
+		let symbol = checker.getSymbolAtLocation(tsTypeNode.typeName);
+		if (symbol !== undefined && (symbol.flags & SymbolFlags.Alias) !== 0) {
+			symbol = checker.getAliasedSymbol(symbol);
+		}
+
 		if (symbol === undefined || (symbol.flags & SymbolFlags.TypeAlias) === 0) {
 			return false;
 		}

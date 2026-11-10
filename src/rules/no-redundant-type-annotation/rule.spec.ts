@@ -124,6 +124,22 @@ const valid: Array<ValidTestCase> = [
 		declare function getId(): UserId;
 		const id: UserId = getId();
 	`,
+	// An imported alias is erased the same way.
+	unindent`
+		import type { UserId } from "./no-redundant-type-annotation/aliases";
+		declare function getString(): string;
+		const id: UserId = getString();
+	`,
+	unindent`
+		import type { UserId as Id } from "./no-redundant-type-annotation/aliases";
+		declare function getString(): string;
+		const id: Id = getString();
+	`,
+	unindent`
+		import type { UserId } from "./no-redundant-type-annotation/aliases";
+		declare function each(callback: (id: string) => void): void;
+		each((id: UserId) => {});
+	`,
 	// Destructuring is out of scope.
 	unindent`
 		declare const source: { a: string };
@@ -1950,6 +1966,17 @@ const returnInvalid: Array<InvalidTestCase> = [
 ];
 
 const returnValid: Array<ValidTestCase> = [
+	// An imported alias to a primitive is erased, so the name must stay.
+	{
+		code: unindent`
+			import type { UserId } from "./no-redundant-type-annotation/aliases";
+			declare function getString(): string;
+			function read(): UserId {
+				return getString();
+			}
+		`,
+		options: checkAll,
+	},
 	// Return types are not checked by default.
 	unindent`
 		const kinds = new Set<string>();

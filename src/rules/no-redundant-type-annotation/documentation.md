@@ -118,6 +118,8 @@ declare function getId(): UserId;
 const id: UserId = getId(); // NOT reported — the fix would leave `string`
 ```
 
+This also applies to an alias that you import, with or without a new name.
+
 ## Examples
 
 Examples of **incorrect** code for this rule:
