@@ -294,7 +294,7 @@ function getMaxArguments(signature: Signature, tuple: RestTuple | undefined): nu
  * @returns True when some argument at that position can infer.
  */
 function receivesInferringArgument(
-	call: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
+	call: ArgumentCall,
 	signature: Signature,
 	index: number,
 ): boolean {
