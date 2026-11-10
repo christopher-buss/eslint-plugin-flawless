@@ -342,6 +342,20 @@ function isFunctionNode(
 }
 
 /**
+ * Reports whether a node is a function body or a static block, which the
+ * declaration emitter never prints.
+ *
+ * @param node - The node to inspect, below the program.
+ * @returns True when the node hides its contents from the emitter.
+ */
+function isEmitterBoundary(node: Exclude<TSESTree.Node, TSESTree.Program>): boolean {
+	return (
+		node.type === AST_NODE_TYPES.StaticBlock ||
+		(isFunctionNode(node.parent) && node.parent.body === node)
+	);
+}
+
+/**
  * Reports whether a node is inside a function body or a static block, which
  * the declaration emitter never prints.
  *
@@ -349,17 +363,10 @@ function isFunctionNode(
  * @returns True when an enclosing body hides the node from the emitter.
  */
 function isHiddenFromEmitter(node: TSESTree.Node): boolean {
-	let current = node;
-	while (current.type !== AST_NODE_TYPES.Program) {
-		const { parent } = current;
-		if (
-			current.type === AST_NODE_TYPES.StaticBlock ||
-			(isFunctionNode(parent) && parent.body === current)
-		) {
+	for (let current = node; current.type !== AST_NODE_TYPES.Program; current = current.parent) {
+		if (isEmitterBoundary(current)) {
 			return true;
 		}
-
-		current = parent;
 	}
 
 	return false;
@@ -387,10 +394,7 @@ function isEmitterRead(
 	let inEnumInitializer = false;
 	for (let node: TSESTree.Node = identifier; node.type !== AST_NODE_TYPES.Program; ) {
 		const parent: TSESTree.Node = node.parent;
-		if (
-			node.type === AST_NODE_TYPES.StaticBlock ||
-			(isFunctionNode(parent) && parent.body === node)
-		) {
+		if (isEmitterBoundary(node)) {
 			return false;
 		}
 

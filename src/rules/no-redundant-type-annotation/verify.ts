@@ -689,6 +689,20 @@ function loopScope(node: ts.Node): ts.Node {
 }
 
 /**
+ * Whether a node is a function body or a static block, which declaration
+ * emit never prints. This mirrors the rule's `isEmitterBoundary`.
+ * @param node - The node to inspect, below the source file.
+ * @returns True when the node hides its contents from declaration emit.
+ */
+function isEmitterBoundary(node: ts.Node): boolean {
+	const { parent } = node;
+	return (
+		ts.isClassStaticBlockDeclaration(node) ||
+		(ts.isFunctionLike(parent) && "body" in parent && parent.body === node)
+	);
+}
+
+/**
  * Whether declaration emit can print the candidate's type. Declarations in a
  * function body or a static block, and parameters of functions there, never
  * reach a `.d.ts`.
@@ -697,11 +711,7 @@ function loopScope(node: ts.Node): ts.Node {
  */
 function affectsDeclarationEmit(owner: Candidate["owner"]): boolean {
 	for (let node: ts.Node = owner; !ts.isSourceFile(node.parent); node = node.parent) {
-		const { parent } = node;
-		if (
-			ts.isClassStaticBlockDeclaration(parent) ||
-			(ts.isFunctionLike(parent) && "body" in parent && parent.body === node)
-		) {
+		if (isEmitterBoundary(node)) {
 			return false;
 		}
 	}
