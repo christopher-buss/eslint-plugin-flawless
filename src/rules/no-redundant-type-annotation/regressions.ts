@@ -168,4 +168,26 @@ export function k(): void {
 	if (copy) use(v);
 }`,
 	},
+	{
+		name: "aliased condition after its block",
+		code: `
+export function g(v: string | number) {
+	{
+		const ok: boolean = typeof v === "string";
+		if (!ok) return "none";
+	}
+	return v;
+}`,
+	},
+	{
+		name: "aliased condition after its for statement",
+		code: `
+export function g(v: string | number) {
+	for (const ok: boolean = typeof v === "string"; ; ) {
+		if (!ok) return "none";
+		break;
+	}
+	return v;
+}`,
+	},
 ] as const;

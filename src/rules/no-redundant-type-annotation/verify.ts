@@ -1014,7 +1014,7 @@ function observedNodes(
  * narrows an aliased condition, as in `const ok = typeof v === "string";
  * if (ok) v.length`, only when the `const` has no annotation. Removing the
  * annotation therefore changes the types of `v`, `this`, and property
- * accesses on them after the declaration, where the `const` is in scope.
+ * accesses on them after the declaration, to the end of the enclosing function or file.
  * @param checker - The original checker.
  * @param owner - The candidate's declaration.
  * @param references - The referencing identifiers of the owner.
@@ -1063,9 +1063,16 @@ function aliasNarrowedNodes(
 		return [];
 	}
 
-	// A `for` statement scopes its own declarations.
-	const statement = owner.parent.parent;
-	const scope = ts.isVariableStatement(statement) ? statement.parent : statement;
+	// The narrowing continues to the end of the flow container, also after
+	// the block or `for` statement that scopes the `const`.
+	const scope =
+		ts.findAncestor(owner.parent, (node) => {
+			return (
+				ts.isFunctionLike(node) ||
+				ts.isClassStaticBlockDeclaration(node) ||
+				ts.isSourceFile(node)
+			);
+		}) ?? owner.getSourceFile();
 	const nodes: Array<ts.Node> = [];
 	function observe(node: ts.Node): void {
 		let current = node;
