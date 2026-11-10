@@ -1,5 +1,5 @@
 import type { TSESTree } from "@typescript-eslint/utils";
-import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, AST_TOKEN_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type {
@@ -708,10 +708,35 @@ function create(
 	): void {
 		context.report({
 			data: { typeName: display(type) },
-			fix: fixable ? (fixer) => fixer.remove(annotation) : null,
+			fix: fixable ? (fixer) => removeAnnotation(fixer, annotation) : null,
 			messageId,
 			node: annotation,
 		});
+	}
+
+	/**
+	 * Removes an annotation but keeps the comments inside it.
+	 *
+	 * @param fixer - The fixer of the report.
+	 * @param annotation - The annotation to remove.
+	 * @returns The fix.
+	 */
+	function removeAnnotation(
+		fixer: TSESLint.RuleFixer,
+		annotation: TSESTree.TSTypeAnnotation,
+	): TSESLint.RuleFix {
+		const comments = context.sourceCode.getCommentsInside(annotation);
+		if (comments.length === 0) {
+			return fixer.remove(annotation);
+		}
+
+		// A line comment ends at the line break, so the code after it must
+		// start on a new line.
+		const kept = comments.map((comment) => {
+			const text = context.sourceCode.getText(comment);
+			return comment.type === AST_TOKEN_TYPES.Line ? `${text}\n` : text;
+		});
+		return fixer.replaceText(annotation, ` ${kept.join(" ")}`);
 	}
 
 	/**
@@ -2245,7 +2270,7 @@ function create(
 
 			context.report({
 				data: { typeName: display(annotationType) },
-				fix: (fixer) => fixer.remove(annotation),
+				fix: (fixer) => removeAnnotation(fixer, annotation),
 				messageId: CATCH_MESSAGE_ID,
 				node: annotation,
 			});

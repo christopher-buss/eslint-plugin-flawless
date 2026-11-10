@@ -434,6 +434,9 @@ fix. Before TypeScript 5.3, `parserOptions.projectService` loads
 `typescript/lib/tsserverlibrary`, which is a separate copy of the compiler; use
 `parserOptions.project` there to enable the fix.
 
+The fix keeps the comments inside an annotation:
+`const x: /* note */ string = getS();` becomes `const x /* note */ = getS();`.
+
 ## Known limitations
 
 - Variable declarations are checked for `const` and `let` with a plain
