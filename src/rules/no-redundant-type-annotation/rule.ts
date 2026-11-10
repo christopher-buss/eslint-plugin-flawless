@@ -117,6 +117,16 @@ interface RestTuple {
 	readonly start: number;
 }
 
+/** A callback's contextual signature, with what reads its parameter types. */
+interface ContextualSignature {
+	/** The node to read the parameter types at. */
+	readonly location: ts.Node;
+	/** The signature's rest tuple, if any. */
+	readonly restTuple: RestTuple | undefined;
+	/** The contextual call signature. */
+	readonly signature: Signature;
+}
+
 /**
  * A parameter of a function outside a class body. Only a constructor can
  * declare a parameter property, and the parser rejects one anywhere else.
@@ -2620,21 +2630,28 @@ function create(
 	}
 
 	/**
-	 * Gets the type of the signature parameter that pairs with a callback
-	 * parameter at the same position.
+	 * Gets the contextual type of a callback parameter.
 	 *
-	 * @param signature - The contextual call signature.
-	 * @param index - The parameter position.
-	 * @param isRest - Whether the callback parameter is a rest parameter.
-	 * @param location - The node to read the parameter type at.
-	 * @returns The parameter type, or undefined when nothing pairs with it.
+	 * A parameter pairs with the signature parameter at the same position, and
+	 * a rest parameter only with a rest parameter. A non-rest parameter at or
+	 * after the start of a rest tuple pairs with the tuple element at its
+	 * position instead.
+	 *
+	 * @param contextual - The contextual signature and where to read it.
+	 * @param parameter - The callback parameter.
+	 * @param index - The parameter position, after any `this` parameter.
+	 * @returns The contextual type, or undefined when nothing pairs with it.
 	 */
-	function getParameterTarget(
-		signature: Signature,
+	function getContextualParameterType(
+		{ location, restTuple, signature }: ContextualSignature,
+		parameter: ContextualParameter,
 		index: number,
-		isRest: boolean,
-		location: ts.Node,
 	): Type | undefined {
+		const isRest = parameter.type === AST_NODE_TYPES.RestElement;
+		if (!isRest && restTuple !== undefined && index >= restTuple.start) {
+			return getFixedElement(restTuple, index - restTuple.start);
+		}
+
 		const target = signature.parameters[index];
 		if (target === undefined || isRest !== isRestParameter(signature, index)) {
 			return undefined;
@@ -2679,6 +2696,7 @@ function create(
 		const parameters = getPositionalParameters(node);
 		const location = services.esTreeNodeToTSNodeMap.get(node);
 		const restTuple = getRestTuple(signature, location);
+		const contextual: ContextualSignature = { location, restTuple, signature };
 
 		// A function that needs more arguments than the signature passes gets no
 		// contextual signature at all.
@@ -2692,11 +2710,11 @@ function create(
 				continue;
 			}
 
-			const isRest = parameter.type === AST_NODE_TYPES.RestElement;
-			const contextualParameterType =
-				!isRest && restTuple !== undefined && index >= restTuple.start
-					? getFixedElement(restTuple, index - restTuple.start)
-					: getParameterTarget(signature, index, isRest, location);
+			const contextualParameterType = getContextualParameterType(
+				contextual,
+				parameter,
+				index,
+			);
 			if (contextualParameterType === undefined) {
 				continue;
 			}
