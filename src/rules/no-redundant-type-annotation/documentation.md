@@ -469,17 +469,18 @@ ten candidate annotations are verified in that pass. Such variables are selected
 first. Each one is reported only when its removal alone is safe. A coupled one
 gets that check before the combined check. An uncoupled one gets it when a
 combined check finds a problem with it, because the coupling does not follow all
-data flow. So candidates of other kinds do not change whether it is reported. It
-carries a fix only when the combined fix is verified too. A report without a fix
-then means that this removal alone is safe. The removal of a coupled annotation
-can make it unsafe, and the next lint then withdraws the report. Candidates past
-the limit of ten are still reported but carry no fix, except such a variable,
-which is not reported; `eslint --fix` repeats its fix passes, and each pass
-verifies further candidates after earlier fixes have been applied. If the
-compiler fails during verification, the annotations are left alone and not
-reported. Files with no candidates create no speculative program. Speculative
-programs reuse the parser program's resolved project references, module
-resolution cache, and file system lookups.
+data flow. So candidates of other kinds do not change whether it is reported,
+unless the compiler fails during a check, which leaves every annotation alone.
+It carries a fix only when the combined fix is verified too. A report without a
+fix then means that this removal alone is safe. The removal of a coupled
+annotation can make it unsafe, and the next lint then withdraws the report.
+Candidates past the limit of ten are still reported but carry no fix, except
+such a variable, which is not reported; `eslint --fix` repeats its fix passes,
+and each pass verifies further candidates after earlier fixes have been applied.
+If the compiler fails during verification, the annotations are left alone and
+not reported. Files with no candidates create no speculative program.
+Speculative programs reuse the parser program's resolved project references,
+module resolution cache, and file system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,
