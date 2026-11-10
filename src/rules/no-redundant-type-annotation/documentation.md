@@ -151,6 +151,10 @@ signature, or the outer call writes its type arguments out. The parameter type
 then gives the argument its context, and the annotation cannot reach it:
 
 ```ts
+interface Removal {
+	readonly name: string;
+}
+
 declare function createRemoval(name: string, names: Set<string>): Removal;
 
 const removal: Removal = createRemoval("a", new Set(["b"])); // reported
