@@ -1009,6 +1009,72 @@ function observedNodes(
 	return nodes;
 }
 
+const EQUALITY_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+	ts.SyntaxKind.EqualsEqualsEqualsToken,
+	ts.SyntaxKind.EqualsEqualsToken,
+	ts.SyntaxKind.ExclamationEqualsEqualsToken,
+	ts.SyntaxKind.ExclamationEqualsToken,
+]);
+
+const LOGICAL_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+	ts.SyntaxKind.AmpersandAmpersandToken,
+	ts.SyntaxKind.BarBarToken,
+	ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+/**
+ * Reports whether a reference can be a condition that TypeScript narrows
+ * by: a test of a statement or a conditional, an operand of a logical
+ * expression, a `switch` or `case` expression, a call argument (an
+ * assertion), the initializer of another alias, or a returned value (an
+ * inferred type predicate). The check looks through parentheses, type
+ * assertions, `!`, and equality operators.
+ * @param reference - A reference to the `const`.
+ * @returns False only when the reference cannot narrow.
+ */
+function readByCondition(reference: ts.Node): boolean {
+	let node = reference;
+	let { parent } = node;
+	while (
+		ts.isParenthesizedExpression(parent) ||
+		ts.isAssertionExpression(parent) ||
+		ts.isSatisfiesExpression(parent) ||
+		ts.isNonNullExpression(parent) ||
+		(ts.isPrefixUnaryExpression(parent) &&
+			parent.operator === ts.SyntaxKind.ExclamationToken) ||
+		(ts.isBinaryExpression(parent) && EQUALITY_OPERATORS.has(parent.operatorToken.kind))
+	) {
+		node = parent;
+		({ parent } = node);
+	}
+
+	if (ts.isBinaryExpression(parent)) {
+		return LOGICAL_OPERATORS.has(parent.operatorToken.kind);
+	}
+
+	if (
+		ts.isIfStatement(parent) ||
+		ts.isWhileStatement(parent) ||
+		ts.isDoStatement(parent) ||
+		ts.isSwitchStatement(parent) ||
+		ts.isCaseClause(parent)
+	) {
+		return parent.expression === node;
+	}
+
+	if (ts.isForStatement(parent) || ts.isConditionalExpression(parent)) {
+		return parent.condition === node;
+	}
+
+	// A `const` initialized with the reference aliases it in turn.
+	return (
+		ts.isCallExpression(parent) ||
+		ts.isVariableDeclaration(parent) ||
+		ts.isReturnStatement(parent) ||
+		(ts.isArrowFunction(parent) && parent.body === node)
+	);
+}
+
 /**
  * Finds the uses a `const` can narrow through its initializer. TypeScript
  * narrows an aliased condition, as in `const ok = typeof v === "string";
@@ -1029,8 +1095,8 @@ function aliasNarrowedNodes(
 	if (
 		!ts.isVariableDeclaration(owner) ||
 		owner.initializer === undefined ||
-		references.length === 0 ||
-		(ts.getCombinedNodeFlags(owner) & (ts.NodeFlags.Const | ts.NodeFlags.Using)) === 0
+		(ts.getCombinedNodeFlags(owner) & (ts.NodeFlags.Const | ts.NodeFlags.Using)) === 0 ||
+		!references.some(readByCondition)
 	) {
 		return [];
 	}
@@ -1046,9 +1112,17 @@ function aliasNarrowedNodes(
 
 		if (node.kind === ts.SyntaxKind.ThisKeyword) {
 			thisReads.push(node);
-		} else if (ts.isIdentifier(node)) {
+		} else if (
+			ts.isIdentifier(node) &&
+			(!ts.isPropertyAccessExpression(node.parent) || node.parent.name !== node)
+		) {
+			// Only a variable, a parameter, or an import is a narrowable
+			// reference. A property access narrows through its object.
 			const symbol = checker.getSymbolAtLocation(node);
-			if (symbol !== undefined) {
+			if (
+				symbol !== undefined &&
+				(symbol.flags & (ts.SymbolFlags.Variable | ts.SymbolFlags.Alias)) !== 0
+			) {
 				symbols.add(symbol);
 				names.add(node.text);
 			}

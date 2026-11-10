@@ -169,6 +169,16 @@ export function k(): void {
 }`,
 	},
 	{
+		name: "aliased condition through another alias",
+		code: `
+export function g(v: string | number) {
+	const ok: boolean = typeof v === "string";
+	const same = ok;
+	if (!same) return "none";
+	return v;
+}`,
+	},
+	{
 		name: "aliased condition after its block",
 		code: `
 export function g(v: string | number) {
