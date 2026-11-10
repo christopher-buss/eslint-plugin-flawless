@@ -690,6 +690,32 @@ const valid: Array<ValidTestCase> = [
 		declare function each(callback: (value: any) => void): void;
 		each((value: string) => {});
 	`,
+	// An optional tuple element is not a fixed position.
+	unindent`
+		declare function handle(listener: (...args: [chunk: string, size?: number]) => void): void;
+		handle((chunk, size: number | undefined) => {});
+	`,
+	// A rest element in the tuple is not a fixed position.
+	unindent`
+		declare function handle(listener: (...args: [chunk: string, ...sizes: Array<number>]) => void): void;
+		handle((chunk, size: number) => {});
+	`,
+	// A rest parameter holds the rest of the tuple, not one element.
+	unindent`
+		declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+		handle((chunk, ...rest: [size: number]) => {});
+	`,
+	// A function that needs more arguments than the tuple holds gets no
+	// contextual signature at all.
+	unindent`
+		declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+		handle((chunk: string, size: number, extra: boolean) => {});
+	`,
+	// A position past the tuple has no contextual type.
+	unindent`
+		declare function handle(listener: (...args: [chunk: string]) => void): void;
+		handle((chunk, extra?: boolean) => {});
+	`,
 
 	// --- catch clauses ---
 
@@ -1583,6 +1609,48 @@ const invalid: Array<InvalidTestCase> = [
 		output: unindent`
 			declare function each(callback: (...values: Array<string>) => void): void;
 			each((...values) => {});
+		`,
+	},
+	// A rest parameter of a fixed tuple types each position with its element.
+	{
+		code: unindent`
+			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+			handle((chunk: string, size: number) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
+		output: unindent`
+			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+			handle((chunk, size) => {});
+		`,
+	},
+	// An unnamed tuple pairs the same way, after the leading parameters.
+	{
+		code: unindent`
+			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
+			handle((event: string, id: number, done: boolean) => {});
+		`,
+		errors: [
+			{ messageId: parameterMessageId },
+			{ messageId: parameterMessageId },
+			{ messageId: parameterMessageId },
+		],
+		output: unindent`
+			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
+			handle((event, id, done) => {});
+		`,
+	},
+	// `Parameters` gives a fixed tuple, so a mock's parameters restate it.
+	{
+		code: unindent`
+			type Listener = (value: string, count: number) => void;
+			declare function mock(implementation: (...args: Parameters<Listener>) => void): void;
+			mock((value: Parameters<Listener>[0], count: number) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
+		output: unindent`
+			type Listener = (value: string, count: number) => void;
+			declare function mock(implementation: (...args: Parameters<Listener>) => void): void;
+			mock((value, count) => {});
 		`,
 	},
 	// An explicit type argument pins the generic, so the annotation restates it.

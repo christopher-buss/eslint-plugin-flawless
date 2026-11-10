@@ -2283,6 +2283,16 @@ export const corpus: ReadonlyArray<CorpusCase> = [
 		`,
 	},
 	{
+		name: "callback: rest tuple positions",
+		code: unindent`
+			type Listener = (value: string, count: number) => void;
+			declare function mock(implementation: (...args: Parameters<Listener>) => void): void;
+			mock((value: Parameters<Listener>[0], count: number) => value.length + count);
+			declare function stream(listener: (...args: [chunk: string, size?: number]) => void): void;
+			stream((chunk: string, size: number | undefined) => size ?? chunk.length);
+		`,
+	},
+	{
 		name: "R6 narrowed let",
 		code: unindent`
 			declare const v: string | number; if (typeof v === "string") { let x: string = v; x = "b"; void x; } export {};

@@ -200,6 +200,25 @@ methods. A method takes its context from the property of the same name in the
 object's contextual type. A function declaration has no contextual type, so its
 parameters must be annotated.
 
+A rest parameter whose type is a tuple gives each position its element. A
+parameter is paired only with a required element that has only required elements
+before it. An optional element, a rest element, or a callback rest parameter at
+that position is not reported:
+
+```ts
+declare function handle(
+	listener: (...args: [chunk: string, size: number]) => void,
+): void;
+
+handle((chunk: string, size: number) => chunk.length + size); // both are reported
+
+declare function stream(
+	listener: (...args: [chunk: string, ...sizes: Array<number>]) => void,
+): void;
+
+stream((chunk, size: number) => chunk.length + size); // NOT reported — `size` is in the rest element
+```
+
 A contextual type of `undefined` or `null` gives no signature, so those members
 are dropped first: an optional callback property counts as its function type. A
 union of different function types, or a method in an object whose context is a
