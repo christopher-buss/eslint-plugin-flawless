@@ -1410,6 +1410,60 @@ const invalid: Array<InvalidTestCase> = [
 		};
 	}),
 
+	// The removal of isNum narrows v in its block, which the narrowing of ok
+	// also observes. The two are coupled, so the problem of isNum does not
+	// reject ok.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			declare const v: string | number;
+			const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+			if (ok) {}
+			const isNum: boolean = typeof v === "number";
+			if (isNum) { console.log(v); }
+		`,
+		errors: [{ line: 4, messageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			declare const v: string | number;
+			const ok = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+			if (ok) {}
+			const isNum: boolean = typeof v === "number";
+			if (isNum) { console.log(v); }
+		`,
+	},
+	// Each removal alone is safe, but not both: without both annotations, same
+	// narrows v. The fix of same is verified. ok, which needs proof, is safe
+	// alone, so it is reported without a fix.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			export function narrow(v: string | number) {
+				const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+				const same: boolean = ok;
+				if (!same) return "none";
+				return v;
+			}
+		`,
+		errors: [
+			{ line: 4, messageId },
+			{ line: 5, messageId },
+		],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			export function narrow(v: string | number) {
+				const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+				const same = ok;
+				if (!same) return "none";
+				return v;
+			}
+		`,
+	},
+
 	// --- parameters ---
 
 	// The callback's parameter type comes from the signature it is passed to.

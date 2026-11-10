@@ -15,8 +15,8 @@ export interface Candidate {
 	readonly range: readonly [number, number];
 	/**
 	 * The removal is reported only when it is proven safe alone. It is
-	 * selected first and checked alone, apart from the work limit of the
-	 * other checks.
+	 * selected first, and a coupled one is checked alone, apart from the
+	 * work limit of the other checks.
 	 */
 	readonly requiresProof?: boolean;
 }
@@ -64,7 +64,8 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
 // The check alone of a coupled removal that requires proof is not in this
-// budget, so one lint creates at most MAX_PROGRAMS + MAX_PROGRAMS - 2 programs.
+// budget. Each selected removal uses at most one check alone and one combined
+// check, so one lint creates at most 2 * (MAX_PROGRAMS - 2) programs.
 const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
