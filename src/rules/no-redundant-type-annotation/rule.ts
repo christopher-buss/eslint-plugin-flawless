@@ -1651,9 +1651,7 @@ function create(
 			return false;
 		}
 
-		// A `this` parameter is not a signature parameter.
-		const { params }: { params: ReadonlyArray<ContextualParameter> } = callback;
-		const parameters = hasThisParameter(callback) ? params.slice(1) : params;
+		const parameters = getPositionalParameters(callback);
 		// A rest parameter is last, and it types every position from its own.
 		const last = before.parameters.length - 1;
 		const restStart = isRestParameter(before, last) ? last : Number.POSITIVE_INFINITY;
