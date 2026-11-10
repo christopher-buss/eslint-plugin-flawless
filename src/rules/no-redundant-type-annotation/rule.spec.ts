@@ -1371,6 +1371,45 @@ const invalid: Array<InvalidTestCase> = [
 		].join("\n"),
 	},
 
+	// Each removal of a pair is safe alone, but not together, so the pairs
+	// use all the programs of the combined check. A variable that needs
+	// proof is reported when its removal alone is safe, so it is still
+	// reported, without a fix. This holds also for two such variables that
+	// are coupled.
+	...[
+		{
+			errors: [3, 6, 12, 18, 24],
+			kept: ["const kept: Array<Item> = items.filter((item) => item.ok);"],
+		},
+		{
+			errors: [3, 4, 7, 13, 19, 25],
+			kept: [
+				"const kept: Array<Item> = items.filter((item) => item.ok);",
+				"const more: Array<Item> = kept.filter((item) => item.ok);",
+			],
+		},
+	].map(({ errors, kept }) => {
+		return {
+			code: [
+				"interface Item { ok: boolean }",
+				"declare const items: Array<Item>;",
+				...kept,
+				...Array.from({ length: 4 }, (_, index) => {
+					return [
+						`function narrow${index}(v: string | number) {`,
+						`const ok${index}: boolean = typeof v === "string";`,
+						`const same${index}: boolean = ok${index};`,
+						`if (!same${index}) return "none";`,
+						"return v;",
+						"}",
+					];
+				}).flat(),
+			].join("\n"),
+			errors: errors.map((line) => ({ line, messageId })),
+			output: null,
+		};
+	}),
+
 	// --- parameters ---
 
 	// The callback's parameter type comes from the signature it is passed to.

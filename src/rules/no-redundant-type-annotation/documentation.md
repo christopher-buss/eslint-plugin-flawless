@@ -76,8 +76,7 @@ const values: Array<Option> = options.map(({ value }) => value); // reported
 
 When a generic or overloaded call can give the callback its context from the
 annotation, as `filter` and `reduce` can, the variable is reported only if the
-verifier accepts the removal. Such a variable is not reported when the removal
-is not verified (see below).
+verifier proves that the removal of its annotation alone is safe (see below).
 
 ### `any` is never redundant
 
@@ -462,17 +461,21 @@ Assertion functions and receivers used by assertion calls keep their variable or
 parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
 
-Verification is bounded to twelve speculative programs per lint of a file. At
-most ten candidate annotations are verified in that pass. A variable whose
-callback argument needs the verifier (see above) is verified before the other
-candidates, so other candidates do not change whether it is reported. Candidates
-past that limit are still reported but carry no fix, except such a variable,
-which is not reported; `eslint --fix` repeats its fix passes, and each pass
-verifies further candidates after earlier fixes have been applied. If the
-compiler fails during verification, the annotations are left alone and not
-reported. Files with no candidates create no speculative program. Speculative
-programs reuse the parser program's resolved project references, module
-resolution cache, and file system lookups.
+Verification creates at most twelve speculative programs per lint of a file,
+plus one for each variable whose callback argument needs the verifier (see
+above) and whose removal is coupled with another, so at most twenty-two. At most
+ten candidate annotations are verified in that pass. Such variables are selected
+first. Each one is reported when its removal alone is safe: a coupled one gets
+its own program for that check, and the first combined check decides an
+uncoupled one. So candidates of other kinds do not change whether it is
+reported. It carries a fix only when the combined fix is verified too.
+Candidates past the limit of ten are still reported but carry no fix, except
+such a variable, which is not reported; `eslint --fix` repeats its fix passes,
+and each pass verifies further candidates after earlier fixes have been applied.
+If the compiler fails during verification, the annotations are left alone and
+not reported. Files with no candidates create no speculative program.
+Speculative programs reuse the parser program's resolved project references,
+module resolution cache, and file system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,

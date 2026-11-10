@@ -2597,14 +2597,19 @@ function create(
 		},
 		"Program:exit": function (node: TSESTree.Program): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
-			// The verifier checks a limited number of candidates. A candidate
-			// that needs proof goes first, so other candidates cannot hide it.
-			const { accepted, unverified } = verifyAnnotations(services.program, source, [
-				...candidates.filter(({ requiresProof }) => requiresProof === true),
-				...candidates.filter(({ requiresProof }) => requiresProof !== true),
-			]);
+			const { accepted, acceptedAlone, unverified } = verifyAnnotations(
+				services.program,
+				source,
+				candidates,
+			);
 			for (const candidate of accepted) {
 				report(candidate, true);
+			}
+
+			// A user or an editor can apply this fix alone, but the combined
+			// fix of `eslint --fix` is not verified.
+			for (const candidate of acceptedAlone) {
+				report(candidate, false);
 			}
 
 			// Unverified is not proven unsafe. Keep the report visible, but
