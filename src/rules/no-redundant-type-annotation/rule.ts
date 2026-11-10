@@ -381,14 +381,9 @@ function isHiddenFromEmitter(node: TSESTree.Node): boolean {
  * and nothing inside a function body or static block.
  *
  * @param identifier - The reference to inspect.
- * @param printedType - Whether the reference is a type that the emitter
- *   prints wherever it is.
  * @returns True when the emitter reads the referenced declaration there.
  */
-function isEmitterRead(
-	identifier: TSESTree.Identifier | TSESTree.JSXIdentifier,
-	printedType: boolean,
-): boolean {
+function isEmitterRead(identifier: TSESTree.Identifier | TSESTree.JSXIdentifier): boolean {
 	// One walk to the root finds both a hiding body and an enum member
 	// initializer, which is copied whole at any depth.
 	let inEnumInitializer = false;
@@ -405,7 +400,7 @@ function isEmitterRead(
 		node = parent;
 	}
 
-	if (printedType || inEnumInitializer) {
+	if (inEnumInitializer) {
 		return true;
 	}
 
@@ -1842,11 +1837,13 @@ function create(
 					return false;
 				}
 
-				// The emitter prints every type that names a class.
-				return isEmitterRead(
-					identifier,
-					node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference,
-				);
+				// The emitter prints every type that names a class, outside a
+				// function body or static block.
+				if (node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference) {
+					return !isHiddenFromEmitter(identifier);
+				}
+
+				return isEmitterRead(identifier);
 			});
 		});
 	}
