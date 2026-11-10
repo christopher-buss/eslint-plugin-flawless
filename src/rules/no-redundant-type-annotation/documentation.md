@@ -82,6 +82,24 @@ value whose type the context shapes, such as `items.map(() => "a")`, and to a
 callback that a conditional or a sequence passes to the call, or that a tagged
 template substitution passes to its tag.
 
+A non-empty array literal of plain values is also reported only if the verifier
+proves its removal alone is safe. Without the annotation, an element can lose
+its literal type, and the array is not a tuple or readonly:
+
+```ts
+declare function read(): number;
+
+const open: Array<number> = [-1]; // reported
+const values: Array<number> = [read(), 2]; // reported
+
+const tuple: [number] = [-1]; // not reported: it becomes number[]
+const flags: Array<-1 | 0> = [-1]; // not reported: it becomes number[]
+const list: ReadonlyArray<number> = [-1]; // not reported: it becomes number[]
+```
+
+An array literal that is empty, or that holds an object, array, or function
+literal, or spreads a value that the annotation types, is never reported.
+
 ### `any` is never redundant
 
 `any` is mutually assignable with every type, so a structural comparison alone
@@ -524,7 +542,8 @@ after the `=>`, because a line break before `=>` is a syntax error.
 
 - Variable declarations are checked for `const` and `let` with a plain
   identifier only. Destructuring patterns and class properties are out of scope.
-- Object and array literal initializers are skipped. There the annotation also
+- Object literal initializers are skipped, and so are array literals that are
+  empty or hold an object, array, or function literal. There the annotation also
   governs excess property checking and literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
   subject.

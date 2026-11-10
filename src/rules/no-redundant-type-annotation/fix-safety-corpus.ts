@@ -16,6 +16,21 @@ export interface CorpusCase {
 export const corpus: ReadonlyArray<CorpusCase> = [
 	...regressions,
 	{
+		name: "array literal: plain values",
+		code: unindent`
+			declare function read(): number;
+			declare const values: Array<number>;
+			const open: Array<number> = [-1];
+			const mixed: Array<number> = [read(), 2, ...values];
+			const tuple: [number] = [1];
+			const literal: Array<-1> = [-1];
+			const sparse: Array<number | undefined> = [1, , 2];
+			let changed: Array<number> = [1];
+			changed = [2];
+			export { changed, literal, mixed, open, sparse, tuple };
+		`,
+	},
+	{
 		name: "callback: context from the receiver",
 		code: unindent`
 			type Option = "a" | "b";

@@ -1695,11 +1695,12 @@ function create(
 			return hasTemplateType(services.getTypeAtLocation(node)) ? "dependent" : "independent";
 		}
 
-		if (
-			node.type === AST_NODE_TYPES.ObjectExpression ||
-			node.type === AST_NODE_TYPES.ArrayExpression
-		) {
+		if (node.type === AST_NODE_TYPES.ObjectExpression) {
 			return "dependent";
+		}
+
+		if (node.type === AST_NODE_TYPES.ArrayExpression) {
+			return arrayLiteralDependence(node);
 		}
 
 		const operands = contextForwardedOperands(node);
@@ -1708,6 +1709,56 @@ function create(
 		}
 
 		return contextDependence(node);
+	}
+
+	/**
+	 * Finds the dependence of an array literal that the annotation types.
+	 *
+	 * The annotation gives each element its element type. An empty array is
+	 * `never[]` without it. An object, array, or function literal element
+	 * gets excess property checks or the types of its parameters, `this`,
+	 * and return value from it, and the verifier does not observe these. Any
+	 * other element can only keep or lose its literal type, and the array
+	 * can only be a tuple or not. These change the type of the variable,
+	 * which the verifier compares, so it decides.
+	 *
+	 * @param node - The array literal to inspect.
+	 * @returns `"unproven"` when no element makes the array dependent.
+	 */
+	function arrayLiteralDependence(node: TSESTree.ArrayExpression): ContextDependence {
+		if (node.elements.length === 0) {
+			return "dependent";
+		}
+
+		function elementDependence(element: null | TSESTree.Node): ContextDependence {
+			if (element === null) {
+				return "independent";
+			}
+
+			// A spread hands the array's own context to its operand.
+			if (element.type === AST_NODE_TYPES.SpreadElement) {
+				return elementDependence(element.argument);
+			}
+
+			if (
+				element.type === AST_NODE_TYPES.ObjectExpression ||
+				element.type === AST_NODE_TYPES.ArrayExpression ||
+				isContextualFunction(element)
+			) {
+				return "dependent";
+			}
+
+			const operands = contextForwardedOperands(element);
+			if (operands !== undefined) {
+				return strongestDependence(operands, elementDependence);
+			}
+
+			return annotationContextDependence(element);
+		}
+
+		return strongestDependence(node.elements, elementDependence) === "dependent"
+			? "dependent"
+			: "unproven";
 	}
 
 	/**
