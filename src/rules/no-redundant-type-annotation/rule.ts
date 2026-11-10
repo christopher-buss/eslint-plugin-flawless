@@ -742,6 +742,46 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
 }
 
 /**
+ * Finds the operands that an expression hands its own contextual type to.
+ *
+ * These are both branches of a conditional, both operands of a logical
+ * expression, the last expression of a sequence, and the operand of `await`,
+ * `!`, `as const`, and an optional chain.
+ *
+ * @param node - The expression to inspect.
+ * @returns The operands, or undefined when the expression forwards no
+ *   context.
+ */
+function contextForwardedOperands(node: TSESTree.Node): ReadonlyArray<TSESTree.Node> | undefined {
+	if (node.type === AST_NODE_TYPES.ConditionalExpression) {
+		return [node.consequent, node.alternate];
+	}
+
+	if (node.type === AST_NODE_TYPES.LogicalExpression) {
+		return [node.left, node.right];
+	}
+
+	if (node.type === AST_NODE_TYPES.SequenceExpression) {
+		return node.expressions.slice(-1);
+	}
+
+	if (node.type === AST_NODE_TYPES.AwaitExpression) {
+		return [node.argument];
+	}
+
+	// An optional chain wraps the call it makes.
+	if (
+		node.type === AST_NODE_TYPES.ChainExpression ||
+		node.type === AST_NODE_TYPES.TSNonNullExpression ||
+		isConstAssertion(node)
+	) {
+		return [node.expression];
+	}
+
+	return undefined;
+}
+
+/**
  * Combines the dependence of several expressions. A sure dependence wins and
  * stops the walk, then an unproven one.
  *
@@ -1549,28 +1589,9 @@ function create(
 			return "dependent";
 		}
 
-		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-			return strongestDependence(
-				[node.consequent, node.alternate],
-				annotationContextDependence,
-			);
-		}
-
-		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return strongestDependence([node.left, node.right], annotationContextDependence);
-		}
-
-		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return annotationContextDependence(node.argument);
-		}
-
-		if (node.type === AST_NODE_TYPES.TSNonNullExpression || isConstAssertion(node)) {
-			return annotationContextDependence(node.expression);
-		}
-
-		if (node.type === AST_NODE_TYPES.SequenceExpression) {
-			const last = node.expressions.at(-1);
-			return last === undefined ? "independent" : annotationContextDependence(last);
+		const operands = contextForwardedOperands(node);
+		if (operands !== undefined) {
+			return strongestDependence(operands, annotationContextDependence);
 		}
 
 		return contextDependence(node);
@@ -1688,9 +1709,8 @@ function create(
 	 * itself.
 	 *
 	 * The walk follows only the positions the annotation's contextual type
-	 * actually reaches: the initializer, both branches of a conditional or
-	 * logical expression, through `await`, `!`, `as const`, and an optional
-	 * chain, and into call arguments.
+	 * actually reaches: the initializer, the operands that
+	 * `contextForwardedOperands` finds, and call arguments.
 	 *
 	 * @param node - The expression to inspect.
 	 * @returns `"unproven"` when only an untyped callback argument, whose
@@ -1727,28 +1747,10 @@ function create(
 			return isInferenceSensitiveCall(node) ? "dependent" : "independent";
 		}
 
-		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-			return strongestDependence([node.consequent, node.alternate], contextDependence);
-		}
-
-		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return strongestDependence([node.left, node.right], contextDependence);
-		}
-
-		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return contextDependence(node.argument);
-		}
-
-		// An optional chain wraps the call it makes.
-		if (
-			node.type === AST_NODE_TYPES.ChainExpression ||
-			node.type === AST_NODE_TYPES.TSNonNullExpression ||
-			isConstAssertion(node)
-		) {
-			return contextDependence(node.expression);
-		}
-
-		return "independent";
+		const operands = contextForwardedOperands(node);
+		return operands === undefined
+			? "independent"
+			: strongestDependence(operands, contextDependence);
 	}
 
 	/**

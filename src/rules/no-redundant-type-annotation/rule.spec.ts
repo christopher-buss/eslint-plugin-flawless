@@ -1393,6 +1393,14 @@ const invalid: Array<InvalidTestCase> = [
 			errors: 11,
 			fixed: "const last = items.map((item) => item.name);",
 		},
+		// A sequence hands its context to its last expression, so this
+		// callback also takes its context from the annotation. The removal
+		// changes the type, so it is not reported.
+		{
+			code: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
+			errors: 10,
+			fixed: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
+		},
 	].map(({ code, errors, fixed }) => {
 		const prefix = unindent`
 			interface Item { name: string; ok: boolean }
