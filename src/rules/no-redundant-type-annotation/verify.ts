@@ -1047,7 +1047,8 @@ function canActAsCondition(reference: ts.Node): boolean {
 	while (
 		ts.isParenthesizedExpression(parent) ||
 		ts.isAssertionExpression(parent) ||
-		ts.isSatisfiesExpression(parent) ||
+		// TypeScript 4.8 has no `isSatisfiesExpression`.
+		parent.kind === ts.SyntaxKind.SatisfiesExpression ||
 		ts.isNonNullExpression(parent) ||
 		(ts.isPrefixUnaryExpression(parent) &&
 			parent.operator === ts.SyntaxKind.ExclamationToken) ||

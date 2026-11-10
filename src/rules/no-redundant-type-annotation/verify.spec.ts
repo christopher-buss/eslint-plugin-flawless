@@ -19,6 +19,13 @@ const directory = path.resolve(__dirname, "../../../fixtures");
 const [major = 0, minor = 0] = ts.versionMajorMinor.split(".").map(Number);
 const projectServiceSharesCompiler = major > 5 || (major === 5 && minor >= 3);
 
+// Before TypeScript 5.2, a condition alias does not narrow `this`, so that
+// annotation is not needed there.
+const aliasesThis = major > 5 || (major === 5 && minor >= 2);
+const verifiedRegressions = regressions.filter(
+	({ name }) => aliasesThis || name !== "aliased condition of this",
+);
+
 /**
  * A real checker over an editor buffer, without writing the source to disk.
  * @param code - The unsaved source text.
@@ -104,7 +111,7 @@ function compilerProblems(code: string, removals: ReadonlyArray<Candidate>): Rea
 }
 
 describe("annotation verification", () => {
-	it.each(regressions)("keeps annotations needed by $name", ({ code }) => {
+	it.each(verifiedRegressions)("keeps annotations needed by $name", ({ code }) => {
 		const { candidates, program, source } = project(code);
 		const verification = verifyAnnotations(program, source, candidates);
 		expect(verification.rejected.length).toBeGreaterThan(0);
