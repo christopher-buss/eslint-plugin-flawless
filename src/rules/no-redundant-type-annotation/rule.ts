@@ -83,7 +83,7 @@ type ReturnTypedFunction =
 	| TSESTree.FunctionDeclaration
 	| TSESTree.FunctionExpression;
 
-/** An arrow or function expression, a class member's included. */
+/** An arrow or function expression, also one that is a class method. */
 type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
 
 /** A redundant annotation, with what its report shows. */
