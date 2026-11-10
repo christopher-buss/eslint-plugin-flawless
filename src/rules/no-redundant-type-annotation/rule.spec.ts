@@ -563,11 +563,38 @@ const valid: Array<ValidTestCase> = [
 		declare function wrap<T>(callback: (value: T) => T): void;
 		wrap((value: number) => value);
 	`,
-	// An overloaded callee can be picked by the parameter type.
+	// An overloaded callee can be picked by the parameter type. Without the
+	// annotation, the first overload resolves and `payload` is `number`.
 	unindent`
-		declare function on(event: "click", handler: (payload: number) => void): void;
-		declare function on(event: "key", handler: (payload: string) => void): void;
-		on("click", (payload: number) => {});
+		declare function on(handler: (payload: number) => void): void;
+		declare function on(handler: (payload: string) => void): void;
+		on((payload: string) => {});
+	`,
+	// The first overload fails on `b`, but it gives `a` the type `number`
+	// before the second overload resolves.
+	unindent`
+		declare function on(handler: (a: number, b: number) => void): void;
+		declare function on(handler: (a: string, b: string) => void): void;
+		on((a: string, b: string) => {});
+	`,
+	// The annotation fails the first overload, so the `any` catch-all
+	// resolves. Without it, the first overload resolves.
+	unindent`
+		interface Stream {
+			on(event: "data", listener: (chunk: Uint8Array) => void): this;
+			on(event: string, listener: (...args: Array<any>) => void): this;
+		}
+		declare const stream: Stream;
+		stream.on("data", (chunk: string) => {});
+	`,
+	// Only the `any` catch-all accepts this event.
+	unindent`
+		interface Stream {
+			on(event: "data", listener: (chunk: Uint8Array) => void): this;
+			on(event: string, listener: (...args: Array<any>) => void): this;
+		}
+		declare const stream: Stream;
+		stream.on("end", (chunk: Uint8Array) => {});
 	`,
 	// A function the callback returns infers the generic's return type, so its
 	// annotation is the only source of the context it would appear to restate.
@@ -996,6 +1023,62 @@ const invalid: Array<InvalidTestCase> = [
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason) => String(reason));
 		`,
+	},
+	// The call resolves to one overload, which gives the callback its context.
+	// The removal does not change which overload resolves.
+	{
+		code: unindent`
+			interface Emitter {
+				once(event: "exit", listener: (code: null | number) => void): this;
+				once(event: "data", listener: (chunk: string) => void): this;
+			}
+			declare const emitter: Emitter;
+			emitter.once("exit", (code: null | number) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Emitter {
+				once(event: "exit", listener: (code: null | number) => void): this;
+				once(event: "data", listener: (chunk: string) => void): this;
+			}
+			declare const emitter: Emitter;
+			emitter.once("exit", (code) => {});
+		`,
+	},
+	// An `any` catch-all does not resolve here, with or without the annotation.
+	{
+		code: unindent`
+			interface Stream {
+				on(event: "data", listener: (chunk: Uint8Array) => void): this;
+				on(event: string, listener: (...args: Array<any>) => void): this;
+			}
+			declare const stream: Stream;
+			stream.on("data", (chunk: Uint8Array) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			interface Stream {
+				on(event: "data", listener: (chunk: Uint8Array) => void): this;
+				on(event: string, listener: (...args: Array<any>) => void): this;
+			}
+			declare const stream: Stream;
+			stream.on("data", (chunk) => {});
+		`,
+	},
+	// Past the work limit, a parameter of an overload pick is not verified, so
+	// it is not reported. The next fix pass verifies it.
+	{
+		code: [
+			'declare function on(event: "a", handler: (value: string) => void): void;',
+			'declare function on(event: "b", handler: (value: number) => void): void;',
+			...Array.from({ length: 11 }, () => 'on("a", (value: string) => {});'),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
+		output: [
+			'declare function on(event: "a", handler: (value: string) => void): void;',
+			'declare function on(event: "b", handler: (value: number) => void): void;',
+			...Array.from({ length: 11 }, () => 'on("a", (value) => {});'),
+		].join("\n"),
 	},
 	// An arrow callback ignores an inferred `this`.
 	{

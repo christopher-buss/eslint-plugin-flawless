@@ -127,6 +127,18 @@ interface ContextualSignature {
 	readonly signature: Signature;
 }
 
+/** The node that fixes a function expression's contextual type. */
+interface ContextAnchor {
+	/** The anchor node. */
+	readonly node: TSESTree.Node;
+	/**
+	 * The context is a parameter of the overload that the call resolves to.
+	 * The annotation can change which overload resolves, so only the verifier
+	 * can prove a removal safe.
+	 */
+	readonly picksOverload: boolean;
+}
+
 /**
  * A parameter of a function outside a class body. Only a constructor can
  * declare a parameter property, and the parser rejects one anywhere else.
@@ -1032,7 +1044,7 @@ function create(
 	const allowExpressions = options.allowExpressions ?? DEFAULT_OPTIONS.allowExpressions;
 	let exportedNames: Set<string> | undefined;
 	let isScriptFile: boolean | undefined;
-	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
+	const anchors = new Map<FunctionExpressionNode, ContextAnchor | undefined>();
 	const candidates: Array<Candidate & Removal> = [];
 
 	/**
@@ -1446,6 +1458,34 @@ function create(
 	}
 
 	/**
+	 * Reports whether a callback takes its context from the overload that its
+	 * call resolves to, and inference does not take part in that choice.
+	 *
+	 * This is a cost filter, not a proof: the callback's parameter types can
+	 * be what picks the overload, so the verifier decides. Only a callee whose
+	 * overloads are all not generic is accepted.
+	 *
+	 * @param call - The call that receives the callback.
+	 * @param callback - The callback, a direct argument of the call.
+	 * @returns True when the context is a parameter of the resolved overload.
+	 */
+	function isOverloadPick(call: CallLike, callback: FunctionExpressionNode): boolean {
+		if (
+			call.type !== AST_NODE_TYPES.CallExpression &&
+			call.type !== AST_NODE_TYPES.NewExpression
+		) {
+			return false;
+		}
+
+		const signatures = getCalleeSignatures(call);
+		return (
+			call.arguments.includes(callback) &&
+			signatures.length > 1 &&
+			!signatures.some(isGeneric)
+		);
+	}
+
+	/**
 	 * Finds the node that fixes a function expression's contextual type,
 	 * independent of any annotation this rule could remove.
 	 *
@@ -1462,16 +1502,19 @@ function create(
 	 * search does not know, finds no anchor, so an unknown context costs a
 	 * report rather than a wrong fix.
 	 *
+	 * A callback that a call passes to an overload (see `isOverloadPick`) is
+	 * anchored to the call, but only the verifier can prove a removal safe.
+	 *
 	 * @param node - The function expression to locate.
 	 * @returns The anchor, or undefined when the context is not proven stable.
 	 */
-	function resolveContextAnchor(node: FunctionExpressionNode): TSESTree.Node | undefined {
+	function resolveContextAnchor(node: FunctionExpressionNode): ContextAnchor | undefined {
 		if (anchors.has(node)) {
 			return anchors.get(node);
 		}
 
 		let current: TSESTree.Node = node;
-		let anchor: TSESTree.Node | undefined;
+		let anchor: ContextAnchor | undefined;
 		while (current.type !== AST_NODE_TYPES.Program) {
 			const parent: TSESTree.Node = current.parent;
 			if (forwardsContext(parent, current)) {
@@ -1485,7 +1528,7 @@ function create(
 				// one, a declaration has no context to pass on, and an expression
 				// passes on its own.
 				if (returning.returnType !== undefined) {
-					anchor = returning;
+					anchor = { node: returning, picksOverload: false };
 				} else if (returning.type !== AST_NODE_TYPES.FunctionDeclaration) {
 					current = returning;
 					continue;
@@ -1495,17 +1538,22 @@ function create(
 			}
 
 			if (isWrittenAnchor(parent, current)) {
-				anchor = parent;
+				anchor = { node: parent, picksOverload: false };
 				break;
 			}
 
 			const call = getReceivingCall(parent, current);
+			if (call === undefined) {
+				break;
+			}
+
 			if (
-				call !== undefined &&
-				(hasFixedSignature(call) ||
-					(current === node && hasSettledCallbackParameters(call, node)))
+				hasFixedSignature(call) ||
+				(current === node && hasSettledCallbackParameters(call, node))
 			) {
-				anchor = call;
+				anchor = { node: call, picksOverload: false };
+			} else if (current === node && isOverloadPick(call, node)) {
+				anchor = { node: call, picksOverload: true };
 			}
 
 			break;
@@ -1534,7 +1582,7 @@ function create(
 			return (
 				isContextualFunction(child) &&
 				!child.params.every(isUntypedParameter) &&
-				resolveContextAnchor(child) === anchor
+				resolveContextAnchor(child)?.node === anchor
 			);
 		}
 
@@ -2758,7 +2806,8 @@ function create(
 			return;
 		}
 
-		if (resolveContextAnchor(node) === undefined) {
+		const anchor = resolveContextAnchor(node);
+		if (anchor === undefined) {
 			return;
 		}
 
@@ -2838,7 +2887,12 @@ function create(
 				continue;
 			}
 
-			collect({ annotation, messageId: PARAMETER_MESSAGE_ID, type: annotationType });
+			collect({
+				annotation,
+				messageId: PARAMETER_MESSAGE_ID,
+				requiresProof: anchor.picksOverload,
+				type: annotationType,
+			});
 		}
 	}
 
