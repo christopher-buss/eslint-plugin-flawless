@@ -132,22 +132,24 @@ export function verifyAnnotations<C extends Candidate>(
 		const snapshots = new Map(
 			selected.map((candidate) => {
 				const thisFree = thisFreeCall(candidate.owner);
+				const ownerReferences = references.get(candidate.owner) ?? [];
 				return [
 					candidate,
-					observedNodes(candidate, references.get(candidate.owner) ?? [], thisFree).map(
-						(node) => {
-							let type: string | undefined;
-							const omitThis = thisFree?.arrows.has(node) === true;
-							return {
-								node,
-								omitThis,
-								original: (): string => {
-									type ??= print(checker, node, declarationKey, omitThis);
-									return type;
-								},
-							};
-						},
-					),
+					[
+						...observedNodes(candidate, ownerReferences, thisFree),
+						...aliasNarrowedNodes(checker, candidate.owner, ownerReferences),
+					].map((node) => {
+						let type: string | undefined;
+						const omitThis = thisFree?.arrows.has(node) === true;
+						return {
+							node,
+							omitThis,
+							original: (): string => {
+								type ??= print(checker, node, declarationKey, omitThis);
+								return type;
+							},
+						};
+					}),
 				];
 			}),
 		);
@@ -1004,6 +1006,104 @@ function observedNodes(
 		visit(root);
 	}
 
+	return nodes;
+}
+
+/**
+ * Finds the uses a `const` can narrow through its initializer. TypeScript
+ * narrows an aliased condition, as in `const ok = typeof v === "string";
+ * if (ok) v.length`, only when the `const` has no annotation. Removing the
+ * annotation therefore changes the types of `v`, `this`, and property
+ * accesses on them after the declaration, where the `const` is in scope.
+ * @param checker - The original checker.
+ * @param owner - The candidate's declaration.
+ * @param references - The referencing identifiers of the owner.
+ * @returns The narrowable references after the declaration, with their
+ * property and element accesses.
+ */
+function aliasNarrowedNodes(
+	checker: ts.TypeChecker,
+	owner: Candidate["owner"],
+	references: ReadonlyArray<ts.Identifier>,
+): Array<ts.Node> {
+	if (
+		!ts.isVariableDeclaration(owner) ||
+		owner.initializer === undefined ||
+		references.length === 0 ||
+		(ts.getCombinedNodeFlags(owner) & (ts.NodeFlags.Const | ts.NodeFlags.Using)) === 0
+	) {
+		return [];
+	}
+
+	const symbols = new Set<ts.Symbol>();
+	const names = new Set<string>();
+	const thisReads: Array<ts.Node> = [];
+	function collect(node: ts.Node): void {
+		// A narrowing inside a nested function is not an alias.
+		if (ts.isTypeNode(node) || ts.isFunctionLike(node)) {
+			return;
+		}
+
+		if (node.kind === ts.SyntaxKind.ThisKeyword) {
+			thisReads.push(node);
+		} else if (ts.isIdentifier(node)) {
+			const symbol = checker.getSymbolAtLocation(node);
+			if (symbol !== undefined) {
+				symbols.add(symbol);
+				names.add(node.text);
+			}
+		}
+
+		ts.forEachChild(node, collect);
+	}
+
+	collect(owner.initializer);
+	const readsThis = thisReads.length > 0;
+	if (symbols.size === 0 && !readsThis) {
+		return [];
+	}
+
+	// A `for` statement scopes its own declarations.
+	const statement = owner.parent.parent;
+	const scope = ts.isVariableStatement(statement) ? statement.parent : statement;
+	const nodes: Array<ts.Node> = [];
+	function observe(node: ts.Node): void {
+		let current = node;
+		nodes.push(current);
+		while (
+			(ts.isPropertyAccessExpression(current.parent) ||
+				ts.isElementAccessExpression(current.parent)) &&
+			current.parent.expression === current
+		) {
+			current = current.parent;
+			nodes.push(current);
+		}
+	}
+
+	function visit(node: ts.Node): void {
+		if (ts.isTypeNode(node) || node.end <= owner.end) {
+			return;
+		}
+
+		if (node.pos >= owner.end) {
+			if (node.kind === ts.SyntaxKind.ThisKeyword && readsThis) {
+				observe(node);
+			} else if (ts.isIdentifier(node) && names.has(node.text)) {
+				const symbol = checker.getSymbolAtLocation(node);
+				if (symbol !== undefined && symbols.has(symbol)) {
+					observe(
+						ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+							? node.parent
+							: node,
+					);
+				}
+			}
+		}
+
+		ts.forEachChild(node, visit);
+	}
+
+	visit(scope);
 	return nodes;
 }
 

@@ -413,6 +413,13 @@ function bodies are checked for references to inaccessible or shadowed names.
 These targeted checks supplement the existing conservative guards; they do not
 run complete compiler diagnostics or declaration emit.
 
+TypeScript narrows through a `const` used as a condition only when the `const`
+has no annotation, as in `const ok = typeof v === "string"; if (ok) v.length`.
+For a `const` candidate, the verifier also compares the types of the
+identifiers, `this`, and property and element accesses that its initializer
+reads, at each later use in the scope of the `const`. A removal that changes how
+such a use narrows is not reported. A `let` does not narrow this way.
+
 Assertion functions and receivers used by assertion calls keep their variable or
 parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
