@@ -202,8 +202,9 @@ parameters must be annotated.
 
 A rest parameter whose type is a tuple gives each position its element. A
 parameter is paired only with a required element that has only required elements
-before it. An optional element, a rest element, or a callback rest parameter at
-that position is not reported:
+before it. An optional element or a rest element is not reported. A callback
+rest parameter at the start of the tuple is compared with the whole tuple; a
+callback rest parameter after the start is not reported:
 
 ```ts
 declare function handle(

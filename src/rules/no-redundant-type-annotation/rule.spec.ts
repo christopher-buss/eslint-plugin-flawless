@@ -1627,16 +1627,24 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		code: unindent`
 			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
-			handle((event: string, id: number, done: boolean) => {});
+			handle((event, id: number, done: boolean) => {});
 		`,
-		errors: [
-			{ messageId: parameterMessageId },
-			{ messageId: parameterMessageId },
-			{ messageId: parameterMessageId },
-		],
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
 			handle((event, id, done) => {});
+		`,
+	},
+	// A rest parameter at the start of the tuple restates the whole tuple.
+	{
+		code: unindent`
+			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+			handle((...args: [chunk: string, size: number]) => {});
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
+			handle((...args) => {});
 		`,
 	},
 	// `Parameters` gives a fixed tuple, so a mock's parameters restate it.
