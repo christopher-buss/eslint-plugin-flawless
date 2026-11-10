@@ -1344,6 +1344,10 @@ const invalid: Array<InvalidTestCase> = [
 			'const last: Array<"a"> = items.map(() => "a");',
 			'const last: Array<{ k: "a" }> = items.map(() => ({ k: "a" }));',
 			'const last: Array<["a"]> = items.map(() => ["a"]);',
+			// A sequence or a conditional hands the context on to the callback.
+			'const last: Array<"a"> = items.map((0, () => "a"));',
+			'const last: Array<"a" | "b"> = items.map(read() > 0 ? () => "a" : () => "b");',
+			'const last: Array<"a"> = items.map((0, (item: Item) => "a"));',
 		].map((code) => {
 			return { code, errors: 10, fixed: code };
 		}),

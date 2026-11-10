@@ -1725,6 +1725,36 @@ function create(
 	}
 
 	/**
+	 * Finds the dependence of a call argument, or of an operand that the
+	 * argument hands its context to. A callback there gets its context from
+	 * the parameter at the argument's position, so the verifier can compare
+	 * that context before and after inference.
+	 *
+	 * @param call - The call that receives the argument.
+	 * @param index - The argument's position.
+	 * @param node - The argument, or an operand that it forwards to.
+	 * @returns The dependence of the expression.
+	 */
+	function argumentDependence(
+		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		index: number,
+		node: TSESTree.Node,
+	): ContextDependence {
+		if (isContextualFunction(node)) {
+			return !takesContext(node) || isCallbackContextFixed(call, index, node)
+				? "independent"
+				: "unproven";
+		}
+
+		const operands = contextForwardedOperands(node);
+		if (operands === undefined) {
+			return contextDependence(node);
+		}
+
+		return strongestDependence(operands, (operand) => argumentDependence(call, index, operand));
+	}
+
+	/**
 	 * Reports whether removing the annotation could change what the initializer
 	 * means, because some part of it is typed by its context rather than by
 	 * itself.
@@ -1739,8 +1769,10 @@ function create(
 	 *   depend on its context.
 	 */
 	function contextDependence(node: TSESTree.Node): ContextDependence {
+		// A function here is not a call argument, so its context cannot be
+		// compared before and after inference.
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter) ? "dependent" : "independent";
+			return takesContext(node) ? "dependent" : "independent";
 		}
 
 		if (
@@ -1751,15 +1783,15 @@ function create(
 				return "dependent";
 			}
 
-			return strongestDependence(node.arguments, (argument, index) => {
-				if (!isContextualFunction(argument)) {
-					return contextDependence(argument);
-				}
+			const call = node;
+			function dependenceOf(
+				argument: TSESTree.CallExpressionArgument,
+				index: number,
+			): ContextDependence {
+				return argumentDependence(call, index, argument);
+			}
 
-				return !takesContext(argument) || isCallbackContextFixed(node, index, argument)
-					? "independent"
-					: "unproven";
-			});
+			return strongestDependence(node.arguments, dependenceOf);
 		}
 
 		// A tagged template calls its tag, so a generic tag infers the same way.
