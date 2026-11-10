@@ -187,6 +187,11 @@ const valid: Array<ValidTestCase> = [
 		declare function make<T>(): Array<T>;
 		const items: Array<number> = [...make()];
 	`,
+	// A generic call element infers its type argument from the element type.
+	unindent`
+		declare function make<T>(): T;
+		const items: Array<number> = [make()];
+	`,
 	// Without the annotation, an element loses its literal type, and the
 	// array is not a tuple or readonly.
 	unindent`

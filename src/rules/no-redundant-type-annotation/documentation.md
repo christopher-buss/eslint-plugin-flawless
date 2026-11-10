@@ -82,9 +82,9 @@ value whose type the context shapes, such as `items.map(() => "a")`, and to a
 callback that a conditional or a sequence passes to the call, or that a tagged
 template substitution passes to its tag.
 
-A non-empty array literal of plain values is also reported only if the verifier
-proves its removal alone is safe. Without the annotation, an element can lose
-its literal type, and the array is not a tuple or readonly:
+The same holds for a non-empty array literal of plain values. Without the
+annotation, an element can lose its literal type, and the array is not a tuple
+or readonly:
 
 ```ts
 declare function read(): number;
@@ -97,8 +97,15 @@ const flags: Array<-1 | 0> = [-1]; // not reported: it becomes number[]
 const list: ReadonlyArray<number> = [-1]; // not reported: it becomes number[]
 ```
 
-An array literal that is empty, or that holds an object, array, or function
-literal, or spreads a value that the annotation types, is never reported.
+An array literal is never reported when it is empty, or when an element or a
+spread operand is an object, array, or function literal, or a generic call whose
+type argument the annotation infers:
+
+```ts
+declare function make<T>(): T;
+
+const items: Array<number> = [make()]; // NOT reported — without it, `T` is `unknown`
+```
 
 ### `any` is never redundant
 
@@ -542,9 +549,10 @@ after the `=>`, because a line break before `=>` is a syntax error.
 
 - Variable declarations are checked for `const` and `let` with a plain
   identifier only. Destructuring patterns and class properties are out of scope.
-- Object literal initializers are skipped, and so are array literals that are
-  empty or hold an object, array, or function literal. There the annotation also
-  governs excess property checking and literal widening, which is
+- Object literal initializers are skipped, and so are the array literals that
+  [When an annotation is doing work](#when-an-annotation-is-doing-work) lists as
+  never reported. There the annotation also governs excess property checking and
+  literal widening, which is
   [`flawless/no-known-value-widening`](../no-known-value-widening/documentation.md)'s
   subject.
 - `let` widens a literal type only when the initializer writes the literal in
