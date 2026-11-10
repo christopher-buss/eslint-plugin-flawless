@@ -625,9 +625,22 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
  * @param node - The function to inspect.
  * @returns True when the first parameter is `this`.
  */
-function hasThisParameter(node: FunctionExpressionNode): boolean {
+function hasThisParameter(node: { readonly params: ReadonlyArray<TSESTree.Parameter> }): boolean {
 	const [first] = node.params;
 	return first?.type === AST_NODE_TYPES.Identifier && first.name === "this";
+}
+
+/**
+ * Finds the parameters that match the positions of a signature. A `this`
+ * parameter has no position there.
+ *
+ * @param node - The function to inspect.
+ * @returns The parameters after a `this` parameter.
+ */
+function getPositionalParameters(node: {
+	readonly params: ReadonlyArray<ContextualParameter>;
+}): ReadonlyArray<ContextualParameter> {
+	return hasThisParameter(node) ? node.params.slice(1) : node.params;
 }
 
 /**
@@ -2203,8 +2216,7 @@ function create(
 
 		// A `this` parameter has no counterpart in the contextual signature's
 		// positional list, so the positions start after it.
-		const { params }: { params: ReadonlyArray<ContextualParameter> } = node;
-		const parameters = hasThisParameter(node) ? params.slice(1) : params;
+		const parameters = getPositionalParameters(node);
 
 		// A function that needs more arguments than the signature passes gets no
 		// contextual signature at all.
