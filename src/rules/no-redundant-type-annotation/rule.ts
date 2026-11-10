@@ -117,6 +117,12 @@ const messages = {
 };
 
 /**
+ * How an expression depends on the annotation's context: not at all, surely,
+ * or through an untyped callback argument that only the verifier can clear.
+ */
+type ContextDependence = "dependent" | "independent" | "proof";
+
+/**
  * Reports whether a parameter carries no type annotation of its own.
  *
  * An untyped parameter takes its type from the surrounding contextual type,
@@ -736,6 +742,34 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
 }
 
 /**
+ * Combines the dependence of several expressions. A sure dependence wins and
+ * stops the walk, then a dependence that needs proof.
+ *
+ * @template T - The type of the expressions.
+ * @param items - The expressions to inspect.
+ * @param dependence - Finds the dependence of one expression.
+ * @returns The strongest dependence of the expressions.
+ */
+function strongestDependence<T>(
+	items: ReadonlyArray<T>,
+	dependence: (item: T, index: number) => ContextDependence,
+): ContextDependence {
+	let result: ContextDependence = "independent";
+	for (const [index, item] of items.entries()) {
+		const next = dependence(item, index);
+		if (next === "dependent") {
+			return next;
+		}
+
+		if (next === "proof") {
+			result = next;
+		}
+	}
+
+	return result;
+}
+
+/**
  * Reports whether a function declares a `this` parameter.
  *
  * @param node - The function to inspect.
@@ -813,11 +847,6 @@ function create(
 	let isScriptFile: boolean | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
 	const candidates: Array<Candidate & Removal & { readonly requiresProof: boolean }> = [];
-
-	// Set while the rule reads a variable's initializer. A callback whose
-	// context is not proven fixed marks the variable here instead of skipping
-	// it, so only a verified removal is reported.
-	let proofSink: undefined | { required: boolean };
 
 	/**
 	 * Save a potential removal for verification after visiting the file.
@@ -1492,59 +1521,71 @@ function create(
 	 * annotation, which governs excess property checking and literal widening:
 	 * `no-known-value-widening`'s subject, not a restatement. A function there
 	 * takes its `this` and return values from the annotation too. This is kept
-	 * apart from `isContextDependent` because that also runs on call arguments,
+	 * apart from `contextDependence` because that also runs on call arguments,
 	 * where a literal or a callback takes its context from the callee instead.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns True when the annotation shapes the expression's type.
+	 * @returns `"proof"` when only the verifier can tell whether it does.
 	 */
-	function receivesAnnotationContext(node: TSESTree.Node): boolean {
+	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return (
-				node.params.some(isUntypedParameter) ||
+			return node.params.some(isUntypedParameter) ||
 				usesContextualThis(node) ||
 				returnsContextTypedValue(node)
-			);
+				? "dependent"
+				: "independent";
 		}
 
 		// A template expression is a template type only because the context
 		// asks for one.
 		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
-			return hasTemplateType(services.getTypeAtLocation(node));
+			return hasTemplateType(services.getTypeAtLocation(node)) ? "dependent" : "independent";
 		}
 
 		if (
 			node.type === AST_NODE_TYPES.ObjectExpression ||
 			node.type === AST_NODE_TYPES.ArrayExpression
 		) {
-			return true;
+			return "dependent";
 		}
 
 		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-			return (
-				receivesAnnotationContext(node.consequent) ||
-				receivesAnnotationContext(node.alternate)
+			return strongestDependence(
+				[node.consequent, node.alternate],
+				annotationContextDependence,
 			);
 		}
 
 		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return receivesAnnotationContext(node.left) || receivesAnnotationContext(node.right);
+			return strongestDependence([node.left, node.right], annotationContextDependence);
 		}
 
 		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return receivesAnnotationContext(node.argument);
+			return annotationContextDependence(node.argument);
 		}
 
 		if (node.type === AST_NODE_TYPES.TSNonNullExpression || isConstAssertion(node)) {
-			return receivesAnnotationContext(node.expression);
+			return annotationContextDependence(node.expression);
 		}
 
 		if (node.type === AST_NODE_TYPES.SequenceExpression) {
 			const last = node.expressions.at(-1);
-			return last !== undefined && receivesAnnotationContext(last);
+			return last === undefined ? "independent" : annotationContextDependence(last);
 		}
 
-		return isContextDependent(node);
+		return contextDependence(node);
+	}
+
+	/**
+	 * Reports whether the annotation's contextual type may reach an expression
+	 * and shape its type. A dependence that only the verifier can rule out
+	 * counts.
+	 *
+	 * @param node - The expression to inspect.
+	 * @returns True unless the expression is independent of the annotation.
+	 */
+	function receivesAnnotationContext(node: TSESTree.Node): boolean {
+		return annotationContextDependence(node) !== "independent";
 	}
 
 	/**
@@ -1654,56 +1695,50 @@ function create(
 	 * chain, and into call arguments.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns True when the expression depends on its context.
+	 * @returns `"proof"` when only an untyped callback argument, whose
+	 *   context the call may take from the annotation, makes the expression
+	 *   depend on its context.
 	 */
-	function isContextDependent(node: TSESTree.Node): boolean {
+	function contextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter);
+			return node.params.some(isUntypedParameter) ? "dependent" : "independent";
 		}
 
 		if (
 			node.type === AST_NODE_TYPES.CallExpression ||
 			node.type === AST_NODE_TYPES.NewExpression
 		) {
-			return (
-				isInferenceSensitiveCall(node) ||
-				node.arguments.some((argument, index) => {
-					if (!isContextualFunction(argument)) {
-						return isContextDependent(argument);
-					}
+			if (isInferenceSensitiveCall(node)) {
+				return "dependent";
+			}
 
-					if (
-						!argument.params.some(isUntypedParameter) ||
-						isCallbackContextFixed(node, index, argument)
-					) {
-						return false;
-					}
+			return strongestDependence(node.arguments, (argument, index) => {
+				if (!isContextualFunction(argument)) {
+					return contextDependence(argument);
+				}
 
-					if (proofSink === undefined) {
-						return true;
-					}
-
-					proofSink.required = true;
-					return false;
-				})
-			);
+				return !argument.params.some(isUntypedParameter) ||
+					isCallbackContextFixed(node, index, argument)
+					? "independent"
+					: "proof";
+			});
 		}
 
 		// A tagged template calls its tag, so a generic tag infers the same way.
 		if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return isInferenceSensitiveCall(node);
+			return isInferenceSensitiveCall(node) ? "dependent" : "independent";
 		}
 
 		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-			return isContextDependent(node.consequent) || isContextDependent(node.alternate);
+			return strongestDependence([node.consequent, node.alternate], contextDependence);
 		}
 
 		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return isContextDependent(node.left) || isContextDependent(node.right);
+			return strongestDependence([node.left, node.right], contextDependence);
 		}
 
 		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return isContextDependent(node.argument);
+			return contextDependence(node.argument);
 		}
 
 		// An optional chain wraps the call it makes.
@@ -1712,10 +1747,10 @@ function create(
 			node.type === AST_NODE_TYPES.TSNonNullExpression ||
 			isConstAssertion(node)
 		) {
-			return isContextDependent(node.expression);
+			return contextDependence(node.expression);
 		}
 
-		return false;
+		return "independent";
 	}
 
 	/**
@@ -2611,16 +2646,10 @@ function create(
 				return;
 			}
 
-			const proof = { required: false };
-			proofSink = proof;
-			let dependent: boolean;
-			try {
-				dependent = receivesAnnotationContext(node.init);
-			} finally {
-				proofSink = undefined;
-			}
-
-			if (dependent) {
+			// A callback whose context is not proven fixed does not skip the
+			// variable. It makes only a verified removal reportable.
+			const dependence = annotationContextDependence(node.init);
+			if (dependence === "dependent") {
 				return;
 			}
 
@@ -2686,7 +2715,7 @@ function create(
 				return;
 			}
 
-			collect({ annotation, messageId: MESSAGE_ID, type: annotationType }, proof.required);
+			collect({ annotation, messageId: MESSAGE_ID, type: annotationType }, dependence === "proof");
 		},
 	};
 }
