@@ -120,7 +120,7 @@ const messages = {
  * How an expression depends on the annotation's context: not at all, surely,
  * or through an untyped callback argument that only the verifier can clear.
  */
-type ContextDependence = "dependent" | "independent" | "proof";
+type ContextDependence = "dependent" | "independent" | "unproven";
 
 /**
  * Reports whether a parameter carries no type annotation of its own.
@@ -743,7 +743,7 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
 
 /**
  * Combines the dependence of several expressions. A sure dependence wins and
- * stops the walk, then a dependence that needs proof.
+ * stops the walk, then an unproven one.
  *
  * @template T - The type of the expressions.
  * @param items - The expressions to inspect.
@@ -761,7 +761,7 @@ function strongestDependence<T>(
 			return next;
 		}
 
-		if (next === "proof") {
+		if (next === "unproven") {
 			result = next;
 		}
 	}
@@ -1525,7 +1525,7 @@ function create(
 	 * where a literal or a callback takes its context from the callee instead.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns `"proof"` when only the verifier can tell whether it does.
+	 * @returns `"unproven"` when only the verifier can tell whether it does.
 	 */
 	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
@@ -1693,7 +1693,7 @@ function create(
 	 * chain, and into call arguments.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns `"proof"` when only an untyped callback argument, whose
+	 * @returns `"unproven"` when only an untyped callback argument, whose
 	 *   context the call may take from the annotation, makes the expression
 	 *   depend on its context.
 	 */
@@ -1718,7 +1718,7 @@ function create(
 				return !argument.params.some(isUntypedParameter) ||
 					isCallbackContextFixed(node, index, argument)
 					? "independent"
-					: "proof";
+					: "unproven";
 			});
 		}
 
@@ -2714,7 +2714,10 @@ function create(
 				return;
 			}
 
-			collect({ annotation, messageId: MESSAGE_ID, type: annotationType }, dependence === "proof");
+			collect(
+				{ annotation, messageId: MESSAGE_ID, type: annotationType },
+				dependence === "unproven",
+			);
 		},
 	};
 }
