@@ -862,14 +862,21 @@ const invalid: Array<InvalidTestCase> = [
 	// annotation.
 	{
 		code: unindent`
-			declare function read(): number;
 			const open: Array<number> = [-1];
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			const open = [-1];
+		`,
+	},
+	{
+		code: unindent`
+			declare function read(): number;
 			const values: Array<number> = [read(), 2];
 		`,
-		errors: [{ messageId }, { messageId }],
+		errors: [{ messageId }],
 		output: unindent`
 			declare function read(): number;
-			const open = [-1];
 			const values = [read(), 2];
 		`,
 	},
