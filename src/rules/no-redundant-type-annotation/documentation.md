@@ -303,8 +303,34 @@ declare function wrap<T>(callback: (value: T) => T): void;
 wrap((value: number) => value); // NOT reported — without it, `T` is `unknown`
 ```
 
-The same applies to an overloaded callee, where the parameter types can be what
-picks the overload, and to a function that a callback returns:
+An overloaded callee gives the callback the context of the overload that the
+call resolves to. The parameter types can be what picks that overload. When no
+overload is generic, and the callback is a direct argument of the call, the rule
+reports a parameter only when the verifier proves that its removal alone is safe
+(see below):
+
+```ts
+interface Emitter {
+	once(event: "exit", listener: (code: null | number) => void): this;
+	once(event: "data", listener: (chunk: string) => void): this;
+}
+
+declare const emitter: Emitter;
+declare function report(value: unknown): void;
+
+emitter.once("exit", (code: null | number) => report(code)); // reported — `"exit"` picks the overload
+
+declare function on(handler: (payload: number) => void): void;
+declare function on(handler: (payload: string) => void): void;
+
+on((payload: string) => report(payload)); // NOT reported — without it, the first overload resolves
+```
+
+An overload that types the parameter as `any`, such as a catch-all
+`(...args: Array<any>) => void`, gives no type to compare, so a callback that
+resolves to it is not reported. A generic overloaded callee is left alone.
+
+A function that a callback returns is also left alone:
 
 ```ts
 declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
@@ -526,34 +552,36 @@ parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
 
 Verification creates at most twelve speculative programs per lint of a file,
-plus one for each variable whose callback argument needs the verifier (see
-above) and whose removal is checked alone. There is at most one check alone per
-candidate and at most ten combined checks, so never more than twenty. At most
-ten candidate annotations are verified in that pass. Such variables are selected
-first. Each one is reported only when its removal alone is safe. A coupled one
-gets that check before the combined check. An uncoupled one gets it when a
-combined check finds a problem with it, because the coupling does not follow all
-data flow. So candidates of other kinds do not change whether it is reported,
-unless the compiler fails during a check, which leaves every annotation alone.
-It carries a fix only when the combined fix is verified too. A report without a
-fix then means that this removal alone is safe. The removal of a coupled
-annotation can make it unsafe, and the next lint then withdraws the report.
-Candidates past the limit of ten are still reported but carry no fix, except
-such a variable, which is not reported; `eslint --fix` repeats its fix passes,
-and each pass verifies further candidates after earlier fixes have been applied.
-If the compiler fails during verification, the annotations are left alone and
-not reported. Files with no candidates create no speculative program.
-Speculative programs reuse the parser program's resolved project references,
-module resolution cache, and file system lookups.
+plus one for each candidate that needs proof and whose removal is checked alone.
+A candidate needs proof when it is a variable whose callback argument needs the
+verifier, or a parameter of a callback that an overloaded callee types (see
+above). There is at most one check alone per candidate and at most ten combined
+checks, so never more than twenty. At most ten candidate annotations are
+verified in that pass. Candidates that need proof are selected first. Each one
+is reported only when its removal alone is safe. A coupled one gets that check
+before the combined check. An uncoupled one gets it when a combined check finds
+a problem with it, because the coupling does not follow all data flow. So
+candidates of other kinds do not change whether it is reported, unless the
+compiler fails during a check, which leaves every annotation alone. It carries a
+fix only when the combined fix is verified too. A report without a fix then
+means that this removal alone is safe. The removal of a coupled annotation can
+make it unsafe, and the next lint then withdraws the report. Candidates past the
+limit of ten are still reported but carry no fix, except a candidate that needs
+proof, which is not reported; `eslint --fix` repeats its fix passes, and each
+pass verifies further candidates after earlier fixes have been applied. If the
+compiler fails during verification, the annotations are left alone and not
+reported. Files with no candidates create no speculative program. Speculative
+programs reuse the parser program's resolved project references, module
+resolution cache, and file system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,
 so a second copy would corrupt the parser's checker. With two copies, candidates
-are reported without a fix, and a variable whose callback argument needs the
-verifier is not reported. Install a single TypeScript version to enable the fix.
-Before TypeScript 5.3, `parserOptions.projectService` loads
-`typescript/lib/tsserverlibrary`, which is a separate copy of the compiler; use
-`parserOptions.project` there to enable the fix.
+are reported without a fix, and a candidate that needs proof is not reported.
+Install a single TypeScript version to enable the fix. Before TypeScript 5.3,
+`parserOptions.projectService` loads `typescript/lib/tsserverlibrary`, which is
+a separate copy of the compiler; use `parserOptions.project` there to enable the
+fix.
 
 The fix keeps the comments inside an annotation:
 `const x: /* note */ string = getS();` becomes `const x /* note */ = getS();`.
