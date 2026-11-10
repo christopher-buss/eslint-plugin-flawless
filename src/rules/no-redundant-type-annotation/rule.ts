@@ -370,12 +370,41 @@ function isHiddenFromEmitter(node: TSESTree.Node): boolean {
  *
  * The emitter copies a `typeof` query, a computed key of a type member, an
  * `export default` or `export =` of a name, an export list, a class
- * `extends` clause, and an enum member initializer. It prints no other read.
+ * `extends` clause, and an enum member initializer. It prints no other read,
+ * and nothing inside a function body or static block.
  *
  * @param identifier - The reference to inspect.
+ * @param printedType - Whether the reference is a type that the emitter
+ *   prints wherever it is.
  * @returns True when the emitter reads the referenced declaration there.
  */
-function isEmitterReadPosition(identifier: TSESTree.Identifier | TSESTree.JSXIdentifier): boolean {
+function isEmitterRead(
+	identifier: TSESTree.Identifier | TSESTree.JSXIdentifier,
+	printedType: boolean,
+): boolean {
+	// One walk to the root finds both a hiding body and an enum member
+	// initializer, which is copied whole at any depth.
+	let inEnumInitializer = false;
+	for (let node: TSESTree.Node = identifier; node.type !== AST_NODE_TYPES.Program; ) {
+		const parent: TSESTree.Node = node.parent;
+		if (
+			node.type === AST_NODE_TYPES.StaticBlock ||
+			(isFunctionNode(parent) && parent.body === node)
+		) {
+			return false;
+		}
+
+		if (parent.type === AST_NODE_TYPES.TSEnumMember && parent.initializer === node) {
+			inEnumInitializer = true;
+		}
+
+		node = parent;
+	}
+
+	if (printedType || inEnumInitializer) {
+		return true;
+	}
+
 	// Climb an entity name: `c.a`, `N.c`, `typeof N.c`.
 	let current: TSESTree.Node = identifier;
 	while (
@@ -424,16 +453,6 @@ function isEmitterReadPosition(identifier: TSESTree.Identifier | TSESTree.JSXIde
 		parent.type === AST_NODE_TYPES.TSPropertySignature
 	) {
 		return parent.computed && parent.key === current;
-	}
-
-	// An enum member initializer is copied whole, at any depth.
-	let node: TSESTree.Node = current;
-	while (node.type !== AST_NODE_TYPES.Program) {
-		if (node.parent.type === AST_NODE_TYPES.TSEnumMember && node.parent.initializer === node) {
-			return true;
-		}
-
-		node = node.parent;
 	}
 
 	return false;
@@ -1820,10 +1839,9 @@ function create(
 				}
 
 				// The emitter prints every type that names a class.
-				return (
-					!isHiddenFromEmitter(identifier) &&
-					((node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference) ||
-						isEmitterReadPosition(identifier))
+				return isEmitterRead(
+					identifier,
+					node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference,
 				);
 			});
 		});
