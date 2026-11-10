@@ -1032,7 +1032,7 @@ const LOGICAL_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
  * @param reference - A reference to the `const`.
  * @returns False only when the reference cannot narrow.
  */
-function readByCondition(reference: ts.Node): boolean {
+function canActAsCondition(reference: ts.Node): boolean {
 	let node = reference;
 	let { parent } = node;
 	while (
@@ -1096,7 +1096,7 @@ function aliasNarrowedNodes(
 		!ts.isVariableDeclaration(owner) ||
 		owner.initializer === undefined ||
 		(ts.getCombinedNodeFlags(owner) & (ts.NodeFlags.Const | ts.NodeFlags.Using)) === 0 ||
-		!references.some(readByCondition)
+		!references.some(canActAsCondition)
 	) {
 		return [];
 	}
