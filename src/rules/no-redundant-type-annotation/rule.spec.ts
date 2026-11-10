@@ -1337,6 +1337,16 @@ const invalid: Array<InvalidTestCase> = [
 			errors: 10,
 			fixed: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
 		},
+		// A callback without untyped parameters can still take the type of
+		// its returned value from the annotation. These removals change the
+		// type, so they are not reported.
+		...[
+			'const last: Array<"a"> = items.map(() => "a");',
+			'const last: Array<{ k: "a" }> = items.map(() => ({ k: "a" }));',
+			'const last: Array<["a"]> = items.map(() => ["a"]);',
+		].map((code) => {
+			return { code, errors: 10, fixed: code };
+		}),
 	].map(({ code, errors, fixed }) => {
 		const prefix = unindent`
 			interface Item { name: string; ok: boolean }

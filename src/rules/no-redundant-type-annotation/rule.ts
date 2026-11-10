@@ -1744,8 +1744,14 @@ function create(
 					return contextDependence(argument);
 				}
 
-				return !argument.params.some(isUntypedParameter) ||
-					isCallbackContextFixed(node, index, argument)
+				// A callback takes its context through untyped parameters, an
+				// untyped `this`, or a returned value whose type the context
+				// shapes, such as a literal.
+				const takesContext =
+					argument.params.some(isUntypedParameter) ||
+					usesContextualThis(argument) ||
+					returnsContextTypedValue(argument);
+				return !takesContext || isCallbackContextFixed(node, index, argument)
 					? "independent"
 					: "unproven";
 			});
