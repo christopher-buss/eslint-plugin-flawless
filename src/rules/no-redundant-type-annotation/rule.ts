@@ -302,6 +302,20 @@ function isGeneric(signature: Signature): boolean {
 }
 
 /**
+ * Reports whether the node is a call, `new` expression, or tagged template.
+ *
+ * @param node - The node to inspect.
+ * @returns True when the node passes arguments to a callee.
+ */
+function isArgumentCall(node: TSESTree.Node): node is ArgumentCall {
+	return (
+		node.type === AST_NODE_TYPES.CallExpression ||
+		node.type === AST_NODE_TYPES.NewExpression ||
+		node.type === AST_NODE_TYPES.TaggedTemplateExpression
+	);
+}
+
+/**
  * Reports whether the node is an `as const` or `<const>` assertion.
  *
  * @param node - The node to inspect.
@@ -1788,12 +1802,25 @@ function create(
 	}
 
 	/**
+	 * Reports whether a call gives its arguments the same context with or
+	 * without the variable's annotation.
+	 *
+	 * The context is fixed when the call has explicit type arguments, or no
+	 * callee signature is generic: then overload choice and the parameter
+	 * types do not use the contextual type.
+	 *
+	 * @param call - The call that receives the arguments.
+	 * @returns True when the annotation cannot reach the arguments.
+	 */
+	function isCallContextFixed(call: ArgumentCall): boolean {
+		return call.typeArguments !== undefined || !getCalleeSignatures(call).some(isGeneric);
+	}
+
+	/**
 	 * Reports whether a callback argument gets the same context from its call
 	 * with or without the variable's annotation.
 	 *
-	 * The context is fixed when the call has explicit type arguments, or no
-	 * callee signature is generic: then overload choice and the callback's
-	 * parameter type do not use the contextual type. With one generic
+	 * The context is fixed when `isCallContextFixed` holds. With one generic
 	 * signature, the context is fixed when each type the callback takes from
 	 * it is the same type object before and after inference. Instantiation
 	 * gives back the same object for a type that names no inferred type
@@ -1809,15 +1836,11 @@ function create(
 		index: number,
 		callback: ContextualFunction,
 	): boolean {
-		if (call.typeArguments !== undefined) {
+		if (isCallContextFixed(call)) {
 			return true;
 		}
 
 		const signatures = getCalleeSignatures(call);
-		if (!signatures.some(isGeneric)) {
-			return true;
-		}
-
 		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
 		const spread = getPassedValues(call)
 			.slice(0, index + 1)
@@ -1893,7 +1916,10 @@ function create(
 	 * Finds the dependence of a call argument, or of an operand that the
 	 * argument hands its context to. A callback there gets its context from
 	 * the parameter at the argument's position, so the verifier can compare
-	 * that context before and after inference.
+	 * that context before and after inference. A generic call there infers
+	 * from the parameter type, so when `isCallContextFixed` holds for the
+	 * outer call, the annotation cannot reach that inference; only the
+	 * arguments of the inner call count.
 	 *
 	 * @param call - The call that receives the argument.
 	 * @param index - The argument's position.
@@ -1911,12 +1937,30 @@ function create(
 				: "unproven";
 		}
 
+		if (isArgumentCall(node) && isCallContextFixed(call)) {
+			return passedValuesDependence(node);
+		}
+
 		const operands = contextForwardedOperands(node);
 		if (operands === undefined) {
 			return contextDependence(node);
 		}
 
 		return strongestDependence(operands, (operand) => argumentDependence(call, index, operand));
+	}
+
+	/**
+	 * Finds the strongest dependence among the values a call passes.
+	 *
+	 * @param call - The call whose arguments to inspect.
+	 * @returns The strongest dependence of the arguments.
+	 */
+	function passedValuesDependence(call: ArgumentCall): ContextDependence {
+		function dependenceOf(value: TSESTree.Node | undefined, index: number): ContextDependence {
+			return value === undefined ? "independent" : argumentDependence(call, index, value);
+		}
+
+		return strongestDependence(getPassedValues(call), dependenceOf);
 	}
 
 	/**
@@ -1941,24 +1985,8 @@ function create(
 		}
 
 		// A tagged template calls its tag, so a generic tag infers the same way.
-		if (
-			node.type === AST_NODE_TYPES.CallExpression ||
-			node.type === AST_NODE_TYPES.NewExpression ||
-			node.type === AST_NODE_TYPES.TaggedTemplateExpression
-		) {
-			if (isInferenceSensitiveCall(node)) {
-				return "dependent";
-			}
-
-			const call = node;
-			function dependenceOf(
-				value: TSESTree.Node | undefined,
-				index: number,
-			): ContextDependence {
-				return value === undefined ? "independent" : argumentDependence(call, index, value);
-			}
-
-			return strongestDependence(getPassedValues(node), dependenceOf);
+		if (isArgumentCall(node)) {
+			return isInferenceSensitiveCall(node) ? "dependent" : passedValuesDependence(node);
 		}
 
 		const operands = contextForwardedOperands(node);
