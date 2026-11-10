@@ -77,6 +77,12 @@ type CallLike =
 	| TSESTree.NewExpression
 	| TSESTree.TaggedTemplateExpression;
 
+/** A call that passes values to the parameters of a signature. */
+type ArgumentCall =
+	| TSESTree.CallExpression
+	| TSESTree.NewExpression
+	| TSESTree.TaggedTemplateExpression;
+
 /** A function that can carry a return type annotation and has a body. */
 type ReturnTypedFunction =
 	| TSESTree.ArrowFunctionExpression
@@ -809,6 +815,19 @@ function strongestDependence<T>(
 	}
 
 	return result;
+}
+
+/**
+ * Finds the values a call passes, by parameter position. A tagged template
+ * passes its strings first, which have no node.
+ *
+ * @param call - The call to inspect.
+ * @returns The value at each parameter position.
+ */
+function getPassedValues(call: ArgumentCall): ReadonlyArray<TSESTree.Node | undefined> {
+	return call.type === AST_NODE_TYPES.TaggedTemplateExpression
+		? [undefined, ...call.quasi.expressions]
+		: call.arguments;
 }
 
 /**
@@ -1640,7 +1659,7 @@ function create(
 	 * @returns True when the annotation cannot change the callback's context.
 	 */
 	function isCallbackContextFixed(
-		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		call: ArgumentCall,
 		index: number,
 		callback: ContextualFunction,
 	): boolean {
@@ -1654,9 +1673,9 @@ function create(
 		}
 
 		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
-		const spread = call.arguments
+		const spread = getPassedValues(call)
 			.slice(0, index + 1)
-			.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement);
+			.some((value) => value?.type === AST_NODE_TYPES.SpreadElement);
 		if (
 			declared === undefined ||
 			spread ||
@@ -1736,7 +1755,7 @@ function create(
 	 * @returns The dependence of the expression.
 	 */
 	function argumentDependence(
-		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		call: ArgumentCall,
 		index: number,
 		node: TSESTree.Node,
 	): ContextDependence {
@@ -1775,9 +1794,11 @@ function create(
 			return takesContext(node) ? "dependent" : "independent";
 		}
 
+		// A tagged template calls its tag, so a generic tag infers the same way.
 		if (
 			node.type === AST_NODE_TYPES.CallExpression ||
-			node.type === AST_NODE_TYPES.NewExpression
+			node.type === AST_NODE_TYPES.NewExpression ||
+			node.type === AST_NODE_TYPES.TaggedTemplateExpression
 		) {
 			if (isInferenceSensitiveCall(node)) {
 				return "dependent";
@@ -1785,18 +1806,13 @@ function create(
 
 			const call = node;
 			function dependenceOf(
-				argument: TSESTree.CallExpressionArgument,
+				value: TSESTree.Node | undefined,
 				index: number,
 			): ContextDependence {
-				return argumentDependence(call, index, argument);
+				return value === undefined ? "independent" : argumentDependence(call, index, value);
 			}
 
-			return strongestDependence(node.arguments, dependenceOf);
-		}
-
-		// A tagged template calls its tag, so a generic tag infers the same way.
-		if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return isInferenceSensitiveCall(node) ? "dependent" : "independent";
+			return strongestDependence(getPassedValues(node), dependenceOf);
 		}
 
 		const operands = contextForwardedOperands(node);

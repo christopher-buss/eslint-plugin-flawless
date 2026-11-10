@@ -1348,6 +1348,13 @@ const invalid: Array<InvalidTestCase> = [
 			'const last: Array<"a"> = items.map((0, () => "a"));',
 			'const last: Array<"a" | "b"> = items.map(read() > 0 ? () => "a" : () => "b");',
 			'const last: Array<"a"> = items.map((0, (item: Item) => "a"));',
+			// A tagged template hands a substitution the context of a parameter.
+			...["() =>", "(x) =>"].map((callback) => {
+				return [
+					"declare function tag<T>(s: TemplateStringsArray, cb: (x: number) => T): Array<T>;",
+					`const last: Array<"a"> = tag\`\${${callback} "a"}\`;`,
+				].join(" ");
+			}),
 		].map((code) => {
 			return { code, errors: 10, fixed: code };
 		}),
