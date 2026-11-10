@@ -124,6 +124,12 @@ const valid: Array<ValidTestCase> = [
 		declare function getId(): UserId;
 		const id: UserId = getId();
 	`,
+	// A generic alias to a primitive is erased too.
+	unindent`
+		type Id<T> = string;
+		declare function getString(): string;
+		const id: Id<number> = getString();
+	`,
 	// An imported alias is erased the same way.
 	unindent`
 		import type { UserId } from "./no-redundant-type-annotation/aliases";
@@ -725,6 +731,29 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// A generic alias with type arguments keeps its name in the inferred type.
+	{
+		code: unindent`
+			declare function getReadonly(): Readonly<Record<string, number>>;
+			const map: Readonly<Record<string, number>> = getReadonly();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getReadonly(): Readonly<Record<string, number>>;
+			const map = getReadonly();
+		`,
+	},
+	{
+		code: unindent`
+			declare function getRecord(): Record<string, number>;
+			const record: Record<string, number> = getRecord();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getRecord(): Record<string, number>;
+			const record = getRecord();
+		`,
+	},
 	// An argument infers `T` before the context is consulted.
 	{
 		code: unindent`

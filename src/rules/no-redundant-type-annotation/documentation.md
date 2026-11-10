@@ -107,8 +107,9 @@ removal.
 ### Named types are preserved
 
 An alias to an object, function, union, or array keeps its name in the type
-system, so removing a matching annotation loses nothing. An alias to a primitive
-does not:
+system, so removing a matching annotation loses nothing. This includes a generic
+alias with type arguments, such as `Readonly<Record<string, number>>`. An alias
+to a primitive does not:
 
 ```ts
 type UserId = string;

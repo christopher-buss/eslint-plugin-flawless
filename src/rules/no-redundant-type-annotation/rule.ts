@@ -1441,7 +1441,7 @@ function create(
 			return false;
 		}
 
-		return symbol.name !== display(type);
+		return type.aliasSymbol !== symbol;
 	}
 
 	/**
