@@ -365,7 +365,7 @@ function isGeneric(signature: Signature): boolean {
  * Then the callback takes its context from the overload that the call
  * resolves to. This is a cost filter, not a proof: the callback's parameter
  * types can be what picks the overload, so the verifier decides. When an
- * overload is generic, `isSharedByOverloads` also limits which parameters
+ * overload is generic, `keepsTypeInEveryOverload` also limits which parameters
  * can count.
  *
  * @param callbackCall - The call that receives the callback.
@@ -1479,9 +1479,10 @@ function create(
 	 * @returns True when every callback parameter's type is settled.
 	 */
 	function hasSettledCallbackParameters(
-		{ index, resolved, signatures }: CallbackCall,
+		callbackCall: CallbackCall,
 		callback: FunctionExpressionNode,
 	): boolean {
+		const { index, resolved, signatures } = callbackCall;
 		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
 		if (declared === undefined || isRestParameter(declared, index)) {
 			return false;
@@ -1503,35 +1504,73 @@ function create(
 			return false;
 		}
 
-		return before.parameters.every((parameter, position) => {
-			const target = after.parameters[position];
-			return (
-				target !== undefined &&
-				checker.getTypeOfSymbol(parameter) === checker.getTypeOfSymbol(target)
-			);
+		return before.parameters.every((_parameter, position) => {
+			return keepsDeclaredType(declared, callbackCall, position);
 		});
 	}
 
 	/**
-	 * Reports whether a parameter of a callback that an overloaded callee
-	 * types has a type that no overload's inference can change.
+	 * Gets the type that a callee signature gives a parameter of the callback.
+	 *
+	 * @param signature - A callee signature, declared or resolved.
+	 * @param callbackCall - The call that receives the callback.
+	 * @param position - The parameter's position, after any `this` parameter.
+	 * @returns The type, or undefined when the signature gives none.
+	 */
+	function getCallbackParameterType(
+		signature: Signature | undefined,
+		{ index, location }: CallbackCall,
+		position: number,
+	): Type | undefined {
+		if (signature === undefined || isRestParameter(signature, index)) {
+			return undefined;
+		}
+
+		const parameter = getCallbackSignature(signature.parameters[index])?.parameters[position];
+		return parameter && checker.getTypeOfSymbolAtLocation(parameter, location);
+	}
+
+	/**
+	 * Reports whether a declared signature gives a callback parameter the same
+	 * type object as the resolved signature does after inference.
+	 * Instantiation gives back the same object for a type that names no
+	 * inferred type parameter, so a false answer only means "not proven".
+	 *
+	 * @param declared - A callee signature, before inference.
+	 * @param callbackCall - The call that receives the callback.
+	 * @param position - The parameter's position, after any `this` parameter.
+	 * @returns True when inference leaves the parameter's type as declared.
+	 */
+	function keepsDeclaredType(
+		declared: Signature,
+		callbackCall: CallbackCall,
+		position: number,
+	): boolean {
+		const type = getCallbackParameterType(declared, callbackCall, position);
+		return (
+			type !== undefined &&
+			type === getCallbackParameterType(callbackCall.resolved, callbackCall, position)
+		);
+	}
+
+	/**
+	 * Reports whether no overload's inference can change the type of a
+	 * parameter of a callback that an overloaded callee types.
 	 *
 	 * Without a generic overload, inference takes no part, so every position
-	 * counts. Otherwise, each overload must give the position the same type
-	 * object, before inference, as the resolved overload gives it after
-	 * inference. Instantiation gives back the same object for a type that
-	 * names no inferred type parameter, so this proves that the type does not
-	 * depend on them, as `value` in `find`'s type predicate overload does
-	 * not. A false answer only means "not proven".
+	 * counts. Otherwise, each overload must give the position the
+	 * same type object, before inference, as the resolved overload gives it
+	 * after inference (see `keepsDeclaredType`). This proves that the type does
+	 * not depend on an inferred type parameter, as `value` in `find`'s type
+	 * predicate overload does not. A callback rest parameter at the position
+	 * takes the elements from there on, not one type, so it is not proven.
 	 *
 	 * @param callbackCall - The overloaded call that receives the callback.
 	 * @param position - The parameter's position, after any `this` parameter.
 	 * @returns True when every overload gives the position the same type.
 	 */
-	function isSharedByOverloads(
-		{ call, index, location, resolved, signatures }: CallbackCall,
-		position: number,
-	): boolean {
+	function keepsTypeInEveryOverload(callbackCall: CallbackCall, position: number): boolean {
+		const { call, index, signatures } = callbackCall;
 		if (!signatures.some(isGeneric)) {
 			return true;
 		}
@@ -1543,29 +1582,14 @@ function create(
 			return false;
 		}
 
-		function getTypeAt(signature: Signature | undefined): Type | undefined {
-			if (
-				signature === undefined ||
-				index >= signature.parameters.length ||
-				isRestParameter(signature, index)
-			) {
-				return undefined;
-			}
-
+		return signatures.every((signature) => {
 			const callbackSignature = getCallbackSignature(signature.parameters[index]);
-			if (callbackSignature === undefined || isRestParameter(callbackSignature, position)) {
-				return undefined;
-			}
-
-			const parameter = callbackSignature.parameters[position];
-			return parameter && checker.getTypeOfSymbolAtLocation(parameter, location);
-		}
-
-		const resolvedType = getTypeAt(resolved);
-		return (
-			resolvedType !== undefined &&
-			signatures.every((signature) => getTypeAt(signature) === resolvedType)
-		);
+			return (
+				callbackSignature !== undefined &&
+				!isRestParameter(callbackSignature, position) &&
+				keepsDeclaredType(signature, callbackCall, position)
+			);
+		});
 	}
 
 	/**
@@ -2946,7 +2970,7 @@ function create(
 			}
 
 			const { overloadedCall } = anchor;
-			if (overloadedCall !== undefined && !isSharedByOverloads(overloadedCall, index)) {
+			if (overloadedCall !== undefined && !keepsTypeInEveryOverload(overloadedCall, index)) {
 				continue;
 			}
 
