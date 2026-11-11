@@ -156,16 +156,16 @@ export function verifyAnnotations<C extends Candidate>(
 		// printed.
 		const snapshots = new Map(
 			selected.map((candidate) => {
-				const thisFree = thisFreeCall(candidate.owner);
+				const receiving = receivingCall(candidate.owner);
 				const ownerReferences = references.get(candidate.owner) ?? [];
 				const aliasNodes = aliasNarrowedNodes(checker, candidate.owner, ownerReferences);
 				narrowed.set(candidate, aliasNodes);
 				return [
 					candidate,
-					[...observedNodes(candidate, ownerReferences, thisFree), ...aliasNodes].map(
+					[...observedNodes(candidate, ownerReferences, receiving), ...aliasNodes].map(
 						(node) => {
 							let type: string | undefined;
-							const omitThis = thisFree?.arrows.has(node) === true;
+							const omitThis = receiving?.arrows.has(node) === true;
 							return {
 								node,
 								omitThis,
@@ -542,7 +542,8 @@ function fileKey(name: string): string {
 const sharedHosts = new WeakMap<ts.Program, SharedHost>();
 
 /** A call whose arrow arguments are compared without `this`. */
-interface ThisFreeCall {
+/** The call that receives the callback whose parameter a candidate annotates. */
+interface ReceivingCall {
 	/** The call's arguments that are arrows, without their parentheses. */
 	readonly arrows: ReadonlySet<ts.Node>;
 	readonly call: ts.CallExpression | ts.NewExpression;
@@ -1008,16 +1009,26 @@ function skipParentheses(node: ts.Expression): ts.Expression {
 }
 
 /**
- * Finds the call that receives the arrow whose parameter a candidate
- * annotates. Without the annotation, the arrow's signature takes `this` from
- * its context, but an arrow never reads that `this`, so the call's arrow
+ * Finds the call that receives the arrow or function expression whose
+ * parameter a candidate annotates.
+ *
+ * Without the annotation, the callback can become context sensitive. Then
+ * the call checks it after its other arguments, and a type parameter can be
+ * fixed before the callback can infer it. So the call and its other
+ * arguments are observed.
+ *
+ * Without the annotation, an arrow's signature also takes `this` from its
+ * context, but an arrow never reads that `this`, so the call's arrow
  * arguments are compared without it. The call observes a `this` that
  * escapes.
  * @param owner - The candidate's owner.
  * @returns The call and its arrow arguments, or undefined.
  */
-function thisFreeCall(owner: Candidate["owner"]): ThisFreeCall | undefined {
-	if (!ts.isParameter(owner) || !ts.isArrowFunction(owner.parent)) {
+function receivingCall(owner: Candidate["owner"]): ReceivingCall | undefined {
+	if (
+		!ts.isParameter(owner) ||
+		(!ts.isArrowFunction(owner.parent) && !ts.isFunctionExpression(owner.parent))
+	) {
 		return undefined;
 	}
 
@@ -1041,18 +1052,19 @@ function thisFreeCall(owner: Candidate["owner"]): ThisFreeCall | undefined {
 function observedNodes(
 	candidate: Candidate,
 	references: ReadonlyArray<ts.Identifier>,
-	thisFree: ThisFreeCall | undefined,
+	receiving: ReceivingCall | undefined,
 ): Array<ts.Node> {
 	const nodes: Array<ts.Node> = [candidate.owner];
 	if (ts.isParameter(candidate.owner)) {
 		nodes.push(candidate.owner.parent);
 	}
 
-	// The `this` left out of the arrows' types can still escape through the
-	// call's inference, as in `wrap<F>(callback: F): F`. The call and its
-	// other arguments observe that.
-	if (thisFree !== undefined) {
-		const { call } = thisFree;
+	// The call and its other arguments observe a type parameter that the
+	// call fixes before the callback can infer it, and a `this` left out of
+	// the arrows' types that escapes through inference, as in
+	// `wrap<F>(callback: F): F`.
+	if (receiving !== undefined) {
+		const { call } = receiving;
 		const self = candidate.owner.parent;
 		nodes.push(
 			call,

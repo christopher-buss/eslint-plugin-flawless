@@ -363,6 +363,21 @@ pair((x: string) => {}, (y: string) => {});`;
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
+	it("keeps a function callback annotation that fixes a sibling's inference", () => {
+		const code = `declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+const piped = pipe(function (a) {}, function (x: number) { return x; });`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toStrictEqual([]);
+	});
+
+	it("keeps a function callback annotation that picks a generic overload", () => {
+		const code = `declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+declare function pipe(g: (a: string) => void, f: (x: number) => string, z: 1): 0;
+const piped = pipe(function (a) {}, function (x: number) { return x; });`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toStrictEqual([]);
+	});
+
 	it("ignores the contextual this of a parenthesized arrow callback", () => {
 		const code = `declare const list: Array<string>;
 const flat = list.flatMap(((item: string) => [item]));`;
