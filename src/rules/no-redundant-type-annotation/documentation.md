@@ -360,12 +360,12 @@ declare function map<T, R>(items: Array<T>, callback: (item: T) => R): Array<R>;
 map([1], () => (text: string) => text.length); // NOT reported — without it, `text` is implicitly `any`
 ```
 
-A generic callee is left alone unless the function is a direct argument of a
-call with one signature, and each of the callback's parameter types is the same
-before and after the call's type arguments are inferred, and so is its `this`
-type. An array method's callback has a `this` typed by the `thisArg` type
-parameter, so a `function` callback there is left alone. An arrow cannot bind
-`this`, so its `this` type is not compared:
+A generic callee with one signature is left alone unless the function is a
+direct argument of the call, and each of the callback's parameter types is the
+same before and after the call's type arguments are inferred, and so is its
+`this` type. A method whose callback has a `this` typed by a `thisArg` type
+parameter infers that type, so a `function` callback there is left alone. An
+arrow cannot bind `this`, so its `this` type is not compared:
 `list.flatMap((item: string) => [item])` is checked. The rule holds for
 `promise.catch((reason: unknown) => reason)`, where `reason` names no type
 parameter, so it is checked; the verifier decides whether the removal is safe.
