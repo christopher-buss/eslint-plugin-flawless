@@ -1,7 +1,9 @@
+autoInstallPeers: true
 catalogMode: prefer
 cleanupUnusedCatalogs: true
+dedupePeers: true
+enableGlobalVirtualStore: true
 enablePrePostScripts: true
-ignoreWorkspaceRootCheck: true
 
 minimumReleaseAgeExclude:
   - eslint-plugin-eslint-plugin@7.4.1
@@ -70,3 +72,19 @@ catalogs:
   utils:
     eslint-doc-generator: 3.6.0
     eslint-rule-benchmark: 0.8.0
+
+packageExtensions:
+  "@pobammer-ts/eslint-cease-nonsense-rules@1":
+    dependencies:
+      "@typescript-eslint/types": ^8.55.0
+    peerDependencies:
+      typescript: "*"
+
+permissions:
+  eslint-vitest-rule-tester:
+    skills: true
+
+skills:
+  dirs:
+    - .agents/skills
+    - .claude/skills
