@@ -127,6 +127,32 @@ interface ContextualSignature {
 	readonly signature: Signature;
 }
 
+/** A call that passes a callback as a direct argument, read once per callback. */
+interface CallbackCall {
+	/** The call. */
+	readonly call: TSESTree.CallExpression | TSESTree.NewExpression;
+	/** The callback's argument position. */
+	readonly index: number;
+	/** The call's TypeScript node, to read types at. */
+	readonly location: ts.Node;
+	/** The signature that the call resolves to. */
+	readonly resolved: Signature | undefined;
+	/** The callee's signatures, before inference. */
+	readonly signatures: ReadonlyArray<Signature>;
+}
+
+/** The node that fixes a function expression's contextual type. */
+interface ContextAnchor {
+	/** The anchor node. */
+	readonly node: TSESTree.Node;
+	/**
+	 * The call, when the context is a parameter of the overload that the call
+	 * resolves to. The annotation can change which overload resolves, so only
+	 * the verifier can prove a removal safe.
+	 */
+	readonly overloadedCall?: CallbackCall;
+}
+
 /**
  * A parameter of a function outside a class body. Only a constructor can
  * declare a parameter property, and the parser rejects one anywhere else.
@@ -271,6 +297,37 @@ function getMaxArguments(signature: Signature, tuple: RestTuple | undefined): nu
 }
 
 /**
+ * Reports whether a parameter receives an argument that can infer a type
+ * parameter: one that is not an object or array literal.
+ *
+ * A tagged template passes its holes, so every parameter counts there.
+ *
+ * @param call - The call to inspect.
+ * @param signature - The callee's declared signature.
+ * @param index - The parameter position.
+ * @returns True when some argument at that position can infer.
+ */
+function receivesInferringArgument(
+	call: ArgumentCall,
+	signature: Signature,
+	index: number,
+): boolean {
+	if (call.type === AST_NODE_TYPES.TaggedTemplateExpression) {
+		return true;
+	}
+
+	const received = isRestParameter(signature, index)
+		? call.arguments.slice(index)
+		: call.arguments.slice(index, index + 1);
+	return received.some((argument) => {
+		return (
+			argument.type !== AST_NODE_TYPES.ObjectExpression &&
+			argument.type !== AST_NODE_TYPES.ArrayExpression
+		);
+	});
+}
+
+/**
  * Counts the parameters a caller must pass, up to the first optional, default,
  * or rest parameter.
  *
@@ -299,6 +356,22 @@ function countLeadingRequired(parameters: ReadonlyArray<ContextualParameter>): n
  */
 function isGeneric(signature: Signature): boolean {
 	return (signature.getTypeParameters()?.length ?? 0) > 0;
+}
+
+/**
+ * Reports whether a call passes a callback to a callee with more than one
+ * signature, none of them generic.
+ *
+ * Then the callback takes its context from the overload that the call
+ * resolves to, and inference takes no part in that choice. This is a cost
+ * filter, not a proof: the callback's parameter types can be what picks
+ * the overload, so the verifier decides.
+ *
+ * @param callbackCall - The call that receives the callback.
+ * @returns True when the callee has overloads, and none is generic.
+ */
+function hasPlainOverloads({ signatures }: CallbackCall): boolean {
+	return signatures.length > 1 && !signatures.some(isGeneric);
 }
 
 /**
@@ -1001,7 +1074,7 @@ function create(
 	const allowExpressions = options.allowExpressions ?? DEFAULT_OPTIONS.allowExpressions;
 	let exportedNames: Set<string> | undefined;
 	let isScriptFile: boolean | undefined;
-	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
+	const anchors = new Map<FunctionExpressionNode, ContextAnchor | undefined>();
 	const candidates: Array<Candidate & Removal> = [];
 
 	/**
@@ -1233,37 +1306,6 @@ function create(
 	}
 
 	/**
-	 * Reports whether a parameter receives an argument that can infer a type
-	 * parameter: one that is not an object or array literal.
-	 *
-	 * A tagged template passes its holes, so every parameter counts there.
-	 *
-	 * @param call - The call to inspect.
-	 * @param signature - The callee's declared signature.
-	 * @param index - The parameter position.
-	 * @returns True when some argument at that position can infer.
-	 */
-	function receivesInferringArgument(
-		call: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.TaggedTemplateExpression,
-		signature: Signature,
-		index: number,
-	): boolean {
-		if (call.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return true;
-		}
-
-		const received = isRestParameter(signature, index)
-			? call.arguments.slice(index)
-			: call.arguments.slice(index, index + 1);
-		return received.some((argument) => {
-			return (
-				argument.type !== AST_NODE_TYPES.ObjectExpression &&
-				argument.type !== AST_NODE_TYPES.ArrayExpression
-			);
-		});
-	}
-
-	/**
 	 * Reports whether a type mentions another directly, in a union or
 	 * intersection member, a type argument, or a call signature.
 	 *
@@ -1389,6 +1431,40 @@ function create(
 	}
 
 	/**
+	 * Reads a call that passes a callback as a direct argument.
+	 *
+	 * @param call - The call that receives the callback.
+	 * @param callback - The function that may be one of the call's arguments.
+	 * @returns The call record, or undefined when the call is not a call or
+	 *   `new` expression, or the callback is not one of its arguments.
+	 */
+	function getCallbackCall(
+		call: CallLike,
+		callback: FunctionExpressionNode,
+	): CallbackCall | undefined {
+		if (
+			call.type !== AST_NODE_TYPES.CallExpression &&
+			call.type !== AST_NODE_TYPES.NewExpression
+		) {
+			return undefined;
+		}
+
+		const index = call.arguments.indexOf(callback);
+		if (index === -1) {
+			return undefined;
+		}
+
+		const location = services.esTreeNodeToTSNodeMap.get(call);
+		return {
+			call,
+			index,
+			location,
+			resolved: checker.getResolvedSignature(location),
+			signatures: getCalleeSignatures(call),
+		};
+	}
+
+	/**
 	 * Reports whether a generic call types a callback argument's parameters
 	 * without inference.
 	 *
@@ -1397,29 +1473,19 @@ function create(
 	 * before and after the call's type arguments are inferred names none of
 	 * them, as `reason` in `promise.catch((reason: unknown) => reason)` does.
 	 *
-	 * @param call - The call that receives the callback.
+	 * @param callbackCall - The call that receives the callback.
 	 * @param callback - The callback, a direct argument of the call.
 	 * @returns True when every callback parameter's type is settled.
 	 */
 	function hasSettledCallbackParameters(
-		call: CallLike,
+		{ index, resolved, signatures }: CallbackCall,
 		callback: FunctionExpressionNode,
 	): boolean {
-		if (
-			call.type !== AST_NODE_TYPES.CallExpression &&
-			call.type !== AST_NODE_TYPES.NewExpression
-		) {
-			return false;
-		}
-
-		const index = call.arguments.indexOf(callback);
-		const signatures = getCalleeSignatures(call);
 		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
-		if (declared === undefined || index === -1 || isRestParameter(declared, index)) {
+		if (declared === undefined || isRestParameter(declared, index)) {
 			return false;
 		}
 
-		const resolved = checker.getResolvedSignature(services.esTreeNodeToTSNodeMap.get(call));
 		const before = getCallbackSignature(declared.parameters[index]);
 		const after = getCallbackSignature(resolved?.parameters[index]);
 		if (before === undefined || before.parameters.length !== after?.parameters.length) {
@@ -1462,16 +1528,19 @@ function create(
 	 * search does not know, finds no anchor, so an unknown context costs a
 	 * report rather than a wrong fix.
 	 *
+	 * A callback that a call passes to an overload (see `hasPlainOverloads`) is
+	 * anchored to the call, but only the verifier can prove a removal safe.
+	 *
 	 * @param node - The function expression to locate.
 	 * @returns The anchor, or undefined when the context is not proven stable.
 	 */
-	function resolveContextAnchor(node: FunctionExpressionNode): TSESTree.Node | undefined {
+	function resolveContextAnchor(node: FunctionExpressionNode): ContextAnchor | undefined {
 		if (anchors.has(node)) {
 			return anchors.get(node);
 		}
 
 		let current: TSESTree.Node = node;
-		let anchor: TSESTree.Node | undefined;
+		let anchor: ContextAnchor | undefined;
 		while (current.type !== AST_NODE_TYPES.Program) {
 			const parent: TSESTree.Node = current.parent;
 			if (forwardsContext(parent, current)) {
@@ -1485,7 +1554,7 @@ function create(
 				// one, a declaration has no context to pass on, and an expression
 				// passes on its own.
 				if (returning.returnType !== undefined) {
-					anchor = returning;
+					anchor = { node: returning };
 				} else if (returning.type !== AST_NODE_TYPES.FunctionDeclaration) {
 					current = returning;
 					continue;
@@ -1495,17 +1564,23 @@ function create(
 			}
 
 			if (isWrittenAnchor(parent, current)) {
-				anchor = parent;
+				anchor = { node: parent };
 				break;
 			}
 
 			const call = getReceivingCall(parent, current);
+			if (call === undefined) {
+				break;
+			}
+
+			const callbackCall = current === node ? getCallbackCall(call, node) : undefined;
 			if (
-				call !== undefined &&
-				(hasFixedSignature(call) ||
-					(current === node && hasSettledCallbackParameters(call, node)))
+				hasFixedSignature(call) ||
+				(callbackCall !== undefined && hasSettledCallbackParameters(callbackCall, node))
 			) {
-				anchor = call;
+				anchor = { node: call };
+			} else if (callbackCall !== undefined && hasPlainOverloads(callbackCall)) {
+				anchor = { node: call, overloadedCall: callbackCall };
 			}
 
 			break;
@@ -1534,7 +1609,7 @@ function create(
 			return (
 				isContextualFunction(child) &&
 				!child.params.every(isUntypedParameter) &&
-				resolveContextAnchor(child) === anchor
+				resolveContextAnchor(child)?.node === anchor
 			);
 		}
 
@@ -2758,7 +2833,8 @@ function create(
 			return;
 		}
 
-		if (resolveContextAnchor(node) === undefined) {
+		const anchor = resolveContextAnchor(node);
+		if (anchor === undefined) {
 			return;
 		}
 
@@ -2838,7 +2914,12 @@ function create(
 				continue;
 			}
 
-			collect({ annotation, messageId: PARAMETER_MESSAGE_ID, type: annotationType });
+			collect({
+				annotation,
+				messageId: PARAMETER_MESSAGE_ID,
+				requiresProof: anchor.overloadedCall !== undefined,
+				type: annotationType,
+			});
 		}
 	}
 

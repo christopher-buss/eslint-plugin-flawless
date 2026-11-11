@@ -2323,4 +2323,38 @@ export const corpus: ReadonlyArray<CorpusCase> = [
 			declare const v: string | number; if (typeof v === "string") { let x: string = v; x = "b"; void x; } export {};
 		`,
 	},
+	{
+		name: "overload pick: event literal",
+		code: unindent`
+			interface Emitter {
+				once(event: "exit", listener: (code: null | number) => void): this;
+				once(event: "data", listener: (chunk: string) => void): this;
+			}
+			declare const emitter: Emitter;
+			emitter.once("exit", (code: null | number) => {});
+			emitter.once("data", (chunk: string) => chunk.length);
+		`,
+	},
+	{
+		name: "overload pick: any catch-all",
+		code: unindent`
+			interface Stream {
+				on(event: "data", listener: (chunk: Uint8Array) => void): this;
+				on(event: string, listener: (...args: Array<any>) => void): this;
+			}
+			declare const stream: Stream;
+			stream.on("data", (chunk: Uint8Array) => {});
+			stream.on("data", (chunk: string) => {});
+			stream.on("end", (chunk: Uint8Array) => {});
+		`,
+	},
+	{
+		name: "overload pick: annotation picks the overload",
+		code: unindent`
+			declare function on(handler: (a: number, b: number) => void): void;
+			declare function on(handler: (a: string, b: string) => void): void;
+			on((a: string, b: string) => a.length + b.length);
+			on((a: string) => a.length);
+		`,
+	},
 ];
