@@ -1685,8 +1685,35 @@ function create(
 	 * @returns `"unproven"` when only the verifier can tell whether it does.
 	 */
 	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
-		if (isContextualFunction(node)) {
-			return takesContext(node) ? "dependent" : "independent";
+		return typedValueDependence(node, (literal) => {
+			if (literal.type === AST_NODE_TYPES.ArrayExpression) {
+				return arrayLiteralDependence(literal);
+			}
+
+			return takesContext(literal) ? "dependent" : "independent";
+		});
+	}
+
+	/**
+	 * Finds the dependence of a value that the annotation's contextual type
+	 * reaches: the initializer, a value a function initializer returns, or an
+	 * element of an array literal there.
+	 *
+	 * The walk is the same for each of them. Only a function or array literal
+	 * depends differently, so the caller tells how.
+	 *
+	 * @param node - The expression to inspect.
+	 * @param literalDependence - The dependence of a function or array literal.
+	 * @returns `"unproven"` when only the verifier can tell whether it depends.
+	 */
+	function typedValueDependence(
+		node: TSESTree.Node,
+		literalDependence: (
+			literal: ContextualFunction | TSESTree.ArrayExpression,
+		) => ContextDependence,
+	): ContextDependence {
+		if (isContextualFunction(node) || node.type === AST_NODE_TYPES.ArrayExpression) {
+			return literalDependence(node);
 		}
 
 		// A template expression is a template type only because the context
@@ -1695,19 +1722,57 @@ function create(
 			return hasTemplateType(services.getTypeAtLocation(node)) ? "dependent" : "independent";
 		}
 
-		if (
-			node.type === AST_NODE_TYPES.ObjectExpression ||
-			node.type === AST_NODE_TYPES.ArrayExpression
-		) {
+		if (node.type === AST_NODE_TYPES.ObjectExpression) {
 			return "dependent";
 		}
 
 		const operands = contextForwardedOperands(node);
 		if (operands !== undefined) {
-			return strongestDependence(operands, annotationContextDependence);
+			function operandDependence(operand: TSESTree.Node): ContextDependence {
+				return typedValueDependence(operand, literalDependence);
+			}
+
+			return strongestDependence(operands, operandDependence);
 		}
 
 		return contextDependence(node);
+	}
+
+	/**
+	 * Finds the dependence of an array literal that the annotation types.
+	 *
+	 * The annotation gives each element its element type. An empty array is
+	 * `never[]` without it. An object, array, or function literal element
+	 * gets excess property checks or the types of its parameters, `this`,
+	 * and return value from it, and the verifier does not observe these. Any
+	 * other element can only keep or lose its literal type, and the array
+	 * can only be a tuple or not. These change the type of the variable,
+	 * which the verifier compares, so it decides.
+	 *
+	 * @param node - The array literal to inspect.
+	 * @returns `"unproven"` when no element makes the array dependent.
+	 */
+	function arrayLiteralDependence(node: TSESTree.ArrayExpression): ContextDependence {
+		if (node.elements.length === 0) {
+			return "dependent";
+		}
+
+		function elementDependence(element: null | TSESTree.Node): ContextDependence {
+			if (element === null) {
+				return "independent";
+			}
+
+			// A spread hands the array's own context to its operand.
+			if (element.type === AST_NODE_TYPES.SpreadElement) {
+				return elementDependence(element.argument);
+			}
+
+			return typedValueDependence(element, () => "dependent");
+		}
+
+		return strongestDependence(node.elements, elementDependence) === "dependent"
+			? "dependent"
+			: "unproven";
 	}
 
 	/**

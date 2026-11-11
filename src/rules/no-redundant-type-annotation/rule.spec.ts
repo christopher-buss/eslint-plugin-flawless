@@ -151,12 +151,67 @@ const valid: Array<ValidTestCase> = [
 		declare const source: { a: string };
 		const { a }: { a: string } = source;
 	`,
-	// Object and array literals belong to no-known-value-widening.
+	// Object literals, and array literals that hold one, belong to
+	// no-known-value-widening. So does an empty array, which is `never[]`
+	// without the annotation.
 	unindent`
 		const items: Array<string> = [];
 	`,
 	unindent`
 		const owner: { id: number } = { id: 1 };
+	`,
+	unindent`
+		const owners: Array<{ id: number }> = [{ id: 1 }];
+	`,
+	unindent`
+		declare const choose: boolean;
+		const owners: Array<{ id: number } | number> = [choose ? { id: 1 } : 1];
+	`,
+	unindent`
+		const grid: Array<Array<number>> = [[1]];
+	`,
+	// An element function takes its context from the annotation.
+	unindent`
+		const makers: Array<() => number> = [() => 1];
+	`,
+	unindent`
+		const parsers: Array<(text: string) => number> = [function (text) {
+			return text.length;
+		}];
+	`,
+	// The annotation types the operand of a spread.
+	unindent`
+		const items: Array<number> = [...[1, 2]];
+	`,
+	unindent`
+		declare function make<T>(): Array<T>;
+		const items: Array<number> = [...make()];
+	`,
+	// A generic call element infers its type argument from the element type.
+	unindent`
+		declare function make<T>(): T;
+		const items: Array<number> = [make()];
+	`,
+	// Without the annotation, an element loses its literal type, and the
+	// array is not a tuple or readonly.
+	unindent`
+		const open: [number] = [-1];
+	`,
+	unindent`
+		const open: readonly [-1] = [-1];
+	`,
+	unindent`
+		const open: ReadonlyArray<number> = [-1];
+	`,
+	unindent`
+		const open: Array<-1 | 0> = [-1];
+	`,
+	unindent`
+		const open: Array<-1> = [-1];
+	`,
+	unindent`
+		declare function read(): number;
+		const open: Array<\`a\${number}\`> = [\`a\${read()}\`];
 	`,
 	// The annotation supplies the contextual type for the untyped parameter.
 	unindent`
@@ -808,6 +863,40 @@ const valid: Array<ValidTestCase> = [
 ];
 
 const invalid: Array<InvalidTestCase> = [
+	// An array literal of plain values infers the same type without the
+	// annotation.
+	{
+		code: unindent`
+			const open: Array<number> = [-1];
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			const open = [-1];
+		`,
+	},
+	{
+		code: unindent`
+			declare function read(): number;
+			const values: Array<number> = [read(), 2];
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function read(): number;
+			const values = [read(), 2];
+		`,
+	},
+	// A spread of a typed value takes no context.
+	{
+		code: unindent`
+			declare const values: Array<number>;
+			const more: Array<number> = [...values, 1];
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const values: Array<number>;
+			const more = [...values, 1];
+		`,
+	},
 	// A generic alias with type arguments keeps its name in the inferred type.
 	{
 		code: unindent`
@@ -1400,6 +1489,19 @@ const invalid: Array<InvalidTestCase> = [
 
 	// Past the work limit, a variable that needs proof is not verified, so it
 	// is not reported. The next fix pass verifies it.
+	{
+		code: [
+			"declare function read(): number;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const kept${index}: Array<number> = [read()];`;
+			}),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
+		output: [
+			"declare function read(): number;",
+			...Array.from({ length: 11 }, (_, index) => `const kept${index} = [read()];`),
+		].join("\n"),
+	},
 	{
 		code: [
 			"interface Item { ok: boolean }",
