@@ -4,7 +4,9 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type {
 	Expression,
+	ObjectType,
 	Signature,
+	TupleTypeReference,
 	Type,
 	TypeReference,
 	UnionOrIntersectionType,
@@ -17,6 +19,7 @@ import { pushChildNodes } from "../../utils/nested-expressions";
 import { type Candidate, verifyAnnotations } from "./verify";
 
 const {
+	ElementFlags,
 	isArrowFunction,
 	isFunctionDeclaration,
 	isFunctionExpression,
@@ -104,6 +107,26 @@ interface Removal {
 	readonly type: Type;
 }
 
+/** A signature's trailing rest parameter whose type is a tuple. */
+interface RestTuple {
+	/** The type of each element, in order. */
+	readonly elements: ReadonlyArray<Type>;
+	/** The kind of each element: required, optional, rest, or variadic. */
+	readonly flags: ReadonlyArray<ts.ElementFlags>;
+	/** The position of the rest parameter in the signature. */
+	readonly start: number;
+}
+
+/** A callback's contextual signature, with what reads its parameter types. */
+interface ContextualSignature {
+	/** The node to read the parameter types at. */
+	readonly location: ts.Node;
+	/** The signature's rest tuple, if any. */
+	readonly restTuple: RestTuple | undefined;
+	/** The contextual call signature. */
+	readonly signature: Signature;
+}
+
 /**
  * A parameter of a function outside a class body. Only a constructor can
  * declare a parameter property, and the parser rejects one anywhere else.
@@ -188,6 +211,63 @@ function isRestParameter(signature: Signature, index: number): boolean {
 		isParameter(declaration) &&
 		declaration.dotDotDotToken !== undefined
 	);
+}
+
+/**
+ * Reports whether a type is a reference to a tuple type.
+ *
+ * `checker.isTupleType` is not public before TypeScript 5.0, so this reads the
+ * object flags.
+ *
+ * @param type - The type to inspect.
+ * @returns True when the type is a tuple reference.
+ */
+function isTupleReference(type: Type): type is TupleTypeReference {
+	return (
+		(type.flags & TypeFlags.Object) !== 0 &&
+		((type as ObjectType).objectFlags & ObjectFlags.Reference) !== 0 &&
+		((type as TypeReference).target.objectFlags & ObjectFlags.Tuple) !== 0
+	);
+}
+
+/**
+ * Gets the type of a tuple element that always holds one argument.
+ *
+ * TypeScript gives a callback parameter the element at its position. An
+ * optional element adds `undefined`, and a rest or variadic element moves the
+ * positions after it, so only an element that is required, with only required
+ * elements before it, pairs with one position.
+ *
+ * @param tuple - The rest tuple.
+ * @param position - The position in the tuple.
+ * @returns The element type, or undefined when the position is not fixed.
+ */
+function getFixedElement(tuple: RestTuple, position: number): Type | undefined {
+	const fixed = tuple.flags.slice(0, position + 1);
+	if (fixed.length <= position || fixed.some((flag) => flag !== ElementFlags.Required)) {
+		return undefined;
+	}
+
+	return tuple.elements[position];
+}
+
+/**
+ * Counts the arguments a signature can pass at most.
+ *
+ * @param signature - The contextual call signature.
+ * @param tuple - The signature's rest tuple, if any.
+ * @returns The largest argument count, or infinity for an open rest.
+ */
+function getMaxArguments(signature: Signature, tuple: RestTuple | undefined): number {
+	if (tuple !== undefined) {
+		const open = tuple.flags.some((flag) => (flag & ElementFlags.Variable) !== 0);
+		return open ? Number.POSITIVE_INFINITY : tuple.start + tuple.flags.length;
+	}
+
+	const last = signature.parameters.length - 1;
+	return isRestParameter(signature, last)
+		? Number.POSITIVE_INFINITY
+		: signature.parameters.length;
 }
 
 /**
@@ -2527,6 +2607,59 @@ function create(
 		collect({ annotation: returnType, messageId: RETURN_MESSAGE_ID, type: annotationType });
 	}
 
+	/**
+	 * Gets a signature's trailing rest parameter when its type is a tuple.
+	 *
+	 * @param signature - The contextual call signature.
+	 * @param location - The node to read the parameter type at.
+	 * @returns The rest tuple, or undefined when there is none.
+	 */
+	function getRestTuple(signature: Signature, location: ts.Node): RestTuple | undefined {
+		const start = signature.parameters.length - 1;
+		const rest = signature.parameters[start];
+		if (rest === undefined || !isRestParameter(signature, start)) {
+			return undefined;
+		}
+
+		const type = checker.getTypeOfSymbolAtLocation(rest, location);
+		if (!isTupleReference(type)) {
+			return undefined;
+		}
+
+		return { elements: checker.getTypeArguments(type), flags: type.target.elementFlags, start };
+	}
+
+	/**
+	 * Gets the contextual type of a callback parameter.
+	 *
+	 * A parameter pairs with the signature parameter at the same position, and
+	 * a rest parameter only with a rest parameter. A non-rest parameter at or
+	 * after the start of a rest tuple pairs with the tuple element at its
+	 * position instead.
+	 *
+	 * @param contextual - The contextual signature and where to read it.
+	 * @param parameter - The callback parameter.
+	 * @param index - The parameter position, after any `this` parameter.
+	 * @returns The contextual type, or undefined when nothing pairs with it.
+	 */
+	function getContextualParameterType(
+		{ location, restTuple, signature }: ContextualSignature,
+		parameter: ContextualParameter,
+		index: number,
+	): Type | undefined {
+		const isRest = parameter.type === AST_NODE_TYPES.RestElement;
+		if (!isRest && restTuple !== undefined && index >= restTuple.start) {
+			return getFixedElement(restTuple, index - restTuple.start);
+		}
+
+		const target = signature.parameters[index];
+		if (target === undefined || isRest !== isRestParameter(signature, index)) {
+			return undefined;
+		}
+
+		return checker.getTypeOfSymbolAtLocation(target, location);
+	}
+
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
 		if (!isContextualFunction(node) || node.params.every(isUntypedParameter)) {
 			return;
@@ -2561,13 +2694,13 @@ function create(
 		// A `this` parameter has no counterpart in the contextual signature's
 		// positional list, so the positions start after it.
 		const parameters = getPositionalParameters(node);
+		const location = services.esTreeNodeToTSNodeMap.get(node);
+		const restTuple = getRestTuple(signature, location);
+		const contextual: ContextualSignature = { location, restTuple, signature };
 
 		// A function that needs more arguments than the signature passes gets no
 		// contextual signature at all.
-		if (
-			!isRestParameter(signature, signature.parameters.length - 1) &&
-			signature.parameters.length < countLeadingRequired(parameters)
-		) {
+		if (countLeadingRequired(parameters) > getMaxArguments(signature, restTuple)) {
 			return;
 		}
 
@@ -2577,13 +2710,12 @@ function create(
 				continue;
 			}
 
-			const isRest = parameter.type === AST_NODE_TYPES.RestElement;
-			if (isRest !== isRestParameter(signature, index)) {
-				continue;
-			}
-
-			const target = signature.parameters[index];
-			if (target === undefined) {
+			const contextualParameterType = getContextualParameterType(
+				contextual,
+				parameter,
+				index,
+			);
+			if (contextualParameterType === undefined) {
 				continue;
 			}
 
@@ -2605,10 +2737,6 @@ function create(
 				continue;
 			}
 
-			const contextualParameterType = checker.getTypeOfSymbolAtLocation(
-				target,
-				services.esTreeNodeToTSNodeMap.get(node),
-			);
 			if (containsAny(contextualParameterType)) {
 				continue;
 			}
