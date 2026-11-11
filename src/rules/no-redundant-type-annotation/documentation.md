@@ -539,6 +539,25 @@ fix. Types that print the same but name different declarations, such as a
 shadowed interface, compare as different. Union members and ordinary object
 properties compare in any order.
 
+For a parameter of an arrow or function expression that a call or `new` takes as
+an argument, the verifier also compares the call and its other arguments.
+Without the annotation, the call can check the callback after the other
+arguments, and a type parameter can then be fixed before the callback infers it:
+
+```ts
+declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+declare function report(value: unknown): void;
+
+pipe(
+	function (a) {
+		report(a);
+	},
+	function (x: number) {
+		return x;
+	},
+); // NOT reported — without it, `A` is `unknown`
+```
+
 Removals that can influence one another are also checked one at a time, for
 editors that apply a single fix. Two removals are coupled when their regions
 overlap or one statement uses both bindings. A variable's region is its

@@ -22,6 +22,10 @@ const projectServiceSharesCompiler = major > 5 || (major === 5 && minor >= 3);
 // Before TypeScript 5.2, a condition alias does not narrow `this`, so that
 // annotation is not needed there.
 const aliasesThis = major > 5 || (major === 5 && minor >= 2);
+// Before TypeScript 6.0, an annotated `function` expression callback does not
+// fix a sibling's inference, so the removal does not change the call's type.
+const functionsFixInference = major >= 6;
+const functionCallbackKept = functionsFixInference ? 0 : 1;
 const verifiedRegressions = regressions.filter(
 	({ name }) => aliasesThis || name !== "aliased condition of this",
 );
@@ -361,6 +365,25 @@ pair((x: string) => {}, (y: string) => {});`;
 		const { accepted } = verifyAnnotations(program, source, candidates);
 		expect(accepted).toHaveLength(2);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("keeps a function callback annotation that fixes a sibling's inference", () => {
+		const code = `declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+const piped = pipe(function (a) {}, function (x: number) { return x; });`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(
+			functionCallbackKept,
+		);
+	});
+
+	it("keeps a function callback annotation that picks a generic overload", () => {
+		const code = `declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+declare function pipe(g: (a: string) => void, f: (x: number) => string, z: 1): 0;
+const piped = pipe(function (a) {}, function (x: number) { return x; });`;
+		const { candidates, program, source } = project(code);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(
+			functionCallbackKept,
+		);
 	});
 
 	it("ignores the contextual this of a parenthesized arrow callback", () => {

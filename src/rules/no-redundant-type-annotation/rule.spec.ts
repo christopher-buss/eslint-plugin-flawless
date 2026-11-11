@@ -617,6 +617,21 @@ const valid: Array<ValidTestCase> = [
 		declare function on(key: number, callback: (value: number) => void): void;
 		on(1, (value: number) => {});
 	`,
+	// Without the annotation, the `function` callback is checked after its
+	// sibling, so `A` is fixed to `unknown` first.
+	unindent`
+		declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+		const piped = pipe(function (a) {}, function (x: number) {
+			return x;
+		});
+	`,
+	unindent`
+		declare function pipe<A>(g: (a: A) => void, f: (x: number) => A): A;
+		declare function pipe(g: (a: string) => void, f: (x: number) => string, z: 1): 0;
+		const piped = pipe(function (a) {}, function (x: number) {
+			return x;
+		});
+	`,
 	// A function the callback returns infers the generic's return type, so its
 	// annotation is the only source of the context it would appear to restate.
 	unindent`
