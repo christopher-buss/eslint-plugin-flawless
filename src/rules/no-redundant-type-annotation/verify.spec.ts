@@ -352,6 +352,71 @@ const second: string = json();`;
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
+	it("checks a removal alone when another removal in a shared check causes its problem", () => {
+		// The coupling does not follow the return type of get, so the
+		// removals of a and c share a check alone. Without the annotation of
+		// a, c becomes any. Alone, the removal of c is safe.
+		const code = `declare function json(): any;
+const a: string = json();
+const a2: string = a;
+function get() { return a; }
+const c: string = get();
+const d: string = c;`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(
+			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
+		).toStrictEqual(["a"]);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual([
+			"a2",
+			"c",
+			"d",
+		]);
+		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("stops sharing checks alone after a shared check in which all removals fail", () => {
+		// Each pair is coupled, and each removal fails alone. The variables
+		// share one check alone, and so do the parameters.
+		const code = Array.from(
+			{ length: 5 },
+			(_, index) =>
+				`const f${index}: (x: string) => string | number = (x: string | number) => x;`,
+		).join("\n");
+		/**
+		 * Counts the programs that verification creates. Each program built
+		 * from an old program reads the old root names once to reuse it.
+		 * @param text - The source to verify.
+		 * @returns The verification and the number of programs.
+		 */
+		function verifyCounted(text: string): {
+			programs: number;
+			verification: ReturnType<typeof verifyAnnotations<Candidate>>;
+		} {
+			const { candidates, program, source } = project(text);
+			let reads = 0;
+			const counted = Object.assign(Object.create(program) as ts.Program, {
+				getRootFileNames: () => {
+					reads += 1;
+					return program.getRootFileNames();
+				},
+			});
+			const verification = verifyAnnotations(counted, source, candidates);
+			return { programs: reads, verification };
+		}
+
+		// One uncoupled removal needs one combined check.
+		const single = verifyCounted(
+			"declare function read(): string; const value: string = read();",
+		);
+		expect(single.verification.accepted).toHaveLength(1);
+		const { programs, verification } = verifyCounted(code);
+		expect(verification.accepted).toStrictEqual([]);
+		expect(verification.rejected).toHaveLength(10);
+		// One check alone for each removal, and one shared check.
+		expect(programs - single.programs).toBe(10);
+	});
+
 	it("couples a const with the uses that its condition narrows", () => {
 		// Only the removal of isNum narrows v in the second block. The
 		// narrowing of ok observes that use too, so the two are coupled.

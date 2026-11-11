@@ -65,9 +65,9 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
 // The check alone of a removal that requires proof is not in this budget.
-// Each selected removal gets at most one check alone, and each combined check
-// restores at least one removal, so one lint creates at most
-// 2 * (MAX_PROGRAMS - 2) programs.
+// Each selected removal gets at most one check alone, plus one shared check
+// in which all removals fail, and each combined check restores at least one
+// removal, so one lint creates at most 2 * (MAX_PROGRAMS - 2) + 1 programs.
 const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
@@ -266,6 +266,54 @@ export function verifyAnnotations<C extends Candidate>(
 			return problems;
 		}
 
+		/**
+		 * Finds the problem of each coupled removal when it is the only
+		 * removal. Removals that are not coupled with one another share one
+		 * program, as uncoupled removals do in the combined check. A removal
+		 * with a problem there gets a program of its own, so another removal
+		 * never causes its rejection. After a shared program in which all
+		 * removals have a problem, each removal gets a program of its own.
+		 * Thus at most one program more than the number of removals is used.
+		 * @param partners - The removals coupled with each coupled removal.
+		 * @returns The problem of each coupled removal alone, if any.
+		 */
+		function checkAlone(partners: ReadonlyMap<C, ReadonlySet<C>>): Map<C, string | undefined> {
+			const groups: Array<Array<C>> = [];
+			for (const [candidate, coupledWith] of partners) {
+				const group = groups.find((members) => {
+					return members.every((member) => !coupledWith.has(member));
+				});
+				if (group === undefined) {
+					groups.push([candidate]);
+				} else {
+					group.push(candidate);
+				}
+			}
+
+			const problems = new Map<C, string | undefined>();
+			let batching = true;
+			for (const group of groups) {
+				if (!batching || group.length === 1) {
+					for (const candidate of group) {
+						problems.set(candidate, check([candidate]).get(candidate));
+					}
+
+					continue;
+				}
+
+				const shared = check(group);
+				batching = group.some((candidate) => !shared.has(candidate));
+				for (const candidate of group) {
+					problems.set(
+						candidate,
+						shared.has(candidate) ? check([candidate]).get(candidate) : undefined,
+					);
+				}
+			}
+
+			return problems;
+		}
+
 		// Bound speculative work independently of the number of annotations in
 		// the file. Additional candidates are reported without a fix; a later
 		// fix pass verifies them once earlier fixes are applied.
@@ -275,12 +323,13 @@ export function verifyAnnotations<C extends Candidate>(
 
 		// An editor applies one fix at a time. Removals that cannot influence
 		// one another are safe alone when they are safe together, so only
-		// coupled removals need a program of their own. A removal that
-		// requires proof is reported only when it is safe alone. Its program
-		// is not in the budget, so other removals cannot use up its check.
+		// coupled removals need a check alone. A removal that requires proof
+		// is reported only when it is safe alone. Its check is not in the
+		// budget, so other removals cannot use up its check.
 		let programs = 0;
 		const safeAlone = new Set<C>();
 		const coupled = coupledCandidates(selected, references, narrowed);
+		const aloneProblems = checkAlone(coupled);
 		let accepted = selected.filter((candidate) => {
 			if (!coupled.has(candidate)) {
 				return true;
@@ -291,7 +340,7 @@ export function verifyAnnotations<C extends Candidate>(
 				programs += 1;
 			}
 
-			const reason = check([candidate]).get(candidate);
+			const reason = aloneProblems.get(candidate);
 			if (reason !== undefined) {
 				recordRejection(candidate, reason);
 				return false;
@@ -321,7 +370,7 @@ export function verifyAnnotations<C extends Candidate>(
 				return { accepted, acceptedAlone, rejected, unverified };
 			}
 
-			// The coupled removals use at most ten programs above, so this
+			// The coupled removals use at most ten of the budget above, so this
 			// check runs at least once. An uncoupled removal without a problem
 			// here is safe alone.
 			for (const candidate of accepted) {
@@ -1004,13 +1053,13 @@ function contains(outer: ts.Node, inner: ts.Node): boolean {
  * @param references - The referencing identifiers of each candidate owner.
  * @param narrowed - The uses each candidate can narrow as an aliased
  *   condition.
- * @returns The candidates that need an individual check.
+ * @returns The removals coupled with each coupled candidate.
  */
 function coupledCandidates<C extends Candidate>(
 	candidates: ReadonlyArray<C>,
 	references: ReadonlyMap<ts.Node, ReadonlyArray<ts.Identifier>>,
 	narrowed: ReadonlyMap<C, ReadonlyArray<ts.Node>>,
-): Set<C> {
+): Map<C, Set<C>> {
 	const scoped = candidates.map((candidate) => {
 		return {
 			candidate,
@@ -1021,7 +1070,13 @@ function coupledCandidates<C extends Candidate>(
 			],
 		};
 	});
-	const coupled = new Set<C>();
+	const coupled = new Map<C, Set<C>>();
+	function link(from: C, to: C): void {
+		const partners = coupled.get(from) ?? new Set<C>();
+		partners.add(to);
+		coupled.set(from, partners);
+	}
+
 	for (const [index, first] of scoped.entries()) {
 		for (const second of scoped.slice(index + 1)) {
 			const overlaps = first.scopes.some((outer) => {
@@ -1030,8 +1085,8 @@ function coupledCandidates<C extends Candidate>(
 				);
 			});
 			if (overlaps) {
-				coupled.add(first.candidate);
-				coupled.add(second.candidate);
+				link(first.candidate, second.candidate);
+				link(second.candidate, first.candidate);
 			}
 		}
 	}
