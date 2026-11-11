@@ -41,6 +41,7 @@
 		"posteslint-docs": "eslint --cache --fix \"**/*.md\"",
 		"lint": "isentinel-lint",
 		"lint:ci": "isentinel-lint",
+		"prepare": "simple-git-hooks",
 		"prepublishOnly": "nr build",
 		"release": "bumpp",
 		"start": "tsx src/index.ts",

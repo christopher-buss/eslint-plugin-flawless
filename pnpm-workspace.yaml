@@ -74,7 +74,7 @@ catalogs:
 
 allowBuilds:
   esbuild: true
-  simple-git-hooks: true
+  simple-git-hooks: false
 
 configDependencies:
   "@isentinel/pnpm-plugin-eslint-config": 6.3.0
