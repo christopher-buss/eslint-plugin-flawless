@@ -342,6 +342,122 @@ function isFunctionNode(
 }
 
 /**
+ * Reports whether a node is a function body or a static block, which the
+ * declaration emitter never prints.
+ *
+ * @param node - The node to inspect, below the program.
+ * @returns True when the node hides its contents from the emitter.
+ */
+function isEmitterBoundary(node: Exclude<TSESTree.Node, TSESTree.Program>): boolean {
+	return (
+		node.type === AST_NODE_TYPES.StaticBlock ||
+		(isFunctionNode(node.parent) && node.parent.body === node)
+	);
+}
+
+/**
+ * Reports whether a node is inside a function body or a static block, which
+ * the declaration emitter never prints.
+ *
+ * @param node - The node to inspect.
+ * @returns True when an enclosing body hides the node from the emitter.
+ */
+function isHiddenFromEmitter(node: TSESTree.Node): boolean {
+	for (let current = node; current.type !== AST_NODE_TYPES.Program; current = current.parent) {
+		if (isEmitterBoundary(current)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Reports whether a reference sits where the declaration emitter prints it.
+ *
+ * The emitter copies a `typeof` query, a computed key of a type member, an
+ * `export default` or `export =` of a name, an export list, a class
+ * `extends` clause, and an enum member initializer. It prints no other read,
+ * and nothing inside a function body or static block.
+ *
+ * @param identifier - The reference to inspect.
+ * @returns True when the emitter reads the referenced declaration there.
+ */
+function isEmitterRead(identifier: TSESTree.Identifier | TSESTree.JSXIdentifier): boolean {
+	// One walk to the root finds both a hiding body and an enum member
+	// initializer, which is copied whole at any depth.
+	let inEnumInitializer = false;
+	for (let node: TSESTree.Node = identifier; node.type !== AST_NODE_TYPES.Program; ) {
+		const parent: TSESTree.Node = node.parent;
+		if (isEmitterBoundary(node)) {
+			return false;
+		}
+
+		if (parent.type === AST_NODE_TYPES.TSEnumMember && parent.initializer === node) {
+			inEnumInitializer = true;
+		}
+
+		node = parent;
+	}
+
+	if (inEnumInitializer) {
+		return true;
+	}
+
+	// Climb an entity name: `c.a`, `N.c`, `typeof N.c`.
+	let current: TSESTree.Node = identifier;
+	while (
+		(current.parent.type === AST_NODE_TYPES.MemberExpression &&
+			current.parent.object === current &&
+			!current.parent.computed) ||
+		(current.parent.type === AST_NODE_TYPES.TSQualifiedName && current.parent.left === current)
+	) {
+		current = current.parent;
+	}
+
+	const { parent } = current;
+	if (parent.type === AST_NODE_TYPES.TSTypeQuery) {
+		return true;
+	}
+
+	if (
+		parent.type === AST_NODE_TYPES.ClassDeclaration ||
+		parent.type === AST_NODE_TYPES.ClassExpression
+	) {
+		return parent.superClass === current;
+	}
+
+	if (parent.type === AST_NODE_TYPES.ExportDefaultDeclaration) {
+		return parent.declaration === current;
+	}
+
+	if (parent.type === AST_NODE_TYPES.TSExportAssignment) {
+		return parent.expression === current;
+	}
+
+	if (parent.type === AST_NODE_TYPES.ExportSpecifier) {
+		return parent.local === current;
+	}
+
+	// A computed key of a class member is an error with or without the
+	// annotation on TypeScript 6, but it is kept for older versions.
+	if (
+		parent.type === AST_NODE_TYPES.AccessorProperty ||
+		parent.type === AST_NODE_TYPES.MethodDefinition ||
+		parent.type === AST_NODE_TYPES.PropertyDefinition ||
+		parent.type === AST_NODE_TYPES.TSAbstractAccessorProperty ||
+		parent.type === AST_NODE_TYPES.TSAbstractMethodDefinition ||
+		parent.type === AST_NODE_TYPES.TSAbstractPropertyDefinition ||
+		parent.type === AST_NODE_TYPES.TSMethodSignature ||
+		parent.type === AST_NODE_TYPES.TSPropertySignature
+	) {
+		return parent.computed && parent.key === current;
+	}
+
+	return false;
+}
+
+/**
  * Reports whether a node is a function whose parameters can take their types
  * from a context: an arrow or function expression outside a class body.
  *
@@ -694,6 +810,7 @@ function create(
 	const checkReturnTypes = options.checkReturnTypes ?? DEFAULT_OPTIONS.checkReturnTypes;
 	const allowExpressions = options.allowExpressions ?? DEFAULT_OPTIONS.allowExpressions;
 	let exportedNames: Set<string> | undefined;
+	let isScriptFile: boolean | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
 	const candidates: Array<Candidate & Removal> = [];
 
@@ -1564,10 +1681,27 @@ function create(
 	}
 
 	/**
+	 * Reports whether the file is a script rather than a module.
+	 *
+	 * The declarations at the top of a script are global, so the emitter
+	 * prints all of them. TypeScript decides this, so `moduleDetection` is
+	 * obeyed.
+	 *
+	 * @returns True when TypeScript treats the file as a script.
+	 */
+	function isScript(): boolean {
+		isScriptFile ??= !ts.isExternalModule(
+			services.esTreeNodeToTSNodeMap.get(context.sourceCode.ast),
+		);
+		return isScriptFile;
+	}
+
+	/**
 	 * Reports whether a variable leaves the module.
 	 *
 	 * Only exported declarations are subject to `isolatedDeclarations`, so the
-	 * question decides whether the annotation is load-bearing.
+	 * question decides whether the annotation is load-bearing. A variable at
+	 * the top of a script is global, so it counts as exported.
 	 *
 	 * @param node - The declarator to inspect.
 	 * @returns True when the module exports that variable.
@@ -1583,7 +1717,9 @@ function create(
 		// pattern counts as exported.
 		return (
 			statement.type === AST_NODE_TYPES.Program &&
-			(node.id.type !== AST_NODE_TYPES.Identifier || getExportedNames().has(node.id.name))
+			(isScript() ||
+				node.id.type !== AST_NODE_TYPES.Identifier ||
+				getExportedNames().has(node.id.name))
 		);
 	}
 
@@ -1672,15 +1808,18 @@ function create(
 	}
 
 	/**
-	 * Reports whether the declaration emitter reads a variable that the module
-	 * does not export.
+	 * Reports whether the declaration emitter reads a declaration that the
+	 * module does not export.
 	 *
-	 * An exported declaration can still mention it, through `typeof`, a
-	 * computed key, or `export default`. Only a read inside a function body is
-	 * out of the emitter's sight, so any other read counts.
+	 * An exported declaration can still mention it: through `typeof`, a
+	 * computed key of a type member, `export default`, `export =`, an export
+	 * list, an enum member initializer, or a class `extends` clause. Any type
+	 * that names a class counts too. The emitter prints none of the other
+	 * reads, such as a top-level call, and nothing inside a function body or
+	 * static block.
 	 *
-	 * @param node - The declarator to inspect.
-	 * @returns True when the emitter may need the variable's type.
+	 * @param node - The declaration to inspect.
+	 * @returns True when the emitter may need the declaration's type.
 	 */
 	function isReadByEmitter(
 		node:
@@ -1688,27 +1827,23 @@ function create(
 			| TSESTree.FunctionDeclaration
 			| TSESTree.VariableDeclarator,
 	): boolean {
+		const [start, end] = node.range;
 		return context.sourceCode.getDeclaredVariables(node).some((variable) => {
-			return variable.references.some(({ identifier }) => {
-				if (identifier === node.id) {
+			return variable.references.some(({ identifier, isTypeReference }) => {
+				// A read inside the declaration itself, such as a parameter's
+				// `typeof`, does not make it emitted. The declared variables of
+				// a function include its parameters.
+				if (identifier.range[0] >= start && identifier.range[1] <= end) {
 					return false;
 				}
 
-				let current: TSESTree.Node = identifier;
-				while (current.type !== AST_NODE_TYPES.Program) {
-					const parent: TSESTree.Node = current.parent;
-					if (
-						current.type === AST_NODE_TYPES.BlockStatement &&
-						isFunctionNode(parent) &&
-						parent.body === current
-					) {
-						return false;
-					}
-
-					current = parent;
+				// The emitter prints every type that names a class, outside a
+				// function body or static block.
+				if (node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference) {
+					return !isHiddenFromEmitter(identifier);
 				}
 
-				return true;
+				return isEmitterRead(identifier);
 			});
 		});
 	}
@@ -1821,27 +1956,6 @@ function create(
 	}
 
 	/**
-	 * Reports whether a function sits where the declaration emitter can read
-	 * it. Inside a function body it never can.
-	 *
-	 * @param node - The function to inspect.
-	 * @returns True when the function is outside every function body.
-	 */
-	function isVisibleToEmitter(node: ReturnTypedFunction): boolean {
-		let current: TSESTree.Node = node;
-		while (current.type !== AST_NODE_TYPES.Program) {
-			const parent: TSESTree.Node = current.parent;
-			if (isFunctionNode(parent) && parent.body === current) {
-				return false;
-			}
-
-			current = parent;
-		}
-
-		return true;
-	}
-
-	/**
 	 * Reports whether the declaration emitter reads a function's return type.
 	 * Under `isolatedDeclarations` it reads the written type only, so there
 	 * the annotation is required.
@@ -1850,7 +1964,7 @@ function create(
 	 * @returns True when the emitter may need the return type.
 	 */
 	function feedsDeclarationEmit(node: ReturnTypedFunction): boolean {
-		if (!isVisibleToEmitter(node)) {
+		if (isHiddenFromEmitter(node)) {
 			return false;
 		}
 
@@ -1888,6 +2002,7 @@ function create(
 		return (
 			parent.type === AST_NODE_TYPES.ExportNamedDeclaration ||
 			parent.type === AST_NODE_TYPES.ExportDefaultDeclaration ||
+			(parent.type === AST_NODE_TYPES.Program && isScript()) ||
 			(id !== null && getExportedNames().has(id.name)) ||
 			isReadByEmitter(node)
 		);

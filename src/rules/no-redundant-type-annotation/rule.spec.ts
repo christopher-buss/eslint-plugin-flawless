@@ -1835,6 +1835,208 @@ const isolatedDeclarationsInvalid: Array<InvalidTestCase> = [
 			}
 		`,
 	},
+	{
+		// The emitter does not print a top-level call, so the read does not
+		// need the annotation.
+		code: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			declare function start(c: Config): void;
+			const config: Config = load();
+			start(config);
+			export {};
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			declare function start(c: Config): void;
+			const config = load();
+			start(config);
+			export {};
+		`,
+	},
+	{
+		// A type assertion is what the emitter reads, not the variable.
+		code: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			const c: Config = load();
+			export const x = c as Config;
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			const c = load();
+			export const x = c as Config;
+		`,
+	},
+	{
+		// The emitter does not print a `typeof` inside a function body.
+		code: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			const c: Config = load();
+			export function f(): void {
+				let y: typeof c | undefined;
+				void y;
+			}
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			const c = load();
+			export function f(): void {
+				let y: typeof c | undefined;
+				void y;
+			}
+		`,
+	},
+	{
+		// A namespace member the namespace does not export stays inside it.
+		code: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			export namespace N {
+				const c: Config = load();
+				export function f(): void {
+					void c;
+				}
+			}
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			interface Config { a: number }
+			declare function load(): Config;
+			export namespace N {
+				const c = load();
+				export function f(): void {
+					void c;
+				}
+			}
+		`,
+	},
+	{
+		// A block-scoped variable in a script is not global.
+		code: unindent`
+			declare function n(): number;
+			{
+				const x: number = n();
+			}
+		`,
+		errors: [{ messageId }],
+		filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		output: unindent`
+			declare function n(): number;
+			{
+				const x = n();
+			}
+		`,
+	},
+	...[
+		{
+			// A top-level call of the arrow function is not printed.
+			code: unindent`
+				const kinds = new Set<string>();
+				const g = (): Set<string> => kinds;
+				g();
+				export {};
+			`,
+			output: unindent`
+				const kinds = new Set<string>();
+				const g = () => kinds;
+				g();
+				export {};
+			`,
+		},
+		{
+			// Nor is a `new` of the class.
+			code: unindent`
+				const kinds = new Set<string>();
+				class K {
+					m(): Set<string> {
+						return kinds;
+					}
+				}
+				new K();
+				export {};
+			`,
+			output: unindent`
+				const kinds = new Set<string>();
+				class K {
+					m() {
+						return kinds;
+					}
+				}
+				new K();
+				export {};
+			`,
+		},
+		{
+			// A parameter's `typeof` reads the parameter, not the function.
+			code: unindent`
+				const kinds = new Set<string>();
+				function fn(a: number, b: typeof a): Set<string> {
+					void b;
+					return kinds;
+				}
+				fn(1, 2);
+				export {};
+			`,
+			output: unindent`
+				const kinds = new Set<string>();
+				function fn(a: number, b: typeof a) {
+					void b;
+					return kinds;
+				}
+				fn(1, 2);
+				export {};
+			`,
+		},
+		{
+			// The emitter prints nothing inside a static block.
+			code: unindent`
+				const kinds = new Set<string>();
+				export class C {
+					static {
+						const K = class {
+							m(): Set<string> {
+								return kinds;
+							}
+						};
+						void K;
+					}
+				}
+			`,
+			output: unindent`
+				const kinds = new Set<string>();
+				export class C {
+					static {
+						const K = class {
+							m() {
+								return kinds;
+							}
+						};
+						void K;
+					}
+				}
+			`,
+		},
+	].map(({ code, output }): InvalidTestCase => {
+		return {
+			code,
+			errors: [{ messageId: "redundantReturn" }],
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+			options: [{ checkReturnTypes: true }],
+			output,
+		};
+	}),
 ];
 
 run({
@@ -1911,6 +2113,144 @@ run({
 			`,
 			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
+		{
+			// A script has no exports: its top-level declarations are global,
+			// and the emitter prints all of them.
+			code: unindent`
+				declare function n(): number;
+				let x: number = n();
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+		},
+		{
+			code: unindent`
+				declare const kinds: Set<string>;
+				function fn(): Set<string> {
+					return kinds;
+				}
+			`,
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+			options: [{ checkReturnTypes: true }],
+		},
+		// The emitter prints these reads, so the variable keeps its
+		// annotation (TS9010 or TS9020 without it).
+		...[
+			unindent`
+				interface Config { a: number }
+				declare function load(): Config;
+				const c: Config = load();
+				export type T = typeof c;
+			`,
+			unindent`
+				interface Config { a: number }
+				declare function load(): Config;
+				const c: Config = load();
+				export type T = typeof c.a;
+			`,
+			unindent`
+				interface Config { a: number }
+				declare function load(): Config;
+				const c: Config = load();
+				export function f(x: typeof c): void {
+					void x;
+				}
+			`,
+			unindent`
+				interface Config { a: number }
+				declare function load(): Config;
+				const c: Config = load();
+				declare global {
+					var g: typeof c;
+				}
+				export {};
+			`,
+			unindent`
+				declare function key(): "k";
+				const c: "k" = key();
+				export interface I {
+					[c]: number;
+				}
+			`,
+			unindent`
+				declare function key(): "k";
+				const c: "k" = key();
+				export type I = { [c]: number };
+			`,
+			unindent`
+				interface Config { a: number }
+				declare function load(): Config;
+				const c: Config = load();
+				export = c;
+			`,
+			unindent`
+				declare function n(): number;
+				const c: number = n();
+				export enum E {
+					A = c + 1,
+				}
+			`,
+			unindent`
+				declare class Base0 {
+					a: number;
+				}
+				declare function mk(): typeof Base0;
+				const B: typeof Base0 = mk();
+				export class D extends B {}
+			`,
+		].map((code) => {
+			return { code, filename: path.join(isolatedDeclarationsDirectory, "case.ts") };
+		}),
+		// The emitter reads a function or class that an emitted
+		// declaration names (TS9007, TS9008).
+		...[
+			unindent`
+				const kinds = new Set<string>();
+				function fn(): Set<string> {
+					return kinds;
+				}
+				export type T = typeof fn;
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				function fn(): Set<string> {
+					return kinds;
+				}
+				export default fn;
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				class K {
+					m(): Set<string> {
+						return kinds;
+					}
+				}
+				export class D extends K {}
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				class K {
+					m(): Set<string> {
+						return kinds;
+					}
+				}
+				export declare function make(): K;
+			`,
+			unindent`
+				const kinds = new Set<string>();
+				class K {
+					m(): Set<string> {
+						return kinds;
+					}
+				}
+				export interface I extends K {}
+			`,
+		].map((code) => {
+			return {
+				code,
+				filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
+				options: [{ checkReturnTypes: true }],
+			};
+		}),
 		// The emitter reads an exported function's return type (TS9007).
 		...[
 			unindent`

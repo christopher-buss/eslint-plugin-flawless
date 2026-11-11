@@ -331,8 +331,8 @@ after a returned value are also left alone. A body that returns no value infers
 `Promise<T>` is compared with the awaited returned values.
 
 Under `isolatedDeclarations` the emitter reads an exported function's return
-type, so a function that is exported, that an exported declaration reads, or
-that is a method of an exported class keeps it (TS9007).
+type, so a function that is exported, that an exported declaration reads (see
+below), or that is a method of an exported class keeps it (TS9007).
 
 ## Exported variables under `isolatedDeclarations`
 
@@ -351,10 +351,30 @@ Inference gives the same `unique symbol` here, so the annotation does restate
 the initializer, but removing it stops the build. The check reads the option
 from the project the file belongs to and stands down on every exported variable
 while it is on, whether the export sits on the declaration or in a later
-`export { ... }` list, and on a variable that is read anywhere outside a
-function body, since an exported declaration can mention it through `typeof`, a
-computed key, or `export default`. Variables used only inside function bodies
-are out of the option's reach and are still reported.
+`export { ... }` list. It also stands down on a variable that an exported
+declaration mentions, in a position the emitter prints:
+
+- a `typeof` query, such as `export type T = typeof config`
+- a computed key of an interface or type literal member
+- `export default config` or `export = config`
+- an enum member initializer
+- a class `extends` clause
+
+The emitter prints no other read. A variable read only by top-level code, such
+as `start(config)`, or only inside function bodies or static blocks, is still
+reported:
+
+```ts
+const config: Config = loadConfig();
+//          ^^^^^^^^ reported
+start(config);
+```
+
+A function or class follows the same positions, and a class also keeps its
+return types when an emitted declaration names it as a type.
+
+A file with no `import` or `export` is a script. Its top-level declarations are
+global and the emitter prints all of them, so they keep their annotations.
 
 The option reaches parameters too. When the emitter types an exported value from
 its syntax (an exported variable without an annotation, a default export, or a
@@ -410,9 +430,9 @@ their outermost loop before type comparison, to expose control-flow inference
 cycles. Loop replay is enabled for TypeScript 5.9 and 6.0; other supported
 versions retain loop annotations because their checker query order has not been
 validated. Under `declaration` or `composite`, serialized inferred types outside
-function bodies are checked for references to inaccessible or shadowed names.
-These targeted checks supplement the existing conservative guards; they do not
-run complete compiler diagnostics or declaration emit.
+function bodies and static blocks are checked for references to inaccessible or
+shadowed names. These targeted checks supplement the existing conservative
+guards; they do not run complete compiler diagnostics or declaration emit.
 
 TypeScript narrows through a `const` used as a condition only when the `const`
 has no annotation, as in `const ok = typeof v === "string"; if (ok) v.length`.
