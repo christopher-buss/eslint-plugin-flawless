@@ -1,4 +1,4 @@
-import type { SelectorString } from "./enums";
+import type { SelectorString } from "./enums.ts";
 import {
 	COMPONENT_PROP_WEIGHT,
 	MetaSelector,
@@ -11,30 +11,31 @@ import {
 	TYPE_REFERENCE_STRICT_WEIGHT,
 	TypeModifier,
 	UnderscoreOption,
-} from "./enums";
-import type { AllowedWordIndex } from "./format";
-import { indexAllowedWords } from "./format";
-import { isMetaSelector } from "./shared";
+} from "./enums.ts";
+import type { AllowedWordIndex } from "./format.ts";
+import { indexAllowedWords } from "./format.ts";
+import { isMetaSelector } from "./shared.ts";
 import type {
 	Context,
 	NamingSelector,
 	NormalizedSelector,
 	ParsedOptions,
 	TypeReference,
-} from "./types";
-import { createValidator } from "./validator";
+} from "./types.ts";
+import { createValidator } from "./validator.ts";
 
-export function parseOptions(context: Context): ParsedOptions {
+export function parseOptions(context: Context, options: Context["options"]): ParsedOptions {
 	const settingsAllowedWords = getSettingsAllowedWords(context);
-	const normalizedOptions = context.options.flatMap((option) => {
+	const normalizedOptions = options.flatMap((option) => {
 		return normalizeOption(option, settingsAllowedWords);
 	});
 
-	// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
+	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
 	return Object.fromEntries(
 		Object.keys(Selector).map((key) => [
 			key,
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
+
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
 			createValidator(key as SelectorString, context, normalizedOptions),
 		]),
 	) as ParsedOptions;
@@ -107,6 +108,7 @@ function normalizeOption(
 	settingsAllowedWords: AllowedWordIndex | undefined,
 ): Array<NormalizedSelector> {
 	let weight = 0;
+	/* oxlint-disable oxc/bad-bitwise-operator -- the weight is a bit set of modifier flags */
 
 	if (option.modifiers) {
 		for (const modifier of option.modifiers) {
@@ -135,6 +137,7 @@ function normalizeOption(
 		}
 	}
 
+	/* oxlint-enable oxc/bad-bitwise-operator */
 	if (option.componentProp === true) {
 		weight |= COMPONENT_PROP_WEIGHT;
 	}
@@ -194,6 +197,7 @@ function normalizeOption(
 
 	const selectors = Array.isArray(option.selector) ? option.selector : [option.selector];
 
+	// oxlint-disable-next-line oxc/no-map-spread -- each selector needs its own object; normalizedOption is shared
 	return selectors.map((selector) => {
 		return {
 			selector: isMetaSelector(selector) ? MetaSelector[selector] : Selector[selector],

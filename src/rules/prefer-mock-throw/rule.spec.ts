@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { preferMockThrow, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { preferMockThrow, RULE_NAME } from "./rule.ts";
 
 const messageId = "preferMockThrow";
 
@@ -168,7 +169,8 @@ const valid: Array<ValidTestCase> = [
 	"vi.fn().mockImplementation(() => { throw [...errors]; })",
 	'vi.fn().mockImplementation(() => { throw { toString() { return "x"; } }; })',
 	"vi.fn().mockImplementation(() => { throw () => 1; })",
-	// eslint-disable-next-line no-template-curly-in-string -- test source
+
+	// oxlint-disable-next-line no-template-curly-in-string -- test source
 	"vi.fn().mockImplementation(() => { throw `${makeMessage()}`; })",
 	"vi.fn().mockImplementation(() => { throw condition ? a : b; })",
 	"vi.fn().mockImplementation(() => { throw -value; })",

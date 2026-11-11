@@ -1,12 +1,14 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { run } from "../test";
-import { checkFixes, checkRuleFixes, type FixedSnippet } from "./fix-safety";
-import { corpus } from "./fix-safety-corpus";
-import { regressions } from "./regressions";
-import { noRedundantTypeAnnotation, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { corpus } from "./fix-safety-corpus.ts";
+import { checkFixes, checkRuleFixes } from "./fix-safety.ts";
+import type { FixedSnippet } from "./fix-safety.ts";
+import { regressions } from "./regressions.ts";
+import { noRedundantTypeAnnotation, RULE_NAME } from "./rule.ts";
 
 const catchMessageId = "redundantCatch";
 const messageId = "redundant";

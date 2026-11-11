@@ -1,7 +1,8 @@
-import { AST_NODE_TYPES, type JSONSchema, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "jsx-shorthand-fragment";
 
@@ -159,7 +160,6 @@ export const jsxShorthandFragment: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],
 	meta: {
 		defaultOptions: [{ fragmentName: DEFAULT_FRAGMENT_NAME, mode: DEFAULT_MODE }],
 		docs: {

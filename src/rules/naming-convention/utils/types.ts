@@ -1,6 +1,6 @@
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { MessageIds, Options } from "../rule";
+import type { MessageIds, Options } from "../rule.ts";
 import type {
 	IndividualAndMetaSelectorsString,
 	MetaSelectorType,
@@ -14,8 +14,8 @@ import type {
 	TypeModifierType,
 	UnderscoreOptionString,
 	UnderscoreOptionType,
-} from "./enums";
-import type { AllowedWordIndex } from "./format";
+} from "./enums.ts";
+import type { AllowedWordIndex } from "./format.ts";
 
 export type Context = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 

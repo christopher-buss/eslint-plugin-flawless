@@ -1,14 +1,9 @@
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { ReactImportKind } from "./imports";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { ReactImportKind } from "./imports.ts";
 import {
 	classifySpecifier,
 	ensureNamedValueImport,
@@ -18,7 +13,7 @@ import {
 	hasReactNamespaceImport,
 	insertImportStatement,
 	removeNamedSpecifier,
-} from "./imports";
+} from "./imports.ts";
 
 export const RULE_NAME = "react-namespace";
 
@@ -310,7 +305,6 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

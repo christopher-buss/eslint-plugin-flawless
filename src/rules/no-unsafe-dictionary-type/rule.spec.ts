@@ -1,11 +1,12 @@
 import { parse } from "@typescript-eslint/parser";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { expect, it } from "vitest";
 
-import { run } from "../test";
-import { isTypeNode, noUnsafeDictionaryType, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { isTypeNode, noUnsafeDictionaryType, RULE_NAME } from "./rule.ts";
 
 const messageId = "unsafeDictionary";
 

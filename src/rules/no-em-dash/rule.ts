@@ -1,9 +1,9 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_TOKEN_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { isLineBreak, isWhitespace } from "../../utils/char-codes";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { isLineBreak, isWhitespace } from "../../utils/char-codes.ts";
 
 export const RULE_NAME = "no-em-dash";
 
@@ -522,8 +522,8 @@ export const noEmDash: FlawlessRuleModule<Options, MessageIds> = createFlawlessR
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow em dashes in comments, strings, JSX text, and Markdown prose",
 			recommended: false,

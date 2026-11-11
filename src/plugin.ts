@@ -3,57 +3,58 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { Linter } from "eslint";
 
 import { name as packageName, version as packageVersion } from "../package.json";
-import { arrowReturnStyle } from "./rules/arrow-return-style/rule";
-import { cognitiveComplexity } from "./rules/cognitive-complexity/rule";
-import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule";
-import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule";
-import { maxCommentLength } from "./rules/max-comment-length/rule";
-import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule";
-import { namingConvention } from "./rules/naming-convention/rule";
-import { noConditionalEmptyObjectSpread } from "./rules/no-conditional-empty-object-spread/rule";
-import { noConditionalInTest } from "./rules/no-conditional-in-test/rule";
-import { noEmDash } from "./rules/no-em-dash/rule";
-import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule";
-import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule";
-import { noIgnoredReturn } from "./rules/no-ignored-return/rule";
-import { noIncompatibleAssertionTypes } from "./rules/no-incompatible-assertion-types/rule";
-import { noKnownValueWidening } from "./rules/no-known-value-widening/rule";
-import { noMaterializedFilterMap } from "./rules/no-materialized-filter-map/rule";
-import { noObjectParameters } from "./rules/no-object-parameters/rule";
-import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule";
-import { noRedundantTypeAnnotation } from "./rules/no-redundant-type-annotation/rule";
-import { noReflectGet } from "./rules/no-reflect-get/rule";
-import { noReflectSet } from "./rules/no-reflect-set/rule";
-import { noShapeInSymbolNames } from "./rules/no-shape-in-symbol-names/rule";
-import { noSharedMocks } from "./rules/no-shared-mocks/rule";
-import { noSharedTestState } from "./rules/no-shared-test-state/rule";
-import { noTrivialFunctions } from "./rules/no-trivial-functions/rule";
-import { noUnknownParameters } from "./rules/no-unknown-parameters/rule";
-import { noUnknownReturns } from "./rules/no-unknown-returns/rule";
-import { noUnnecessaryPropertyAlias } from "./rules/no-unnecessary-prop-alias/rule";
-import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule";
-import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule";
-import { noUnsafeDictionaryType } from "./rules/no-unsafe-dictionary-type/rule";
-import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule";
-import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule";
-import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/rule";
-import { preferExpectAssertionsCount } from "./rules/prefer-expect-assertions-count/rule";
-import { preferMockThrow } from "./rules/prefer-mock-throw/rule";
-import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule";
-import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule";
-import { preferVitestLocalContext } from "./rules/prefer-vitest-local-context/rule";
-import { purity } from "./rules/purity/rule";
-import { reactNamespace } from "./rules/react-namespace/rule";
-import { tomlSortKeys } from "./rules/toml-sort-keys/rule";
-import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule";
-import { yamlSortSequenceByKey } from "./rules/yaml-sort-sequence-by-key/rule";
+import { arrowReturnStyle } from "./rules/arrow-return-style/rule.ts";
+import { cognitiveComplexity } from "./rules/cognitive-complexity/rule.ts";
+import { jsxShorthandBoolean } from "./rules/jsx-shorthand-boolean/rule.ts";
+import { jsxShorthandFragment } from "./rules/jsx-shorthand-fragment/rule.ts";
+import { maxCommentLength } from "./rules/max-comment-length/rule.ts";
+import { maxLinesPerFunction } from "./rules/max-lines-per-function/rule.ts";
+import { namingConvention } from "./rules/naming-convention/rule.ts";
+import { noConditionalEmptyObjectSpread } from "./rules/no-conditional-empty-object-spread/rule.ts";
+import { noConditionalInTest } from "./rules/no-conditional-in-test/rule.ts";
+import { noEmDash } from "./rules/no-em-dash/rule.ts";
+import { noExportDefaultArrow } from "./rules/no-export-default-arrow/rule.ts";
+import { noFloatingPointEquality } from "./rules/no-floating-point-equality/rule.ts";
+import { noIgnoredReturn } from "./rules/no-ignored-return/rule.ts";
+import { noIncompatibleAssertionTypes } from "./rules/no-incompatible-assertion-types/rule.ts";
+import { noKnownValueWidening } from "./rules/no-known-value-widening/rule.ts";
+import { noMaterializedFilterMap } from "./rules/no-materialized-filter-map/rule.ts";
+import { noObjectParameters } from "./rules/no-object-parameters/rule.ts";
+import { noRedundantTsconfigOptions } from "./rules/no-redundant-tsconfig-options/rule.ts";
+import { noRedundantTypeAnnotation } from "./rules/no-redundant-type-annotation/rule.ts";
+import { noReflectGet } from "./rules/no-reflect-get/rule.ts";
+import { noReflectSet } from "./rules/no-reflect-set/rule.ts";
+import { noShapeInSymbolNames } from "./rules/no-shape-in-symbol-names/rule.ts";
+import { noSharedMocks } from "./rules/no-shared-mocks/rule.ts";
+import { noSharedTestState } from "./rules/no-shared-test-state/rule.ts";
+import { noTrivialFunctions } from "./rules/no-trivial-functions/rule.ts";
+import { noUnknownParameters } from "./rules/no-unknown-parameters/rule.ts";
+import { noUnknownReturns } from "./rules/no-unknown-returns/rule.ts";
+import { noUnnecessaryPropertyAlias } from "./rules/no-unnecessary-prop-alias/rule.ts";
+import { noUnnecessaryUseCallback } from "./rules/no-unnecessary-use-callback/rule.ts";
+import { noUnnecessaryUseMemo } from "./rules/no-unnecessary-use-memo/rule.ts";
+import { noUnsafeDictionaryType } from "./rules/no-unsafe-dictionary-type/rule.ts";
+import { paddingAfterExpectAssertions } from "./rules/padding-after-expect-assertions/rule.ts";
+import { preferDestructuringAssignment } from "./rules/prefer-destructuring-assignment/rule.ts";
+import { preferEndingWithAnExpect } from "./rules/prefer-ending-with-an-expect/rule.ts";
+import { preferExpectAssertionsCount } from "./rules/prefer-expect-assertions-count/rule.ts";
+import { preferMockThrow } from "./rules/prefer-mock-throw/rule.ts";
+import { preferParameterDestructuring } from "./rules/prefer-parameter-destructuring/rule.ts";
+import { preferReadOnlyProps } from "./rules/prefer-read-only-props/rule.ts";
+import { preferVitestLocalContext } from "./rules/prefer-vitest-local-context/rule.ts";
+import { purity } from "./rules/purity/rule.ts";
+import { reactNamespace } from "./rules/react-namespace/rule.ts";
+import { tomlSortKeys } from "./rules/toml-sort-keys/rule.ts";
+import { yamlBlockKeyBlankLines } from "./rules/yaml-block-key-blank-lines/rule.ts";
+import { yamlSortSequenceByKey } from "./rules/yaml-sort-sequence-by-key/rule.ts";
 
 export const PLUGIN_NAME: string = packageName.replace(/^eslint-plugin-/, "");
 
 /** The rule modules the plugin exposes, keyed by rule name. */
 // A type alias, not an interface: `getRules` and `satisfies` need the implicit
 // index signature that only type aliases get.
-// eslint-disable-next-line ts/consistent-type-definitions -- see above
+
+// oxlint-disable-next-line typescript/consistent-type-definitions -- see above
 export type PluginRules = {
 	"arrow-return-style": typeof arrowReturnStyle;
 	"cognitive-complexity": typeof cognitiveComplexity;
@@ -104,7 +105,8 @@ export type PluginRules = {
 /** The ESLint plugin object: metadata plus every rule. */
 // A type alias, not an interface: `getRules` and `satisfies` need the implicit
 // index signature that only type aliases get.
-// eslint-disable-next-line ts/consistent-type-definitions -- see above
+
+// oxlint-disable-next-line typescript/consistent-type-definitions -- see above
 export type FlawlessPlugin = {
 	meta: {
 		name: string;

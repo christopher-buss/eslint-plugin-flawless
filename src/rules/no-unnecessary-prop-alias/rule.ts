@@ -1,9 +1,10 @@
 import * as core from "@eslint-react/core";
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { RESERVED_WORDS } from "../../utils/reserved-words";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { RESERVED_WORDS } from "../../utils/reserved-words.ts";
 
 export const RULE_NAME = "no-unnecessary-prop-alias";
 
@@ -465,7 +466,6 @@ export const noUnnecessaryPropertyAlias: FlawlessRuleModule<Options, MessageIds>
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [{ reportConflicts: false }],
 		meta: {
 			defaultOptions: [{ reportConflicts: false }],
 			docs: {

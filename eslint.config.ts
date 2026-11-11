@@ -1,17 +1,15 @@
-import isentinel, { GLOB_YAML } from "@isentinel/eslint-config";
+import { GLOB_YAML, isentinel } from "@isentinel/eslint-config/eslint";
 
 export default isentinel(
 	{
 		eslintPlugin: true,
 		flawless: true,
+		oxlint: "native",
 		pnpm: true,
 		roblox: false,
 		rules: {
 			"flawless/max-lines-per-function": "off",
 			"flawless/naming-convention": "off",
-			"flawless/prefer-parameter-destructuring": "warn",
-			"max-lines": "off",
-			"max-lines-per-function": "off",
 			"package-json/require-bin": "off",
 			"package-json/restrict-top-level-properties": "off",
 			"sonar/cognitive-complexity": "off",

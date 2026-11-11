@@ -1,4 +1,5 @@
-import { PredefinedFormat, type PredefinedFormatType } from "./enums";
+import { PredefinedFormat } from "./enums.ts";
+import type { PredefinedFormatType } from "./enums.ts";
 
 //
 // These format functions are taken from
@@ -24,8 +25,7 @@ function hasStrictCamelHumps(name: string, isUpper: boolean): boolean {
 	}
 
 	for (let index = 1; index < name.length; ++index) {
-		// eslint-disable-next-line ts/no-non-null-assertion -- Controlled loop
-		const char = name[index]!;
+		const char = name.charAt(index);
 		if (char === "_") {
 			return false;
 		}
@@ -219,10 +219,8 @@ function findWordAt(
 	index: number,
 	allowedWords: AllowedWordIndex,
 ): string | undefined {
-	/* eslint-disable ts/no-non-null-assertion -- The caller bounds `index` */
-	const char = name[index]!;
-	const previous = index === 0 ? undefined : name[index - 1]!;
-	/* eslint-enable ts/no-non-null-assertion */
+	const char = name.charAt(index);
+	const previous = index === 0 ? undefined : name.charAt(index - 1);
 
 	if (previous === undefined) {
 		// A single pass over one bucket keeps the longest-first order, so a

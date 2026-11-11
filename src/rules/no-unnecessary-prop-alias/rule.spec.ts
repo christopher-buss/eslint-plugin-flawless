@@ -1,12 +1,8 @@
-import {
-	type InvalidTestCase,
-	run as runDefaultParser,
-	unindent as tsx,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { run as runDefaultParser, unindent as tsx } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noUnnecessaryPropertyAlias, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noUnnecessaryPropertyAlias, RULE_NAME } from "./rule.ts";
 
 const messageId = "unnecessaryAlias";
 const filename = "file.tsx";

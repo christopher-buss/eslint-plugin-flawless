@@ -1,19 +1,12 @@
-import {
-	DefinitionType,
-	type Reference,
-	type ScopeVariable,
-} from "@typescript-eslint/scope-manager";
-import {
-	AST_NODE_TYPES,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { DefinitionType } from "@typescript-eslint/scope-manager";
+import type { Reference, ScopeVariable } from "@typescript-eslint/scope-manager";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { parameterAnnotation } from "../shared/function-parameters";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { parameterAnnotation } from "../shared/function-parameters.ts";
 
 export const RULE_NAME = "prefer-vitest-local-context";
 
@@ -770,6 +763,28 @@ function markReachable(helper: Helper, reachable: Set<Helper>): boolean {
 	return true;
 }
 
+function argumentText(
+	helper: Helper,
+	shape: HelperShape,
+	callerBindings: ReadonlyMap<FixtureName, string> | undefined,
+): null | string {
+	const values: Array<[FixtureName, string]> = [];
+	for (const fixture of [...helper.fixtures].toSorted()) {
+		const value = callerBindings?.get(fixture);
+		if (value === undefined) {
+			return null;
+		}
+
+		values.push([fixture, value]);
+	}
+
+	if (shape === "separate") {
+		return values.map(([, value]) => value).join(", ");
+	}
+
+	return `{ ${values.map(([fixture, value]) => propertyText(fixture, value)).join(", ")} }`;
+}
+
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let calls: Array<TSESTree.CallExpression> = [];
 	let functions: Array<FunctionNode> = [];
@@ -1312,28 +1327,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		);
 	}
 
-	function argumentText(
-		helper: Helper,
-		shape: HelperShape,
-		callerBindings: ReadonlyMap<FixtureName, string> | undefined,
-	): null | string {
-		const values: Array<[FixtureName, string]> = [];
-		for (const fixture of [...helper.fixtures].toSorted()) {
-			const value = callerBindings?.get(fixture);
-			if (value === undefined) {
-				return null;
-			}
-
-			values.push([fixture, value]);
-		}
-
-		if (shape === "separate") {
-			return values.map(([, value]) => value).join(", ");
-		}
-
-		return `{ ${values.map(([fixture, value]) => propertyText(fixture, value)).join(", ")} }`;
-	}
-
 	function buildEdits(
 		tests: ReadonlyMap<FunctionNode, TestCase>,
 		activeHelpers: ReadonlySet<Helper>,
@@ -1574,10 +1567,15 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		collectHelperCalls(tests, helpers);
 		propagateFixtures(tests, helpers);
 		const reachable = reachableHelpers(tests, helpers);
-		const relevant = [
-			...[...tests.values()].flatMap(({ directUses }) => [...directUses.keys()]),
-			...[...reachable].flatMap(({ directUses }) => [...directUses.keys()]),
-		];
+		const relevant: Array<TSESTree.Identifier> = [];
+		for (const { directUses } of tests.values()) {
+			relevant.push(...directUses.keys());
+		}
+
+		for (const { directUses } of reachable) {
+			relevant.push(...directUses.keys());
+		}
+
 		if (relevant.length === 0) {
 			return;
 		}
@@ -1633,7 +1631,6 @@ export const preferVitestLocalContext: FlawlessRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

@@ -1,15 +1,11 @@
 import { DefinitionType, ScopeType } from "@typescript-eslint/scope-manager";
-import {
-	AST_NODE_TYPES,
-	AST_TOKEN_TYPES,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, AST_TOKEN_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "prefer-mock-throw";
 
@@ -125,6 +121,39 @@ function getIndentation(sourceCode: Readonly<TSESLint.SourceCode>, line: number)
 }
 
 /**
+ * Determines whether a binding is initialized before the call and stays
+ * initialized: its declaration ends before the call in source order, no
+ * hoisted function declaration lets the call run earlier than that, and it
+ * does not live in a `switch` whose `case` may skip the declaration.
+ *
+ * @param variable - The binding.
+ * @param declaration - The node that initializes the binding.
+ * @param call - The `mockImplementation` call.
+ * @returns `true` when the binding is initialized whenever the call runs.
+ */
+function isInitializedBefore(
+	variable: TSESLint.Scope.Variable,
+	declaration: TSESTree.Node,
+	call: TSESTree.CallExpression,
+): boolean {
+	if (declaration.range[1] > call.range[0] || variable.scope.type === ScopeType.switch) {
+		return false;
+	}
+
+	const scopeBlock = variable.scope.block;
+	let current: TSESTree.Node = call;
+	while (current !== scopeBlock && current.type !== AST_NODE_TYPES.Program) {
+		if (current.type === AST_NODE_TYPES.FunctionDeclaration) {
+			return false;
+		}
+
+		current = current.parent;
+	}
+
+	return true;
+}
+
+/**
  * Prefers `mockThrow(value)` / `mockThrowOnce(value)` over a
  * `mockImplementation` / `mockImplementationOnce` whose implementation only
  * throws. `mockThrow` evaluates its argument once, when the mock is set up,
@@ -213,39 +242,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		return null;
-	}
-
-	/**
-	 * Determines whether a binding is initialized before the call and stays
-	 * initialized: its declaration ends before the call in source order, no
-	 * hoisted function declaration lets the call run earlier than that, and it
-	 * does not live in a `switch` whose `case` may skip the declaration.
-	 *
-	 * @param variable - The binding.
-	 * @param declaration - The node that initializes the binding.
-	 * @param call - The `mockImplementation` call.
-	 * @returns `true` when the binding is initialized whenever the call runs.
-	 */
-	function isInitializedBefore(
-		variable: TSESLint.Scope.Variable,
-		declaration: TSESTree.Node,
-		call: TSESTree.CallExpression,
-	): boolean {
-		if (declaration.range[1] > call.range[0] || variable.scope.type === ScopeType.switch) {
-			return false;
-		}
-
-		const scopeBlock = variable.scope.block;
-		let current: TSESTree.Node = call;
-		while (current !== scopeBlock && current.type !== AST_NODE_TYPES.Program) {
-			if (current.type === AST_NODE_TYPES.FunctionDeclaration) {
-				return false;
-			}
-
-			current = current.parent;
-		}
-
-		return true;
 	}
 
 	/**
@@ -345,7 +341,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			({ expression } = expression);
 		}
 
-		// eslint-disable-next-line ts/switch-exhaustiveness-check -- Anything off the allow-list is unstable
+		// oxlint-disable-next-line typescript/switch-exhaustiveness-check -- Anything off the allow-list is unstable
 		switch (expression.type) {
 			case AST_NODE_TYPES.ArrayExpression: {
 				// A hole is fine; a spread would iterate eagerly.
@@ -506,8 +502,8 @@ export const preferMockThrow: FlawlessRuleModule<Options, MessageIds> = createFl
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Prefer `mockThrow` / `mockThrowOnce` over a mock implementation that only throws",

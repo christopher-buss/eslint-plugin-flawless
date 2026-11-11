@@ -1,5 +1,5 @@
 /* eslint-disable eslint-plugin/no-property-in-node -- TODO: Refactor */
-/* eslint-disable ts/unbound-method -- TODO: Refactor  */
+
 import type { ScopeManager, ScopeVariable } from "@typescript-eslint/scope-manager";
 import { ImplicitLibVariable, ScopeType, Visitor } from "@typescript-eslint/scope-manager";
 import type { TSESTree } from "@typescript-eslint/utils";
@@ -7,8 +7,8 @@ import { AST_NODE_TYPES, ASTUtils, ESLintUtils, TSESLint } from "@typescript-esl
 
 import assert from "node:assert";
 
-import { isTypeImport } from "./is-type-import";
-import { referenceContainsTypeQuery } from "./reference-contains-type-query";
+import { isTypeImport } from "./is-type-import.ts";
+import { referenceContainsTypeQuery } from "./reference-contains-type-query.ts";
 
 interface MutableVariableAnalysis {
 	readonly unusedVariables: Set<ScopeVariable>;
@@ -31,6 +31,7 @@ class UnusedVariablesVisitor extends Visitor {
 
 	readonly #scopeManager: TSESLint.Scope.ScopeManager;
 
+	/* oxlint-disable typescript/unbound-method -- TODO: Refactor */
 	protected ClassDeclaration = this.visitClass;
 	protected ClassExpression = this.visitClass;
 	protected ForInStatement = this.visitForInForOf;
@@ -55,6 +56,7 @@ class UnusedVariablesVisitor extends Visitor {
 	protected TSEmptyBodyFunctionExpression = this.visitFunctionTypeSignature;
 	protected TSFunctionType = this.visitFunctionTypeSignature;
 	protected TSMethodSignature = this.visitFunctionTypeSignature;
+	/* oxlint-enable typescript/unbound-method */
 
 	private constructor(scopeManager: ScopeManager) {
 		super({
@@ -312,7 +314,7 @@ class UnusedVariablesVisitor extends Visitor {
 				return;
 			}
 
-			// eslint-disable-next-line ts/no-non-null-assertion -- checked length above
+			// oxlint-disable-next-line typescript/no-non-null-assertion -- checked length above
 			body = body.body[0]!;
 		}
 
@@ -486,307 +488,308 @@ export function collectVariables<MessageIds extends string, Options extends Read
 // #endregion private helpers
 
 /**
- * Determines if the variable is used.
- * @param variable - The variable to check.
- * @returns True if the variable is used.
+ * Gets a list of function definitions for a specified variable.
+ * @param scopeVariable - Eslint-scope variable object.
+ * @returns Function nodes.
  */
-function isUsedVariable(variable: ScopeVariable): boolean {
+function getFunctionDefinitions(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
+	const functionDefinitions = new Set<TSESTree.Node>();
+
+	for (const definition of scopeVariable.defs) {
+		// FunctionDeclarations
+		if (definition.type === TSESLint.Scope.DefinitionType.FunctionName) {
+			functionDefinitions.add(definition.node);
+		}
+
+		// FunctionExpressions
+		if (
+			definition.type === TSESLint.Scope.DefinitionType.Variable &&
+			(definition.node.init?.type === AST_NODE_TYPES.FunctionExpression ||
+				definition.node.init?.type === AST_NODE_TYPES.ArrowFunctionExpression)
+		) {
+			functionDefinitions.add(definition.node.init);
+		}
+	}
+
+	return functionDefinitions;
+}
+
+function getTypeDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
+	const nodes = new Set<TSESTree.Node>();
+
+	for (const definition of scopeVariable.defs) {
+		if (
+			definition.node.type === AST_NODE_TYPES.TSInterfaceDeclaration ||
+			definition.node.type === AST_NODE_TYPES.TSTypeAliasDeclaration
+		) {
+			nodes.add(definition.node);
+		}
+	}
+
+	return nodes;
+}
+
+function getModuleDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
+	const nodes = new Set<TSESTree.Node>();
+
+	for (const definition of scopeVariable.defs) {
+		if (definition.node.type === AST_NODE_TYPES.TSModuleDeclaration) {
+			nodes.add(definition.node);
+		}
+	}
+
+	return nodes;
+}
+
+function getEnumDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
+	const nodes = new Set<TSESTree.Node>();
+
+	for (const definition of scopeVariable.defs) {
+		if (definition.node.type === AST_NODE_TYPES.TSEnumDeclaration) {
+			nodes.add(definition.node);
+		}
+	}
+
+	return nodes;
+}
+
+/**
+ * Checks whether a given node is unused expression or not.
+ * @param node - The node itself.
+ * @returns The node is an unused expression.
+ */
+function isUnusedExpression(node: TSESTree.Expression): boolean {
+	let current: TSESTree.Node = node;
+	let { parent } = node;
+	while (parent.type === AST_NODE_TYPES.SequenceExpression) {
+		if (parent.expressions.at(-1) !== current) {
+			return true;
+		}
+
+		current = parent;
+		({ parent } = parent);
+	}
+
+	return parent.type === AST_NODE_TYPES.ExpressionStatement;
+}
+
+/**
+ * Checks whether the given node is in a loop or not.
+ * @param node - The node to check.
+ * @returns `true` if the node is in a loop.
+ */
+function isInLoop(node: TSESTree.Node): boolean {
+	let currentNode: TSESTree.Node | undefined = node;
+	while (currentNode) {
+		if (ASTUtils.isFunction(currentNode)) {
+			break;
+		}
+
+		if (ASTUtils.isLoop(currentNode)) {
+			return true;
+		}
+
+		currentNode = currentNode.parent;
+	}
+
+	return false;
+}
+
+/**
+ * Finds a function node from ancestors of a node.
+ * @param node - A start node to find.
+ * @returns A found function node.
+ */
+function getUpperFunction(node: TSESTree.Node): TSESTree.Node | undefined {
+	let currentNode: TSESTree.Node | undefined = node;
+	while (currentNode) {
+		if (ASTUtils.isFunction(currentNode)) {
+			return currentNode;
+		}
+
+		currentNode = currentNode.parent;
+	}
+
+	return undefined;
+}
+
+/**
+ * Checks if the ref is contained within one of the given nodes.
+ * @param ref - A reference to check.
+ * @param nodes - A set of nodes.
+ * @returns `true` if the ref is inside one of the nodes.
+ */
+function isInsideOneOf(ref: TSESLint.Scope.Reference, nodes: Set<TSESTree.Node>): boolean {
+	for (const node of nodes) {
+		if (isInside(ref.identifier, node)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * If a given reference is left-hand side of an assignment, this gets
+ * the right-hand side node of the assignment.
+ *
+ * In the following cases, this returns undefined.
+ *
+ * - The reference is not the LHS of an assignment expression.
+ * - The reference is inside of a loop.
+ * - The reference is inside of a function scope which is different from
+ *   the declaration.
+ * @param ref - A reference to check.
+ * @param previousRhsNode - The previous RHS node. This is for `a = a + a`-like code.
+ * @returns The RHS node or undefined.
+ */
+function getRhsNode(
+	ref: TSESLint.Scope.Reference,
+	previousRhsNode: TSESTree.Node | undefined,
+): TSESTree.Node | undefined {
+	const id = ref.identifier;
+	const { parent } = id;
+	const refScope = ref.from.variableScope;
+
+	// oxlint-disable-next-line typescript/no-non-null-assertion -- exists
+	const { variableScope } = ref.resolved!.scope;
+	const canBeUsedLater = refScope !== variableScope || isInLoop(id);
+
+	// Inherits the previous node if this reference is in the node.
+	// This is for `a = a + a`-like code.
+	if (previousRhsNode && isInside(id, previousRhsNode)) {
+		return previousRhsNode;
+	}
+
+	if (
+		!canBeUsedLater &&
+		parent.type === AST_NODE_TYPES.AssignmentExpression &&
+		id === parent.left &&
+		isUnusedExpression(parent)
+	) {
+		return parent.right;
+	}
+
+	return undefined;
+}
+
+/**
+ * Checks whether a given reference is a read to update itself or not.
+ * @param ref - A reference to check.
+ * @param rhsNode - The RHS node of the previous assignment.
+ * @returns The reference is a read to update itself.
+ */
+function isReadForItself(
+	ref: TSESLint.Scope.Reference,
+	rhsNode: TSESTree.Node | undefined,
+): boolean {
 	/**
-	 * Gets a list of function definitions for a specified variable.
-	 * @param scopeVariable - Eslint-scope variable object.
-	 * @returns Function nodes.
-	 */
-	function getFunctionDefinitions(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
-		const functionDefinitions = new Set<TSESTree.Node>();
-
-		for (const definition of scopeVariable.defs) {
-			// FunctionDeclarations
-			if (definition.type === TSESLint.Scope.DefinitionType.FunctionName) {
-				functionDefinitions.add(definition.node);
-			}
-
-			// FunctionExpressions
-			if (
-				definition.type === TSESLint.Scope.DefinitionType.Variable &&
-				(definition.node.init?.type === AST_NODE_TYPES.FunctionExpression ||
-					definition.node.init?.type === AST_NODE_TYPES.ArrowFunctionExpression)
-			) {
-				functionDefinitions.add(definition.node.init);
-			}
-		}
-
-		return functionDefinitions;
-	}
-
-	function getTypeDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
-		const nodes = new Set<TSESTree.Node>();
-
-		for (const definition of scopeVariable.defs) {
-			if (
-				definition.node.type === AST_NODE_TYPES.TSInterfaceDeclaration ||
-				definition.node.type === AST_NODE_TYPES.TSTypeAliasDeclaration
-			) {
-				nodes.add(definition.node);
-			}
-		}
-
-		return nodes;
-	}
-
-	function getModuleDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
-		const nodes = new Set<TSESTree.Node>();
-
-		for (const definition of scopeVariable.defs) {
-			if (definition.node.type === AST_NODE_TYPES.TSModuleDeclaration) {
-				nodes.add(definition.node);
-			}
-		}
-
-		return nodes;
-	}
-
-	function getEnumDeclarations(scopeVariable: ScopeVariable): Set<TSESTree.Node> {
-		const nodes = new Set<TSESTree.Node>();
-
-		for (const definition of scopeVariable.defs) {
-			if (definition.node.type === AST_NODE_TYPES.TSEnumDeclaration) {
-				nodes.add(definition.node);
-			}
-		}
-
-		return nodes;
-	}
-
-	/**
-	 * Checks if the ref is contained within one of the given nodes.
-	 * @param ref - A reference to check.
-	 * @param nodes - A set of nodes.
-	 * @returns `true` if the ref is inside one of the nodes.
-	 */
-	function isInsideOneOf(ref: TSESLint.Scope.Reference, nodes: Set<TSESTree.Node>): boolean {
-		for (const node of nodes) {
-			if (isInside(ref.identifier, node)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * Checks whether a given node is unused expression or not.
-	 * @param node - The node itself.
-	 * @returns The node is an unused expression.
-	 */
-	function isUnusedExpression(node: TSESTree.Expression): boolean {
-		let current: TSESTree.Node = node;
-		let { parent } = node;
-		while (parent.type === AST_NODE_TYPES.SequenceExpression) {
-			if (parent.expressions.at(-1) !== current) {
-				return true;
-			}
-
-			current = parent;
-			({ parent } = parent);
-		}
-
-		return parent.type === AST_NODE_TYPES.ExpressionStatement;
-	}
-
-	/**
-	 * If a given reference is left-hand side of an assignment, this gets
-	 * the right-hand side node of the assignment.
+	 * Checks whether a given Identifier node exists inside of a function
+	 * node which can be used later.
 	 *
-	 * In the following cases, this returns undefined.
+	 * "can be used later" means: - the function is assigned to a variable.
+	 * - the function is bound to a property and the object can be used
+	 * later. - the function is bound as an argument of a function call.
 	 *
-	 * - The reference is not the LHS of an assignment expression.
-	 * - The reference is inside of a loop.
-	 * - The reference is inside of a function scope which is different from
-	 *   the declaration.
-	 * @param ref - A reference to check.
-	 * @param previousRhsNode - The previous RHS node. This is for `a = a + a`-like code.
-	 * @returns The RHS node or undefined.
+	 * If a reference exists in a function which can be used later, the
+	 * reference is read when the function is called.
+	 * @param id - An Identifier node to check.
+	 * @param rightHandSideNode - The RHS node of the previous assignment.
+	 * @returns `true` if the `id` node exists inside of a function node which can be used later.
 	 */
-	function getRhsNode(
-		ref: TSESLint.Scope.Reference,
-		previousRhsNode: TSESTree.Node | undefined,
-	): TSESTree.Node | undefined {
+	function isInsideOfStorableFunction(
+		id: TSESTree.Node,
+		rightHandSideNode: TSESTree.Node,
+	): boolean {
 		/**
-		 * Checks whether the given node is in a loop or not.
-		 * @param node - The node to check.
-		 * @returns `true` if the node is in a loop.
+		 * Checks whether a given function node is stored to somewhere or not.
+		 * If the function node is stored, the function can be used later.
+		 * @param funcNode - A function node to check.
+		 * @param storableRhsNode - The RHS node of the previous assignment.
+		 * @returns `true` if under the following conditions:
+		 *      - the funcNode is assigned to a variable. - the funcNode is
+		 *      bound as an argument of a function call. - the function is
+		 *      bound to a property and the object satisfies above
+		 *      conditions.
 		 */
-		function isInLoop(node: TSESTree.Node): boolean {
-			let currentNode: TSESTree.Node | undefined = node;
-			while (currentNode) {
-				if (ASTUtils.isFunction(currentNode)) {
-					break;
+		function isStorableFunction(
+			funcNode: TSESTree.Node,
+			storableRhsNode: TSESTree.Node,
+		): boolean {
+			let node = funcNode;
+			let { parent } = funcNode;
+
+			while (parent && isInside(parent, storableRhsNode)) {
+				if (
+					parent.type === AST_NODE_TYPES.SequenceExpression &&
+					parent.expressions.at(-1) !== node
+				) {
+					return false;
 				}
 
-				if (ASTUtils.isLoop(currentNode)) {
-					return true;
+				// oxlint-disable-next-line typescript/switch-exhaustiveness-check -- won't be fixed
+				switch (parent.type) {
+					case AST_NODE_TYPES.AssignmentExpression:
+					case AST_NODE_TYPES.TaggedTemplateExpression:
+					case AST_NODE_TYPES.YieldExpression: {
+						return true;
+					}
+					case AST_NODE_TYPES.CallExpression:
+					case AST_NODE_TYPES.NewExpression: {
+						return parent.callee !== node;
+					}
+					default: {
+						if (
+							parent.type.endsWith("Statement") ||
+							parent.type.endsWith("Declaration")
+						) {
+							// If it encountered statements, this is a
+							// complex pattern. Since analyzing complex
+							// patterns is hard, this returns `true` to avoid
+							// false positive.
+							return true;
+						}
+					}
 				}
 
-				currentNode = currentNode.parent;
+				node = parent;
+				({ parent } = parent);
 			}
 
 			return false;
 		}
 
-		const id = ref.identifier;
-		const { parent } = id;
-		const refScope = ref.from.variableScope;
-		// eslint-disable-next-line ts/no-non-null-assertion -- exists
-		const { variableScope } = ref.resolved!.scope;
-		const canBeUsedLater = refScope !== variableScope || isInLoop(id);
-
-		// Inherits the previous node if this reference is in the node.
-		// This is for `a = a + a`-like code.
-		if (previousRhsNode && isInside(id, previousRhsNode)) {
-			return previousRhsNode;
-		}
-
-		if (
-			!canBeUsedLater &&
-			parent.type === AST_NODE_TYPES.AssignmentExpression &&
-			id === parent.left &&
-			isUnusedExpression(parent)
-		) {
-			return parent.right;
-		}
-
-		return undefined;
-	}
-
-	/**
-	 * Checks whether a given reference is a read to update itself or not.
-	 * @param ref - A reference to check.
-	 * @param rhsNode - The RHS node of the previous assignment.
-	 * @returns The reference is a read to update itself.
-	 */
-	function isReadForItself(
-		ref: TSESLint.Scope.Reference,
-		rhsNode: TSESTree.Node | undefined,
-	): boolean {
-		/**
-		 * Checks whether a given Identifier node exists inside of a function
-		 * node which can be used later.
-		 *
-		 * "can be used later" means: - the function is assigned to a variable.
-		 * - the function is bound to a property and the object can be used
-		 * later. - the function is bound as an argument of a function call.
-		 *
-		 * If a reference exists in a function which can be used later, the
-		 * reference is read when the function is called.
-		 * @param id - An Identifier node to check.
-		 * @param rightHandSideNode - The RHS node of the previous assignment.
-		 * @returns `true` if the `id` node exists inside of a function node which can be used later.
-		 */
-		function isInsideOfStorableFunction(
-			id: TSESTree.Node,
-			rightHandSideNode: TSESTree.Node,
-		): boolean {
-			/**
-			 * Finds a function node from ancestors of a node.
-			 * @param node - A start node to find.
-			 * @returns A found function node.
-			 */
-			function getUpperFunction(node: TSESTree.Node): TSESTree.Node | undefined {
-				let currentNode: TSESTree.Node | undefined = node;
-				while (currentNode) {
-					if (ASTUtils.isFunction(currentNode)) {
-						return currentNode;
-					}
-
-					currentNode = currentNode.parent;
-				}
-
-				return undefined;
-			}
-
-			/**
-			 * Checks whether a given function node is stored to somewhere or not.
-			 * If the function node is stored, the function can be used later.
-			 * @param funcNode - A function node to check.
-			 * @param storableRhsNode - The RHS node of the previous assignment.
-			 * @returns `true` if under the following conditions:
-			 *      - the funcNode is assigned to a variable. - the funcNode is
-			 *      bound as an argument of a function call. - the function is
-			 *      bound to a property and the object satisfies above
-			 *      conditions.
-			 */
-			function isStorableFunction(
-				funcNode: TSESTree.Node,
-				storableRhsNode: TSESTree.Node,
-			): boolean {
-				let node = funcNode;
-				let { parent } = funcNode;
-
-				while (parent && isInside(parent, storableRhsNode)) {
-					if (
-						parent.type === AST_NODE_TYPES.SequenceExpression &&
-						parent.expressions.at(-1) !== node
-					) {
-						return false;
-					}
-
-					// eslint-disable-next-line ts/switch-exhaustiveness-check -- won't be fixed
-					switch (parent.type) {
-						case AST_NODE_TYPES.AssignmentExpression:
-						case AST_NODE_TYPES.TaggedTemplateExpression:
-						case AST_NODE_TYPES.YieldExpression: {
-							return true;
-						}
-						case AST_NODE_TYPES.CallExpression:
-						case AST_NODE_TYPES.NewExpression: {
-							return parent.callee !== node;
-						}
-						default: {
-							if (
-								parent.type.endsWith("Statement") ||
-								parent.type.endsWith("Declaration")
-							) {
-								// If it encountered statements, this is a
-								// complex pattern. Since analyzing complex
-								// patterns is hard, this returns `true` to avoid
-								// false positive.
-								return true;
-							}
-						}
-					}
-
-					node = parent;
-					({ parent } = parent);
-				}
-
-				return false;
-			}
-
-			const funcNode = getUpperFunction(id);
-
-			return (
-				!!funcNode &&
-				isInside(funcNode, rightHandSideNode) &&
-				isStorableFunction(funcNode, rightHandSideNode)
-			);
-		}
-
-		const id = ref.identifier;
-		const { parent } = id;
+		const funcNode = getUpperFunction(id);
 
 		return (
-			// in RHS of an assignment for itself. e.g. `a = a + 1`
-			ref.isRead() &&
-			// self update. e.g. `a += 1`, `a++`
-			((parent.type === AST_NODE_TYPES.AssignmentExpression &&
-				!LOGICAL_ASSIGNMENT_OPERATORS.has(parent.operator) &&
-				isUnusedExpression(parent) &&
-				parent.left === id) ||
-				(parent.type === AST_NODE_TYPES.UpdateExpression && isUnusedExpression(parent)) ||
-				(!!rhsNode && isInside(id, rhsNode) && !isInsideOfStorableFunction(id, rhsNode)))
+			!!funcNode &&
+			isInside(funcNode, rightHandSideNode) &&
+			isStorableFunction(funcNode, rightHandSideNode)
 		);
 	}
 
+	const id = ref.identifier;
+	const { parent } = id;
+
+	return (
+		// in RHS of an assignment for itself. e.g. `a = a + 1`
+		ref.isRead() &&
+		// self update. e.g. `a += 1`, `a++`
+		((parent.type === AST_NODE_TYPES.AssignmentExpression &&
+			!LOGICAL_ASSIGNMENT_OPERATORS.has(parent.operator) &&
+			isUnusedExpression(parent) &&
+			parent.left === id) ||
+			(parent.type === AST_NODE_TYPES.UpdateExpression && isUnusedExpression(parent)) ||
+			(!!rhsNode && isInside(id, rhsNode) && !isInsideOfStorableFunction(id, rhsNode)))
+	);
+}
+
+/**
+ * Determines if the variable is used.
+ * @param variable - The variable to check.
+ * @returns True if the variable is used.
+ */
+function isUsedVariable(variable: ScopeVariable): boolean {
 	const functionNodes = getFunctionDefinitions(variable);
 	const isFunctionDefinition = functionNodes.size > 0;
 

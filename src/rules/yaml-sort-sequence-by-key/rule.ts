@@ -4,9 +4,9 @@ import type { YAMLSourceCode } from "eslint-plugin-yml";
 import naturalCompare from "natural-compare";
 import type { AST } from "yaml-eslint-parser";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { YamlContext } from "../../utils/types";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { YamlContext } from "../../utils/types.ts";
 
 export const RULE_NAME = "yaml-sort-sequence-by-key";
 
@@ -389,7 +389,7 @@ function create(context: Context): TSESLint.RuleListener {
 		const { caseSensitive = true, natural = false, type = "asc" } = spec.order ?? {};
 		const order: ResolvedOrder = { caseSensitive, natural, type };
 		// No `u` flag, matching yml: patterns such as `^a\-b$` stay valid.
-		return { ...spec, order, pattern: new RegExp(spec.pathPattern) };
+		return { key: spec.key, order, pattern: new RegExp(spec.pathPattern) };
 	});
 
 	/**
@@ -532,7 +532,6 @@ export const yamlSortSequenceByKey: EslintRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		defaultOptions: [],
 		docs: {

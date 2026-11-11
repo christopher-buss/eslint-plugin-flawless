@@ -2,11 +2,11 @@ import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type { Type, TypeNode } from "typescript";
+import type { Type } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
 
 export const RULE_NAME = "no-unknown-returns";
 
@@ -105,10 +105,12 @@ function messageIdFor(node: FunctionWithReturnType): MessageIds {
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
-	const services = getParserServices(context, true);
-	if (!services.program) {
+	const parserServices = getParserServices(context, true);
+	if (!parserServices.program) {
 		return {};
 	}
+
+	const services = parserServices;
 
 	const checker = services.program.getTypeChecker();
 
@@ -127,12 +129,7 @@ function create(
 	 * @returns The type behind the annotation, awaited when it is a promise.
 	 */
 	function resolveReturnType(annotation: TSESTree.TSTypeAnnotation): Type {
-		// The map's declared result for a `TypeNode` widens to plain `Identifier`
-		// for the reference case, so the cast restates what it returns at
-		// runtime: the TypeScript node behind this type annotation.
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- See above: the map's declared type is wider than the runtime node.
-		const typeNode = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation) as TypeNode;
-		const declared = checker.getTypeFromTypeNode(typeNode);
+		const declared = services.getTypeFromTypeNode(annotation.typeAnnotation);
 		if (!PROMISE_TYPE_NAMES.has(declared.getSymbol()?.getName() ?? "")) {
 			return declared;
 		}
@@ -181,7 +178,6 @@ export const noUnknownReturns: EslintRuleModule<Options, MessageIds> = createEsl
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		docs: {
 			description: "Disallow explicit return type annotations that resolve to `unknown`",

@@ -10,7 +10,8 @@
  * Foundation and other contributors.
  */
 
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { isArrowToken, isOpeningParenToken } from "@typescript-eslint/utils/ast-utils";
 
 /** The function nodes this rule measures. */

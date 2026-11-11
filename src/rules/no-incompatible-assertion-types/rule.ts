@@ -10,10 +10,11 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 import type { Type, TypeChecker } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { type AssertImports, scanAssertImports } from "../../utils/assert-imports";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { scanAssertImports } from "../../utils/assert-imports.ts";
+import type { AssertImports } from "../../utils/assert-imports.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-incompatible-assertion-types";
 
@@ -129,6 +130,7 @@ function familiesOf(type: Type): number {
 
 	let families = 0;
 	for (const arm of type.types) {
+		// oxlint-disable-next-line oxc/bad-bitwise-operator -- families is a bit set of Family flags
 		families |= familyOf(arm);
 		if ((families & Family.Unknown) !== 0) {
 			break;
@@ -447,7 +449,6 @@ export const noIncompatibleAssertionTypes: FlawlessRuleModule<Options, MessageId
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
 		meta: {
 			docs: {
 				description:

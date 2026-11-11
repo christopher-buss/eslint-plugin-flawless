@@ -1,11 +1,8 @@
-import {
-	type InvalidTestCase,
-	unindent as ts,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { unindent as ts } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { preferParameterDestructuring, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { preferParameterDestructuring, RULE_NAME } from "./rule.ts";
 
 const messageId = "default";
 

@@ -2,15 +2,17 @@
 // cspell:ignore CFrame, Cframe, cframe, CFRAME, UDim, RGBA, Rgba
 // cspell:ignore targetmotor, callees
 import tsParser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, it } from "vitest";
 
-import { run } from "../test";
-import { namingConvention, type Options, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { namingConvention, RULE_NAME } from "./rule.ts";
+import type { Options } from "./rule.ts";
 
 // Shared options for the contextual-type-dictated name cases: only object
 // literal members are configured, so any skip/report comes from that path.
@@ -3879,7 +3881,8 @@ run({
 		},
 		...[
 			'const a = "x";',
-			// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal type.
+
+			// oxlint-disable-next-line no-template-curly-in-string -- Test input is a template literal type.
 			'const b: `id-${string}` = "id-1";',
 			'const c: Uppercase<string> = "X";',
 			'type Id = string; const d: Id = "x";',
@@ -4414,13 +4417,14 @@ run({
  * @param option - The rule option to validate.
  */
 function verifyWithOptions(option: unknown): void {
-	const linter = new Linter();
-	// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges TSESLint rule types to the ESLint `Linter.Config` type.
-	linter.verify("const example = 1;", {
+	const linter = new TSESLint.Linter();
+	const config: TSESLint.FlatConfig.Config = {
 		languageOptions: { parser: tsParser },
 		plugins: { flawless: { rules: { [RULE_NAME]: namingConvention } } },
 		rules: { [`flawless/${RULE_NAME}`]: ["error", option] },
-	} as unknown as Linter.Config);
+	};
+
+	linter.verify("const example = 1;", config);
 }
 
 it.each([

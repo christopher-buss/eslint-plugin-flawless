@@ -1,8 +1,8 @@
 import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { expect, it } from "vitest";
 
-import { run } from "../test";
-import { maxLinesPerFunction, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { maxLinesPerFunction, RULE_NAME } from "./rule.ts";
 
 const exceed = "exceed";
 

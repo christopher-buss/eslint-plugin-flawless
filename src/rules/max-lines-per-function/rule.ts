@@ -1,14 +1,10 @@
-import {
-	AST_NODE_TYPES,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { FunctionNode } from "./core-ast-utils";
-import { getFunctionHeadLoc, getFunctionNameWithKind, upperCaseFirst } from "./core-ast-utils";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { FunctionNode } from "./core-ast-utils.ts";
+import { getFunctionHeadLoc, getFunctionNameWithKind, upperCaseFirst } from "./core-ast-utils.ts";
 
 export const RULE_NAME = "max-lines-per-function";
 
@@ -305,7 +301,6 @@ export const maxLinesPerFunction: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

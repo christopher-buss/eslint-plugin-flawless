@@ -4,10 +4,11 @@ import { getStaticJSONValue } from "jsonc-eslint-parser";
 import type { AST } from "jsonc-eslint-parser";
 import path from "node:path";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { JsonContext, JsonSourceCode } from "../../utils/types";
-import { buildInheritedConfig, type InheritedEntry, isRecord } from "./resolve-extends";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { JsonContext, JsonSourceCode } from "../../utils/types.ts";
+import { buildInheritedConfig, isRecord } from "./resolve-extends.ts";
+import type { InheritedEntry } from "./resolve-extends.ts";
 
 export const RULE_NAME = "no-redundant-tsconfig-options";
 
@@ -135,7 +136,7 @@ function equalUnordered(
  */
 function isLocationIndependent(value: unknown): boolean {
 	if (typeof value === "string") {
-		// eslint-disable-next-line no-template-curly-in-string -- literal tsconfig token
+		// oxlint-disable-next-line no-template-curly-in-string -- literal tsconfig token
 		return value.includes("${configDir}") || path.isAbsolute(value);
 	}
 
@@ -244,7 +245,7 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 	}
 
 	function buildFix(property: AST.JSONProperty): TSESLint.ReportFixFunction | undefined {
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- A JSONC AST node has the `range` and tokens the token-store API reads.
+		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- A JSONC AST node has the `range` and tokens the token-store API reads.
 		const node = property as unknown as TSESTree.Node;
 		const before = sourceCode.getTokenBefore(node);
 		const after = sourceCode.getTokenAfter(node);
@@ -355,7 +356,6 @@ export const noRedundantTsconfigOptions: EslintRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		docs: {
 			description:

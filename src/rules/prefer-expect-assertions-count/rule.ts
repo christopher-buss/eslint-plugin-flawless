@@ -1,8 +1,9 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "prefer-expect-assertions-count";
 
@@ -77,7 +78,6 @@ export const preferExpectAssertionsCount: FlawlessRuleModule<Options, MessageIds
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
 		meta: {
 			docs: {
 				description: "Prefer `expect.assertions(<count>)` over `expect.hasAssertions()`",

@@ -1,7 +1,7 @@
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import { resolveReactPackage } from "../../utils/react-package";
+import { resolveReactPackage } from "../../utils/react-package.ts";
 
 /** The kind of binding an identifier resolves to within a React import. */
 export type ReactImportKind = "named" | "namespace";

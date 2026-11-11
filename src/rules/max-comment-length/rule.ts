@@ -1,8 +1,9 @@
-import { AST_TOKEN_TYPES, type JSONSchema, type TSESTree } from "@typescript-eslint/utils";
+import { AST_TOKEN_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { isLineBreak, isWhitespace } from "../../utils/char-codes";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { isLineBreak, isWhitespace } from "../../utils/char-codes.ts";
 
 export const RULE_NAME = "max-comment-length";
 
@@ -344,7 +345,6 @@ export const maxCommentLength: FlawlessRuleModule<Options, MessageIds> = createF
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

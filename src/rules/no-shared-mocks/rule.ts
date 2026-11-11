@@ -1,13 +1,14 @@
-import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getTestGlobalSources,
 	resolveImportedTestGlobalName,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-shared-mocks";
 
@@ -377,8 +378,8 @@ export const noSharedMocks: FlawlessRuleModule<Options, MessageIds> = createFlaw
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow mocks created once and shared between tests",
 			recommended: false,

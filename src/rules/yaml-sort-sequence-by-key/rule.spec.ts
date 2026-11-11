@@ -1,12 +1,14 @@
-import { Linter } from "eslint";
+import { TSESLint } from "@typescript-eslint/utils";
+
 import yml from "eslint-plugin-yml";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { describe, expect, it } from "vitest";
 import * as yamlParser from "yaml-eslint-parser";
 
-import plugin from "../../index";
-import { runYaml } from "../test";
-import { RULE_NAME, yamlSortSequenceByKey } from "./rule";
+import plugin from "../../index.ts";
+import { runYaml } from "../test.ts";
+import { RULE_NAME, yamlSortSequenceByKey } from "./rule.ts";
 
 const root = [{ key: "name", pathPattern: "^$" }];
 
@@ -752,16 +754,16 @@ runYaml({
 });
 
 describe("idempotent fix", () => {
-	const config: Linter.Config = {
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.yaml"],
 		languageOptions: { parser: yamlParser },
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- bridges two `@eslint/core` type versions.
-		plugins: { flawless: plugin } as unknown as NonNullable<Linter.Config["plugins"]>,
+
+		plugins: { flawless: plugin },
 		rules: { "flawless/yaml-sort-sequence-by-key": ["error", ...root] },
 	};
 
 	it("converges in one pass and leaves no reports", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const { messages, output } = linter.verifyAndFix(labels, config, {
 			filename: "labels.yaml",
 		});
@@ -772,17 +774,14 @@ describe("idempotent fix", () => {
 });
 
 describe("yaml language mode (Languages API)", () => {
-	// The plugin objects mix `@eslint/core` type versions (TSESLint vs
-	// eslint-plugin-yml), so the flat-config `plugins` map is cast to bridge
-	// them.
-	const config: Linter.Config = {
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.yaml"],
 		language: "yaml/yaml",
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- bridges two `@eslint/core` type versions.
+
 		plugins: {
 			flawless: plugin,
 			yaml: yml,
-		} as unknown as NonNullable<Linter.Config["plugins"]>,
+		},
 		rules: { "flawless/yaml-sort-sequence-by-key": ["error", ...root] },
 	};
 
@@ -792,14 +791,14 @@ describe("yaml language mode (Languages API)", () => {
 	`;
 
 	it("reports under the language provider", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const messages = linter.verify(code, config, { filename: "file.yaml" });
 		expect(messages).toHaveLength(1);
 		expect(messages[0]?.messageId).toBe("shouldBeBefore");
 	});
 
 	it("fixes identically to parser mode", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const { output } = linter.verifyAndFix(code, config, { filename: "file.yaml" });
 		expect(output).toBe(
 			unindent`

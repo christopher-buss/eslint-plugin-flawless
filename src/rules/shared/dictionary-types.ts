@@ -1,6 +1,7 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import { lookupAlias, lookupTypeDeclaration } from "./type-bindings";
+import { lookupAlias, lookupTypeDeclaration } from "./type-bindings.ts";
 
 const BUILT_INS = new Set([
 	"NonNullable",
@@ -113,13 +114,9 @@ export function classifyUnsafeDictionary(
  * are the owner type the value is meant to satisfy.
  *
  * @param type - The annotated or asserted target type.
- * @param environment - The file's type declarations.
  * @returns The widening target, or null when the type preserves evidence.
  */
-export function classifyWideningTarget(
-	type: TSESTree.TypeNode,
-	environment: TypeEnvironment,
-): null | WideningTarget {
+export function classifyWideningTarget(type: TSESTree.TypeNode): null | WideningTarget {
 	const unwrapped = unwrapTransparentType(type);
 	if (unwrapped.type === AST_NODE_TYPES.TSUnknownKeyword) {
 		return { kind: "unknown" };
@@ -152,13 +149,11 @@ export function classifyWideningTarget(
 
 	if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped)) {
 		const wrapped = unwrapped.typeArguments?.params[0];
-		return wrapped === undefined ? null : classifyWideningTarget(wrapped, environment);
+		return wrapped === undefined ? null : classifyWideningTarget(wrapped);
 	}
 
 	if (name === "Record" && isBuiltIn(name, unwrapped)) {
-		return hasBroadRecordKey(unwrapped, environment, new Map())
-			? { kind: "open dictionary" }
-			: null;
+		return hasBroadRecordKey(unwrapped, new Map()) ? { kind: "open dictionary" } : null;
 	}
 
 	const alias = lookupAlias(name, unwrapped);
@@ -173,16 +168,11 @@ export function classifyWideningTarget(
 
 	const resolving = new Set([name]);
 	if ((alias.typeParameters?.params.length ?? 0) > 0) {
-		const resolved = classifyAliasBroadTarget(
-			alias.typeAnnotation,
-			environment,
-			substitutions,
-			resolving,
-		);
+		const resolved = classifyAliasBroadTarget(alias.typeAnnotation, substitutions, resolving);
 		return resolved?.kind === "open dictionary" ? { kind: "generic container" } : null;
 	}
 
-	return classifyAliasBroadTarget(alias.typeAnnotation, environment, substitutions, resolving);
+	return classifyAliasBroadTarget(alias.typeAnnotation, substitutions, resolving);
 }
 
 /**
@@ -320,6 +310,7 @@ function resolvedSubstitutionArgument(
 		}
 
 		const nextSeen = new Set(seen);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextSeen.add(name);
 		type = substitution;
 		seen = nextSeen;
@@ -449,6 +440,7 @@ function unsafeDirectValue(
 		}
 
 		const nextResolving = new Set(resolvingAliases);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextResolving.add(name);
 		type = alias.typeAnnotation;
 		substitutions = nextSubstitutions;
@@ -543,6 +535,7 @@ function dictionaryValueTypes(
 		}
 
 		const nextResolving = new Set(resolvingAliases);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextResolving.add(name);
 		type = alias.typeAnnotation;
 		substitutions = nextSubstitutions;
@@ -557,14 +550,12 @@ function dictionaryValueTypes(
  * exist, so it is not broad.
  *
  * @param initialType - The mapped type's constraint.
- * @param environment - The file's type declarations.
  * @param substitutions - Type arguments bound so far.
  * @param initialVisitedAliases - Key aliases already followed, guarding cycles.
  * @returns True when the key admits any property name.
  */
 function isBroadMappedKey(
 	initialType: TSESTree.TypeNode,
-	environment: TypeEnvironment,
 	substitutions: TypeAliasEnvironment,
 	initialVisitedAliases: ReadonlySet<string> = new Set(),
 ): boolean {
@@ -582,7 +573,7 @@ function isBroadMappedKey(
 
 		if (unwrapped.type === AST_NODE_TYPES.TSUnionType) {
 			for (const member of unwrapped.types) {
-				if (isBroadMappedKey(member, environment, substitutions, visitedAliases)) {
+				if (isBroadMappedKey(member, substitutions, visitedAliases)) {
 					return true;
 				}
 			}
@@ -619,6 +610,7 @@ function isBroadMappedKey(
 		}
 
 		const nextVisited = new Set(visitedAliases);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextVisited.add(name);
 		type = alias.typeAnnotation;
 		visitedAliases = nextVisited;
@@ -630,17 +622,15 @@ function isBroadMappedKey(
  * as broad, since nothing narrows it.
  *
  * @param type - The `Record` reference.
- * @param environment - The file's type declarations.
  * @param substitutions - Type arguments bound so far.
  * @returns True when the key admits any property name.
  */
 function hasBroadRecordKey(
 	type: TSESTree.TSTypeReference,
-	environment: TypeEnvironment,
 	substitutions: TypeAliasEnvironment,
 ): boolean {
 	const key = type.typeArguments?.params[0];
-	return key === undefined || isBroadMappedKey(key, environment, substitutions);
+	return key === undefined || isBroadMappedKey(key, substitutions);
 }
 
 /**
@@ -651,14 +641,12 @@ function hasBroadRecordKey(
  * than when it is written inline at the annotation.
  *
  * @param initialType - The aliased type to resolve.
- * @param environment - The file's type declarations.
  * @param initialSubstitutions - Type arguments bound so far.
  * @param initialResolvingAliases - Aliases already being resolved, guarding cycles.
  * @returns The widening target, or null when the alias names a real shape.
  */
 function classifyAliasBroadTarget(
 	initialType: TSESTree.TypeNode,
-	environment: TypeEnvironment,
 	initialSubstitutions: TypeAliasEnvironment,
 	initialResolvingAliases: ReadonlySet<string>,
 ): null | WideningTarget {
@@ -684,7 +672,7 @@ function classifyAliasBroadTarget(
 		}
 
 		if (unwrapped.type === AST_NODE_TYPES.TSMappedType) {
-			return isBroadMappedKey(unwrapped.constraint, environment, substitutions)
+			return isBroadMappedKey(unwrapped.constraint, substitutions)
 				? { kind: "open dictionary" }
 				: null;
 		}
@@ -719,9 +707,7 @@ function classifyAliasBroadTarget(
 		}
 
 		if (name === "Record" && isBuiltIn(name, unwrapped)) {
-			return hasBroadRecordKey(unwrapped, environment, substitutions)
-				? { kind: "open dictionary" }
-				: null;
+			return hasBroadRecordKey(unwrapped, substitutions) ? { kind: "open dictionary" } : null;
 		}
 
 		const alias = lookupAlias(name, unwrapped);
@@ -735,6 +721,7 @@ function classifyAliasBroadTarget(
 		}
 
 		const nextResolving = new Set(resolvingAliases);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextResolving.add(name);
 		type = alias.typeAnnotation;
 		substitutions = nextSubstitutions;

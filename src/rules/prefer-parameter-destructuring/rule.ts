@@ -1,7 +1,8 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "prefer-parameter-destructuring";
 
@@ -71,7 +72,7 @@ interface RewriteQuery {
  * @param out - Receives every bound name, in source order.
  */
 function collectBoundNames(node: TSESTree.Node, out: Array<string>): void {
-	// eslint-disable-next-line ts/switch-exhaustiveness-check -- We have a default case
+	// oxlint-disable-next-line typescript/switch-exhaustiveness-check -- We have a default case
 	switch (node.type) {
 		case AST_NODE_TYPES.ArrayPattern: {
 			for (const element of node.elements) {
@@ -667,7 +668,6 @@ export const preferParameterDestructuring: FlawlessRuleModule<Options, MessageId
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [{ allowSideEffectReordering: true }],
 		meta: {
 			defaultOptions: [{ allowSideEffectReordering: true }],
 			docs: {

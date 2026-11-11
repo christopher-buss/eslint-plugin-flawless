@@ -18,8 +18,8 @@ import type {
 } from "typescript";
 import { isExternalModule, isFunctionLike, isInterfaceDeclaration, TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "no-ignored-return";
 
@@ -461,7 +461,13 @@ function getTables(program: Program): Tables {
 		tables.set(kind, derivePureMethods(program, checker, symbol));
 	}
 
-	const names = new Set([...tables.values()].flatMap((methods) => [...methods]));
+	const names = new Set<string>();
+	for (const methods of tables.values()) {
+		for (const method of methods) {
+			names.add(method);
+		}
+	}
+
 	const result = { names, tables };
 	tablesByProgram.set(program, result);
 	return result;
@@ -779,7 +785,6 @@ export const noIgnoredReturn: FlawlessRuleModule<Options, MessageIds> = createFl
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

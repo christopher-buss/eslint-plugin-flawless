@@ -1,17 +1,13 @@
-import {
-	AST_NODE_TYPES,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getNodeName,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-conditional-in-test";
 
@@ -208,6 +204,20 @@ function collectOptionalTokenFixes(
 }
 
 /**
+ * Determines whether a test block call is a modifier applied to the block
+ * rather than the call that opens it. In `it.skipIf(cond)("works", fn)`
+ * both calls are rooted at `it`, but only the outer one takes the test body
+ * — the inner one sits in its callee position.
+ *
+ * @param node - The test block call to inspect.
+ * @returns `true` when the call is a modifier in a callee chain.
+ */
+function isTestBlockModifier(node: TSESTree.CallExpression): boolean {
+	const { parent } = node;
+	return parent.type === AST_NODE_TYPES.CallExpression && parent.callee === node;
+}
+
+/**
  * Disallows conditional logic inside vitest test bodies (`it`/`test`), which
  * makes a test's behavior depend on runtime state. Ported from
  * eslint-plugin-jest's `no-conditional-in-test` with vitest-aware resolution
@@ -240,20 +250,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 		const name = getNodeName(node.callee);
 		return name !== null && config.additionalTestBlockFunctions.includes(name);
-	}
-
-	/**
-	 * Determines whether a test block call is a modifier applied to the block
-	 * rather than the call that opens it. In `it.skipIf(cond)("works", fn)`
-	 * both calls are rooted at `it`, but only the outer one takes the test body
-	 * — the inner one sits in its callee position.
-	 *
-	 * @param node - The test block call to inspect.
-	 * @returns `true` when the call is a modifier in a callee chain.
-	 */
-	function isTestBlockModifier(node: TSESTree.CallExpression): boolean {
-		const { parent } = node;
-		return parent.type === AST_NODE_TYPES.CallExpression && parent.callee === node;
 	}
 
 	/**
@@ -363,7 +359,6 @@ export const noConditionalInTest: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

@@ -4,9 +4,9 @@ import type { TOMLSourceCode } from "eslint-plugin-toml";
 import type { AST } from "toml-eslint-parser";
 import { getStaticTOMLValue } from "toml-eslint-parser";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { TomlContext } from "../../utils/types";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { TomlContext } from "../../utils/types.ts";
 
 export const RULE_NAME = "toml-sort-keys";
 
@@ -331,7 +331,6 @@ export const tomlSortKeys: EslintRuleModule<Options, MessageIds> = createEslintR
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		defaultOptions: [],
 		docs: {

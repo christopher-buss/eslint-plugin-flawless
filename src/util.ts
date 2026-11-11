@@ -138,7 +138,7 @@ export function createEslintRule<
 		) => TSESLint.RuleListener;
 	},
 ): EslintRuleModule<Options, MessageIds> {
-	// eslint-disable-next-line ts/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
+	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
 	return createRule(rule as BaseRule<Options, MessageIds>);
 }
 
@@ -183,10 +183,10 @@ export function createFlawlessRule<
 		context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 	): TSESLint.RuleListener {
 		const { after, before, ...visitors } = createOnce(
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
 			context as RuleContextWithSourceCode<MessageIds, Options, SourceCode>,
 		);
-		if (before !== undefined && before() === false) {
+		if (before?.() === false) {
 			return {};
 		}
 

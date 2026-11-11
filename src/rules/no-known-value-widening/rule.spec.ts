@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noKnownValueWidening, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noKnownValueWidening, RULE_NAME } from "./rule.ts";
 
 const messageId = "widening";
 
@@ -206,32 +207,32 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const owner: unknown = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "unknown" }, messageId }],
 	},
 	{
 		code: unindent`
 			const owner: object = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "object" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "object" }, messageId }],
 	},
 	{
 		code: unindent`
 			const owner: Record<string, unknown> = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
 			const owner: { [key: string]: string } = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// An inline type literal restates a shape the initializer establishes.
 		code: unindent`
 			const owner: { id: string } = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "anonymous object" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "anonymous object" }, messageId }],
 	},
 	{
 		// The alias chain ends at a bare escape hatch, so the name adds nothing.
@@ -239,21 +240,21 @@ const invalid: Array<InvalidTestCase> = [
 			type Payload = unknown;
 			const owner: Payload = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "unknown" }, messageId }],
 	},
 	{
 		// `Readonly` is transparent, so the wrapped target still decides.
 		code: unindent`
 			const owner: Readonly<Record<string, string>> = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// A non-empty literal is not an accumulator seed.
 		code: unindent`
 			const counts: Record<string, number> = { root: 1 };
 		`,
-		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `counts`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// A generic alias resolving to a dictionary is a generic container: the
@@ -264,7 +265,7 @@ const invalid: Array<InvalidTestCase> = [
 			const registry: Registry<Owner> = { root: { id: "1" } };
 		`,
 		errors: [
-			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },
+			{ data: { subject: "binding `registry`", target: "generic container" }, messageId },
 		],
 	},
 	{
@@ -274,45 +275,35 @@ const invalid: Array<InvalidTestCase> = [
 			type Registry = Record<string, number>;
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
 			type Registry = { [key: string]: number };
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
 			type Registry = { [Key in string]: number };
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
 			type Registry = { [Key in PropertyKey]: number };
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
 			type Registry = Readonly<Record<string, number>>;
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// An alias to an applied generic alias resolves through both hops.
@@ -321,9 +312,7 @@ const invalid: Array<InvalidTestCase> = [
 			type Registry = Index<number>;
 			const registry: Registry = { root: 1 };
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// A block-scoped alias resolves like a module one.
@@ -334,9 +323,7 @@ const invalid: Array<InvalidTestCase> = [
 				return registry;
 			}
 		`,
-		errors: [
-			{ data: { subject: "binding \`registry\`", target: "open dictionary" }, messageId },
-		],
+		errors: [{ data: { subject: "binding `registry`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// A generic alias applied through its default is still a container.
@@ -345,7 +332,7 @@ const invalid: Array<InvalidTestCase> = [
 			const registry: Index = { root: 1 };
 		`,
 		errors: [
-			{ data: { subject: "binding \`registry\`", target: "generic container" }, messageId },
+			{ data: { subject: "binding `registry`", target: "generic container" }, messageId },
 		],
 	},
 	{
@@ -353,7 +340,7 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const counts: Record<"root" | string, number> = { root: 1 };
 		`,
-		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `counts`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// A key alias resolving to \`string\` is still broad.
@@ -361,7 +348,7 @@ const invalid: Array<InvalidTestCase> = [
 			type Key = string;
 			const counts: Record<Key, number> = { root: 1 };
 		`,
-		errors: [{ data: { subject: "binding \`counts\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "binding `counts`", target: "open dictionary" }, messageId }],
 	},
 	{
 		// The evidence survives a stable `const` hop.
@@ -369,7 +356,7 @@ const invalid: Array<InvalidTestCase> = [
 			const owner = { id: "1" };
 			const widened: unknown = owner;
 		`,
-		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `widened`", target: "unknown" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -390,16 +377,14 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [
-			{ data: { subject: "return value of \`makeOwner\`", target: "unknown" }, messageId },
+			{ data: { subject: "return value of `makeOwner`", target: "unknown" }, messageId },
 		],
 	},
 	{
 		code: unindent`
 			const makeOwner = (): object => ({ id: "1" });
 		`,
-		errors: [
-			{ data: { subject: "return value of \`makeOwner\`", target: "object" }, messageId },
-		],
+		errors: [{ data: { subject: "return value of `makeOwner`", target: "object" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -409,7 +394,7 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [
 			{
-				data: { subject: "return value of \`anonymous function\`", target: "unknown" },
+				data: { subject: "return value of `anonymous function`", target: "unknown" },
 				messageId,
 			},
 		],
@@ -420,7 +405,7 @@ const invalid: Array<InvalidTestCase> = [
 				private readonly cache: Record<string, unknown> = { root: 1 };
 			}
 		`,
-		errors: [{ data: { subject: "property \`cache\`", target: "open dictionary" }, messageId }],
+		errors: [{ data: { subject: "property `cache`", target: "open dictionary" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -430,7 +415,7 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ data: { subject: "return value of \`make\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "return value of `make`", target: "unknown" }, messageId }],
 	},
 	{
 		// A `let` that is only ever initialized keeps its annotation's blame.
@@ -438,14 +423,14 @@ const invalid: Array<InvalidTestCase> = [
 			let owner: unknown;
 			owner = { id: "1" };
 		`,
-		errors: [{ data: { subject: "binding \`owner\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `owner`", target: "unknown" }, messageId }],
 	},
 	{
 		code: unindent`
 			const values: Array<unknown> = [1, 2, 3];
 			const widened: unknown = values;
 		`,
-		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `widened`", target: "unknown" }, messageId }],
 	},
 	{
 		// A known value is widened back to \`unknown\` by a local type predicate.
@@ -460,7 +445,7 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					subject: "argument for parameter \`value\` of \`isUser\`",
+					subject: "argument for parameter `value` of `isUser`",
 					target: "unknown",
 				},
 				messageId,
@@ -478,7 +463,7 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					subject: "argument for parameter \`value\` of \`isString\`",
+					subject: "argument for parameter `value` of `isString`",
 					target: "unknown",
 				},
 				messageId,
@@ -495,7 +480,7 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					subject: "argument for parameter \`value\` of \`isString\`",
+					subject: "argument for parameter `value` of `isString`",
 					target: "unknown",
 				},
 				messageId,
@@ -517,7 +502,7 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [
 			{
 				data: {
-					subject: "argument for parameter \`value\` of \`isUser\`",
+					subject: "argument for parameter `value` of `isUser`",
 					target: "unknown",
 				},
 				messageId,
@@ -532,7 +517,7 @@ const invalid: Array<InvalidTestCase> = [
 			const owner: Owner = { id: "1" };
 			const widened: unknown = owner;
 		`,
-		errors: [{ data: { subject: "binding \`widened\`", target: "unknown" }, messageId }],
+		errors: [{ data: { subject: "binding `widened`", target: "unknown" }, messageId }],
 	},
 	{
 		// An unannotated \`const\` still carries its literal's evidence.
@@ -544,7 +529,7 @@ const invalid: Array<InvalidTestCase> = [
 		`,
 		errors: [
 			{
-				data: { subject: "return value of \`makeCounts\`", target: "open dictionary" },
+				data: { subject: "return value of `makeCounts`", target: "open dictionary" },
 				messageId,
 			},
 		],

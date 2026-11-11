@@ -3,9 +3,9 @@ import type { TSESLint } from "@typescript-eslint/utils";
 import type { YAMLSourceCode } from "eslint-plugin-yml";
 import type { AST } from "yaml-eslint-parser";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { YamlContext } from "../../utils/types";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { YamlContext } from "../../utils/types.ts";
 
 export const RULE_NAME = "yaml-block-key-blank-lines";
 
@@ -96,7 +96,6 @@ export const yamlBlockKeyBlankLines: EslintRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		docs: {
 			description: "Enforce blank lines around top-level YAML block collection keys",

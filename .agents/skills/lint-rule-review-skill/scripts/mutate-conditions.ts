@@ -12,7 +12,8 @@
 // Survivors marked likelyTypeOnly are bare null-check early exits, which often exist only for the compiler.
 import type * as TS from "typescript";
 
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHash } from "node:crypto";
 import {
 	accessSync,

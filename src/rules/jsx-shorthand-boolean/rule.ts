@@ -1,5 +1,5 @@
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "jsx-shorthand-boolean";
 
@@ -37,8 +37,8 @@ export const jsxShorthandBoolean: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow shorthand boolean JSX attributes",
 			recommended: false,

@@ -1,13 +1,14 @@
 import parser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { regressions } from "./regressions";
-import { noRedundantTypeAnnotation } from "./rule";
-import { type Candidate, COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify";
+import { regressions } from "./regressions.ts";
+import { noRedundantTypeAnnotation } from "./rule.ts";
+import { COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify.ts";
+import type { Candidate } from "./verify.ts";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
@@ -181,7 +182,7 @@ describe("annotation verification", () => {
 	});
 
 	it("verifies an unsaved file from the parser's project service", () => {
-		const linter = new Linter({ configType: "flat" });
+		const linter = new TSESLint.Linter({ configType: "flat" });
 		// Keep the variable local: isolatedDeclarations requires annotations
 		// on exported variables.
 		const code = "declare function read(): string; const value: string = read(); export {};";
@@ -193,8 +194,8 @@ describe("annotation verification", () => {
 					parser,
 					parserOptions: { projectService: true, tsconfigRootDir: directory },
 				},
-				// eslint-disable-next-line ts/no-unsafe-type-assertion -- ESLint's plugin type does not accept a typescript-eslint rule module.
-				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
+
+				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
 				rules: { "flawless/redundant": "error" },
 			},
 			path.join(directory, "file.ts"),
@@ -205,7 +206,7 @@ describe("annotation verification", () => {
 	});
 
 	it("reports candidates past the work limit without a fix", () => {
-		const linter = new Linter({ configType: "flat" });
+		const linter = new TSESLint.Linter({ configType: "flat" });
 		// Keep the variables local: isolatedDeclarations requires annotations
 		// on exported variables.
 		const code = `declare function read(): string;\n${Array.from(
@@ -220,8 +221,8 @@ describe("annotation verification", () => {
 					parser,
 					parserOptions: { projectService: true, tsconfigRootDir: directory },
 				},
-				// eslint-disable-next-line ts/no-unsafe-type-assertion -- ESLint's plugin type does not accept a typescript-eslint rule module.
-				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
+
+				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
 				rules: { "flawless/redundant": "error" },
 			},
 			path.join(directory, "file.ts"),

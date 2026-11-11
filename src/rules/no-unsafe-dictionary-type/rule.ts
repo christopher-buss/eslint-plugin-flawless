@@ -1,15 +1,16 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	classifyUnsafeDictionary,
 	classifyUnsafeDictionaryValue,
 	createTypeEnvironment,
-	type TypeEnvironment,
 	typeReferenceName,
-} from "../shared/dictionary-types";
-import { lookupAlias } from "../shared/type-bindings";
+} from "../shared/dictionary-types.ts";
+import type { TypeEnvironment } from "../shared/dictionary-types.ts";
+import { lookupAlias } from "../shared/type-bindings.ts";
 
 export const RULE_NAME = "no-unsafe-dictionary-type";
 
@@ -205,8 +206,8 @@ export const noUnsafeDictionaryType: FlawlessRuleModule<Options, MessageIds> = c
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow unsafe object dictionary value types",
 			recommended: false,

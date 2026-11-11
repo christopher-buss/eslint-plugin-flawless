@@ -1,12 +1,11 @@
 import parser from "@typescript-eslint/parser";
-import type { ParserServicesWithTypeInformation, TSESLint } from "@typescript-eslint/utils";
-import { ESLintUtils } from "@typescript-eslint/utils";
+import type { ParserServicesWithTypeInformation } from "@typescript-eslint/utils";
+import { ESLintUtils, TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { noIncompatibleAssertionTypes } from "./rule";
+import { noIncompatibleAssertionTypes } from "./rule.ts";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
@@ -38,7 +37,8 @@ function lint(code: string): Counts & { reports: number } {
 			// Inherit from the originals and override only the counted members.
 			// `Object.create` returns `any`, so the wrappers are typed back to
 			// the objects they inherit from.
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- See above.
+
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- See above.
 			const wrappedSource = Object.create(sourceCode, {
 				getScope: {
 					value(node: never) {
@@ -48,7 +48,8 @@ function lint(code: string): Counts & { reports: number } {
 				},
 				parserServices: { value: wrappedServices },
 			}) as typeof sourceCode;
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- See above.
+
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- See above.
 			const wrapped = Object.create(context, {
 				sourceCode: { value: wrappedSource },
 			}) as typeof context;
@@ -56,7 +57,7 @@ function lint(code: string): Counts & { reports: number } {
 		},
 	};
 
-	const linter = new Linter({ configType: "flat" });
+	const linter = new TSESLint.Linter({ configType: "flat" });
 	const messages = linter.verify(
 		code,
 		{
@@ -71,8 +72,8 @@ function lint(code: string): Counts & { reports: number } {
 					tsconfigRootDir: directory,
 				},
 			},
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- A `TSESLint` rule module does not match ESLint's plugin type.
-			plugins: { flawless: { rules: { counted } } as never },
+
+			plugins: { flawless: { rules: { counted } } },
 			rules: { "flawless/counted": "error" },
 		},
 		path.join(directory, "file.ts"),

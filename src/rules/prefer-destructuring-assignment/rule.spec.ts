@@ -1,11 +1,8 @@
-import {
-	type InvalidTestCase,
-	unindent as tsx,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { unindent as tsx } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { preferDestructuringAssignment, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { preferDestructuringAssignment, RULE_NAME } from "./rule.ts";
 
 const messageId = "default";
 const filename = "file.tsx";

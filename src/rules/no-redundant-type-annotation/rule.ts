@@ -2,20 +2,14 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, AST_TOKEN_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type {
-	Expression,
-	ObjectType,
-	Signature,
-	TupleTypeReference,
-	Type,
-	TypeReference,
-} from "typescript";
+import type { ObjectType, Signature, TupleTypeReference, Type, TypeReference } from "typescript";
 import ts from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import { pushChildNodes } from "../../utils/nested-expressions";
-import { type Candidate, verifyAnnotations } from "./verify";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import { pushChildNodes } from "../../utils/nested-expressions.ts";
+import { verifyAnnotations } from "./verify.ts";
+import type { Candidate } from "./verify.ts";
 
 const {
 	ElementFlags,
@@ -1067,6 +1061,47 @@ function usesContextualThis(node: FunctionExpressionNode): boolean {
 	);
 }
 
+/**
+ * Lists the values a function returns, without entering nested functions.
+ *
+ * @param node - The function to inspect.
+ * @returns The returned expressions, whether a bare `return` appears, and
+ *   whether the end of the body may be reached.
+ */
+function getReturnedValues(node: ReturnTypedFunction): {
+	readonly bareReturn: boolean;
+	readonly fallsThrough: boolean;
+	readonly values: ReadonlyArray<TSESTree.Expression>;
+} {
+	if (node.body.type !== AST_NODE_TYPES.BlockStatement) {
+		return { bareReturn: false, fallsThrough: false, values: [node.body] };
+	}
+
+	const values: Array<TSESTree.Expression> = [];
+	let bareReturn = false;
+	someDescendant(node.body, isFunctionNode, (child) => {
+		if (child.type === AST_NODE_TYPES.ReturnStatement) {
+			if (child.argument === null) {
+				bareReturn = true;
+			} else {
+				values.push(child.argument);
+			}
+		}
+
+		return false;
+	});
+
+	// Whether the end is reachable is control flow the rule does not
+	// model, so only a body that ends in `return` or `throw` counts as
+	// closed.
+	const last = node.body.body.at(-1);
+	const fallsThrough =
+		last === undefined ||
+		(last.type !== AST_NODE_TYPES.ReturnStatement &&
+			last.type !== AST_NODE_TYPES.ThrowStatement);
+	return { bareReturn, fallsThrough, values };
+}
+
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
@@ -1917,6 +1952,20 @@ function create(
 		return contextDependence(node);
 	}
 
+	function elementDependence(element: null | TSESTree.Node): ContextDependence {
+		if (element === null) {
+			return "independent";
+		}
+
+		// A spread hands the array's own context to its operand.
+		let operand = element;
+		while (operand.type === AST_NODE_TYPES.SpreadElement) {
+			operand = operand.argument;
+		}
+
+		return typedValueDependence(operand, () => "dependent");
+	}
+
 	/**
 	 * Finds the dependence of an array literal that the annotation types.
 	 *
@@ -1934,20 +1983,6 @@ function create(
 	function arrayLiteralDependence(node: TSESTree.ArrayExpression): ContextDependence {
 		if (node.elements.length === 0) {
 			return "dependent";
-		}
-
-		function elementDependence(element: null | TSESTree.Node): ContextDependence {
-			if (element === null) {
-				return "independent";
-			}
-
-			// A spread hands the array's own context to its operand.
-			let operand = element;
-			while (operand.type === AST_NODE_TYPES.SpreadElement) {
-				operand = operand.argument;
-			}
-
-			return typedValueDependence(operand, () => "dependent");
 		}
 
 		return strongestDependence(node.elements, elementDependence) === "dependent"
@@ -2430,10 +2465,12 @@ function create(
 	function getFunctionContextualType(node: FunctionExpressionNode): Type | undefined {
 		const { parent } = node;
 		if (parent.type !== AST_NODE_TYPES.Property || !parent.method) {
-			const contextualType = checker.getContextualType(
-				// eslint-disable-next-line ts/no-unsafe-type-assertion -- Outside an object literal method, a function expression maps to a TS expression node.
-				services.esTreeNodeToTSNodeMap.get(node) as Expression,
-			);
+			const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+			if (!ts.isFunctionExpression(tsNode) && !ts.isArrowFunction(tsNode)) {
+				return undefined;
+			}
+
+			const contextualType = checker.getContextualType(tsNode);
 			return contextualType && checker.getNonNullableType(contextualType);
 		}
 
@@ -2635,47 +2672,6 @@ function create(
 		}
 
 		return false;
-	}
-
-	/**
-	 * Lists the values a function returns, without entering nested functions.
-	 *
-	 * @param node - The function to inspect.
-	 * @returns The returned expressions, whether a bare `return` appears, and
-	 *   whether the end of the body may be reached.
-	 */
-	function getReturnedValues(node: ReturnTypedFunction): {
-		readonly bareReturn: boolean;
-		readonly fallsThrough: boolean;
-		readonly values: ReadonlyArray<TSESTree.Expression>;
-	} {
-		if (node.body.type !== AST_NODE_TYPES.BlockStatement) {
-			return { bareReturn: false, fallsThrough: false, values: [node.body] };
-		}
-
-		const values: Array<TSESTree.Expression> = [];
-		let bareReturn = false;
-		someDescendant(node.body, isFunctionNode, (child) => {
-			if (child.type === AST_NODE_TYPES.ReturnStatement) {
-				if (child.argument === null) {
-					bareReturn = true;
-				} else {
-					values.push(child.argument);
-				}
-			}
-
-			return false;
-		});
-
-		// Whether the end is reachable is control flow the rule does not
-		// model, so only a body that ends in `return` or `throw` counts as
-		// closed.
-		const last = node.body.body.at(-1);
-		const fallsThrough =
-			last === undefined ||
-			(last.type !== AST_NODE_TYPES.ReturnStatement &&
-				last.type !== AST_NODE_TYPES.ThrowStatement);
-		return { bareReturn, fallsThrough, values };
 	}
 
 	/**
@@ -3200,7 +3196,6 @@ export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [DEFAULT_OPTIONS],
 	meta: {
 		defaultOptions: [DEFAULT_OPTIONS],
 		docs: {

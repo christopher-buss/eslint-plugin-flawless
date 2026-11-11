@@ -39,7 +39,7 @@ export type SelectorString = keyof typeof Selector;
 export type SelectorType = (typeof Selector)[keyof typeof Selector];
 
 export const MetaSelector = {
-	/* eslint-disable no-inline-comments -- Comments improve readability here */
+	/* oxlint-disable no-inline-comments -- Comments improve readability here */
 	default: -1,
 	variableLike: 15, // 0 | 1 | 2 | 4 | 8
 	memberLike: 32752, // 0 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384
@@ -47,7 +47,7 @@ export const MetaSelector = {
 	method: 1792, // 0 | 256 | 512 | 1024
 	property: 14336, // 0 | 2048 | 4096 | 8192
 	accessor: 16416, // 0 | 32 | 16384
-	/* eslint-enable no-inline-comments */
+	/* oxlint-enable no-inline-comments */
 } as const;
 
 export type MetaSelectorString = keyof typeof MetaSelector;
@@ -104,10 +104,16 @@ export const PredefinedFormat = {
 	UPPER_CASE: 6,
 } as const;
 
-// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
-export const PredefinedFormatValueToKey = Object.fromEntries(
-	Object.entries(PredefinedFormat).map(([key, value]) => [value, key]),
-) as Record<PredefinedFormatType, keyof typeof PredefinedFormat>;
+export const PredefinedFormatValueToKey: {
+	readonly [K in keyof typeof PredefinedFormat as (typeof PredefinedFormat)[K]]: K;
+} = {
+	1: "camelCase",
+	2: "strictCamelCase",
+	3: "PascalCase",
+	4: "StrictPascalCase",
+	5: "snake_case",
+	6: "UPPER_CASE",
+};
 
 export type PredefinedFormatString = keyof typeof PredefinedFormat;
 export type PredefinedFormatType = (typeof PredefinedFormat)[keyof typeof PredefinedFormat];

@@ -472,6 +472,16 @@ export function verifyAnnotations<C extends Candidate>(
 	return { accepted: [], acceptedAlone: [], rejected, unverified };
 }
 
+function bindingNames(binding: ts.BindingName): Array<ts.Identifier> {
+	if (ts.isIdentifier(binding)) {
+		return [binding];
+	}
+
+	return binding.elements.flatMap((element) => {
+		return ts.isBindingElement(element) ? bindingNames(element.name) : [];
+	});
+}
+
 /**
  * Declarations needed to meet assertion calls' syntactic requirements.
  * @param checker - The original checker, with the annotations still present.
@@ -489,16 +499,6 @@ function requiredAssertionTargets(
 		string,
 		Array<{ owner: Candidate["owner"]; symbol: ts.Symbol | undefined }>
 	>();
-	function names(binding: ts.BindingName): Array<ts.Identifier> {
-		if (ts.isIdentifier(binding)) {
-			return [binding];
-		}
-
-		return binding.elements.flatMap((element) => {
-			return ts.isBindingElement(element) ? names(element.name) : [];
-		});
-	}
-
 	function asserts(signature: ts.Signature | undefined): boolean {
 		const predicate =
 			signature === undefined ? undefined : checker.getTypePredicateOfSignature(signature);
@@ -522,7 +522,7 @@ function requiredAssertionTargets(
 		// A method named by a string or computed key binds no name.
 		let bound: Array<ts.Identifier> = [];
 		if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
-			bound = names(owner.name);
+			bound = bindingNames(owner.name);
 		} else if (ts.isIdentifier(owner.name)) {
 			bound = [owner.name];
 		}
@@ -1475,6 +1475,41 @@ function withoutThis(factory: ts.NodeFactory, node: ts.TypeNode): ts.TypeNode {
 	);
 }
 
+function declarations(
+	checker: ts.TypeChecker,
+	type: ts.Type,
+	locate: (declaration: ts.Node) => string,
+	omitThis: boolean,
+): string {
+	const keys = new Set<string>();
+	function add(name: ts.EntityName): void {
+		const identifier = ts.isQualifiedName(name) ? name.right : name;
+		// The node builder attaches the symbol each emitted name denotes.
+		const { symbol } = identifier as ts.Node & { symbol?: ts.Symbol };
+		const declaration = symbol?.declarations?.[0];
+		if (declaration !== undefined) {
+			keys.add(`${identifier.text}@${locate(declaration)}`);
+		}
+	}
+
+	function visit(current: ts.Node): void {
+		if (ts.isTypeReferenceNode(current)) {
+			add(current.typeName);
+		} else if (ts.isTypeQueryNode(current)) {
+			add(current.exprName);
+		}
+
+		ts.forEachChild(current, visit);
+	}
+
+	const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
+	if (node !== undefined) {
+		visit(omitThis ? withoutThis(ts.factory, node) : node);
+	}
+
+	return [...keys].sort().join(", ");
+}
+
 /**
  * Normalize property ordering, preserving every overload and intersection.
  * Names are qualified with their declarations, so two types that print the
@@ -1489,41 +1524,6 @@ function createTypePrinter(): (
 ) => string {
 	const cache = new Map<string, string>();
 	const printer = ts.createPrinter({ removeComments: true });
-	function declarations(
-		checker: ts.TypeChecker,
-		type: ts.Type,
-		locate: (declaration: ts.Node) => string,
-		omitThis: boolean,
-	): string {
-		const keys = new Set<string>();
-		function add(name: ts.EntityName): void {
-			const identifier = ts.isQualifiedName(name) ? name.right : name;
-			// The node builder attaches the symbol each emitted name denotes.
-			const { symbol } = identifier as ts.Node & { symbol?: ts.Symbol };
-			const declaration = symbol?.declarations?.[0];
-			if (declaration !== undefined) {
-				keys.add(`${identifier.text}@${locate(declaration)}`);
-			}
-		}
-
-		function visit(current: ts.Node): void {
-			if (ts.isTypeReferenceNode(current)) {
-				add(current.typeName);
-			} else if (ts.isTypeQueryNode(current)) {
-				add(current.exprName);
-			}
-
-			ts.forEachChild(current, visit);
-		}
-
-		const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
-		if (node !== undefined) {
-			visit(omitThis ? withoutThis(ts.factory, node) : node);
-		}
-
-		return [...keys].sort().join(", ");
-	}
-
 	return (checker, node, locate, omitThis = false) => {
 		const target =
 			ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)

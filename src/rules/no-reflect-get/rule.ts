@@ -1,9 +1,9 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { isGlobalReflectMethodCall } from "../shared/reflect-method";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { isGlobalReflectMethodCall } from "../shared/reflect-method.ts";
 
 export const RULE_NAME = "no-reflect-get";
 
@@ -61,8 +61,8 @@ export const noReflectGet: FlawlessRuleModule<Options, MessageIds> = createFlawl
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Disallow the two-argument `Reflect.get` in favour of typed property access",

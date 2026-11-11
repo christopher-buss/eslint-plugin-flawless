@@ -1,6 +1,6 @@
 import tsParser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
 import path from "node:path";
 import ts from "typescript";
 
@@ -122,7 +122,10 @@ export function checkFixes(snippets: ReadonlyArray<FixedSnippet>): Array<string>
  * @param snippets - Sources to lint, with no expectation on what is reported.
  * @returns One failure per unsafe or unsettled fix, empty when all are safe.
  */
-export function checkRuleFixes(rule: unknown, snippets: ReadonlyArray<Snippet>): Array<string> {
+export function checkRuleFixes(
+	rule: TSESLint.AnyRuleModule,
+	snippets: ReadonlyArray<Snippet>,
+): Array<string> {
 	const failures: Array<string> = [];
 	for (const [tsconfig, group] of groupByTsconfig(snippets)) {
 		let pending: Array<FixRun> = group.map((snippet) => ({ snippet, text: snippet.code }));
@@ -483,7 +486,7 @@ function describeFailure(
  * @param messages - The lint messages, fixable or not.
  * @returns The fixed source.
  */
-function applyFixes(text: string, messages: ReadonlyArray<Linter.LintMessage>): string {
+function applyFixes(text: string, messages: ReadonlyArray<TSESLint.Linter.LintMessage>): string {
 	const fixes = messages
 		.map(({ fix }) => fix)
 		.filter((fix) => fix !== undefined)
@@ -526,7 +529,7 @@ function runFixPass({
 }: {
 	failures: Array<string>;
 	pass: number;
-	rule: unknown;
+	rule: TSESLint.AnyRuleModule;
 	runs: ReadonlyArray<FixRun>;
 	tsconfig: string;
 }): Array<FixRun> {
@@ -540,15 +543,12 @@ function runFixPass({
 		},
 		...entries.map(({ fileName, run }) => ({ fileName, text: run.text })),
 	]);
-	const linter = new Linter({ configType: "flat", cwd: path.dirname(tsconfig) });
-	const config: Linter.Config = {
+	const linter = new TSESLint.Linter({ configType: "flat", cwd: path.dirname(tsconfig) });
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: { parser: tsParser, parserOptions: { programs: [program] } },
 		plugins: {
-			// eslint-disable-next-line ts/no-unsafe-type-assertion -- The caller passes a typescript-eslint rule module, which ESLint's plugin type does not accept.
-			subject: { rules: { rule } } as unknown as NonNullable<
-				Linter.Config["plugins"]
-			>[string],
+			subject: { rules: { rule } },
 		},
 		rules: { "subject/rule": "error" },
 	};

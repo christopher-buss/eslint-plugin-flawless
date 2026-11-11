@@ -2,9 +2,9 @@ import { ScopeType } from "@typescript-eslint/scope-manager";
 import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { referenceContainsTypeQuery } from "../../utils/reference-contains-type-query";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { referenceContainsTypeQuery } from "../../utils/reference-contains-type-query.ts";
 
 export const RULE_NAME = "no-trivial-functions";
 
@@ -509,7 +509,6 @@ export const noTrivialFunctions: FlawlessRuleModule<Options, MessageIds> = creat
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

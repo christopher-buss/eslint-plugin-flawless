@@ -1,6 +1,6 @@
 import { unindent } from "eslint-vitest-rule-tester";
 
-import { regressions } from "./regressions";
+import { regressions } from "./regressions.ts";
 
 /**
  * A snippet the fix-safety oracle lints and fixes, with no expectation on what

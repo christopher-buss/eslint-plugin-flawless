@@ -1,7 +1,7 @@
 import type ts from "typescript";
 import { SymbolFlags } from "typescript";
 
-import { moduleSpecifierMatches } from "./module-specifier";
+import { moduleSpecifierMatches } from "./module-specifier.ts";
 
 /**
  * Follows an import alias to the symbol it was imported from, so a renamed

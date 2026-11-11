@@ -1,9 +1,10 @@
 import * as core from "@eslint-react/core";
-import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener } from "../util";
-import { hasNestedCallOrNew } from "./nested-expressions";
-import { resolve } from "./resolve";
+import type { FlawlessRuleContext, FlawlessRuleListener } from "../util.ts";
+import { hasNestedCallOrNew } from "./nested-expressions.ts";
+import { resolve } from "./resolve.ts";
 
 /**
  * Configuration distinguishing the `useMemo` and `useCallback` variants.
@@ -64,8 +65,7 @@ export function createUnnecessaryHookRule<MessageIds extends string>({
 	const skipComputation = hook === "useMemo";
 
 	return (context) => {
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- `@eslint-react/core` types its context separately; the runtime object is the same.
-		const reactContext = context as unknown as ReactContext;
+		const reactContext: ReactContext = context;
 		const detectHookCall = hook === "useMemo" ? core.isUseMemoCall : core.isUseCallbackCall;
 
 		return {

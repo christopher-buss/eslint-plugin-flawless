@@ -1,19 +1,14 @@
 // cspell:ignore xtest
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils, TSESLint } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getTestGlobalSources,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-shared-test-state";
 
@@ -541,7 +536,6 @@ export const noSharedTestState: FlawlessRuleModule<Options, MessageIds> = create
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

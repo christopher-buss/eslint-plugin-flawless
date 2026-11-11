@@ -4,7 +4,7 @@ import type { TOMLSourceCode } from "eslint-plugin-toml";
 import type { YAMLSourceCode } from "eslint-plugin-yml";
 import type { AST } from "jsonc-eslint-parser";
 
-import type { RuleContextWithSourceCode } from "../util";
+import type { RuleContextWithSourceCode } from "../util.ts";
 
 /**
  * A `SourceCode` for configs parsed by `jsonc-eslint-parser`. That package

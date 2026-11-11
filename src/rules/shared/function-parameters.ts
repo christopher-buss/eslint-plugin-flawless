@@ -1,4 +1,5 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 /** Every node kind that may carry a parameter's type annotation. */
 type AnnotatedNode = TSESTree.DestructuringPattern | TSESTree.Parameter;

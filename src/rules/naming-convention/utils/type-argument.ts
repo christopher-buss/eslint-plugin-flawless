@@ -5,8 +5,8 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type ts from "typescript";
 import { SyntaxKind } from "typescript";
 
-import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
-import type { Context, TypeArgumentReference } from "./types";
+import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol.ts";
+import type { Context, TypeArgumentReference } from "./types.ts";
 
 /**
  * `export default function withAttributes() {}` binds the export under this

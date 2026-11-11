@@ -1,22 +1,22 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { TypeEnvironment, WideningTarget } from "../shared/dictionary-types";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { TypeEnvironment, WideningTarget } from "../shared/dictionary-types.ts";
 import {
 	classifyUnsafeDictionaryValue,
 	classifyWideningTarget,
 	createTypeEnvironment,
 	isKnownEvidenceExpression,
 	unwrapAssertedExpression,
-} from "../shared/dictionary-types";
+} from "../shared/dictionary-types.ts";
 import {
 	containsUnknownType,
 	parameterAnnotation,
 	parameterBinding,
 	parameterName,
-} from "../shared/function-parameters";
+} from "../shared/function-parameters.ts";
 
 export const RULE_NAME = "no-known-value-widening";
 
@@ -477,7 +477,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	): null | WideningTarget {
 		return environment === null || annotation === null || annotation === undefined
 			? null
-			: classifyWideningTarget(annotation.typeAnnotation, environment);
+			: classifyWideningTarget(annotation.typeAnnotation);
 	}
 
 	function reportProperty(node: TSESTree.AccessorProperty | TSESTree.PropertyDefinition): void {
@@ -497,11 +497,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		reportFlow(
-			node.expression,
-			classifyWideningTarget(node.typeAnnotation, environment),
-			"assertion",
-		);
+		reportFlow(node.expression, classifyWideningTarget(node.typeAnnotation), "assertion");
 	}
 
 	return {
@@ -617,8 +613,8 @@ export const noKnownValueWidening: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Disallow syntactically established values from flowing into explicitly broad or anonymous target types that discard useful evidence",

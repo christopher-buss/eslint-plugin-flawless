@@ -1,7 +1,8 @@
-import { AST_NODE_TYPES, type JSONSchema, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "cognitive-complexity";
 
@@ -95,7 +96,7 @@ function isElseIf(node: TSESTree.IfStatement): boolean {
  * @returns `true` when code inside `child` is one level deeper than `parent`.
  */
 function isNestingEdge(parent: TSESTree.Node, child: TSESTree.Node): boolean {
-	// eslint-disable-next-line ts/switch-exhaustiveness-check -- Other nodes add no nesting
+	// oxlint-disable-next-line typescript/switch-exhaustiveness-check -- Other nodes add no nesting
 	switch (parent.type) {
 		case AST_NODE_TYPES.CatchClause:
 		case AST_NODE_TYPES.DoWhileStatement:
@@ -391,7 +392,6 @@ export const cognitiveComplexity: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{ threshold: DEFAULT_THRESHOLD }],
 	meta: {
 		defaultOptions: [{ threshold: DEFAULT_THRESHOLD }],
 		docs: {

@@ -1,13 +1,14 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSyncFn, TsRunner } from "synckit";
 
-import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { FormatRequest, FormatResponse } from "./worker";
+import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { FormatRequest, FormatResponse } from "./worker.ts";
 
 export const RULE_NAME = "arrow-return-style";
 
@@ -357,7 +358,7 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 
 		function arrowTokenOf(node: TSESTree.ArrowFunctionExpression): TSESTree.Token {
 			let token = sourceCode.getTokenBefore(node.body);
-			while (token !== null && token.value === "(") {
+			while (token?.value === "(") {
 				token = sourceCode.getTokenBefore(token);
 			}
 
@@ -829,8 +830,8 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			},
 		};
 	},
-	defaultOptions: [DEFAULTS],
 	meta: {
+		defaultOptions: [DEFAULTS],
 		docs: {
 			description: "Enforce arrow function return style based on line length",
 			requiresTypeChecking: false,

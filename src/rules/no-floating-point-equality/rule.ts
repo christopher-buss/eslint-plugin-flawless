@@ -1,9 +1,10 @@
-import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { scanAssertImports } from "../../utils/assert-imports";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { scanAssertImports } from "../../utils/assert-imports.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-floating-point-equality";
 
@@ -178,6 +179,20 @@ function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 	return [];
 }
 
+function isFractionProducingDivision(node: TSESTree.BinaryExpression): boolean {
+	const left = numericLiteralValue(node.left);
+	const right = numericLiteralValue(node.right);
+	if (left === null || right === null || right === 0) {
+		return false;
+	}
+
+	return (
+		Number.isInteger(left) &&
+		!Number.isInteger(left / right) &&
+		!isExactIntegerDivision(left, right)
+	);
+}
+
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let sourceCode: Readonly<TSESLint.SourceCode>;
 	let assertObjectVariables: ReadonlyMap<TSESLint.Scope.Variable, unknown>;
@@ -266,20 +281,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			!isExactlyRepresentableDecimal(raw);
 		literalSensitivity.set(raw, sensitive);
 		return sensitive;
-	}
-
-	function isFractionProducingDivision(node: TSESTree.BinaryExpression): boolean {
-		const left = numericLiteralValue(node.left);
-		const right = numericLiteralValue(node.right);
-		if (left === null || right === null || right === 0) {
-			return false;
-		}
-
-		return (
-			Number.isInteger(left) &&
-			!Number.isInteger(left / right) &&
-			!isExactIntegerDivision(left, right)
-		);
 	}
 
 	function isFloatingPointConst(identifier: TSESTree.Identifier): boolean {
@@ -571,8 +572,8 @@ export const noFloatingPointEquality: FlawlessRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow exact equality checks involving floating-point-sensitive values",
 			recommended: false,

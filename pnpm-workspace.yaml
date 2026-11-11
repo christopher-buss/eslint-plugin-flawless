@@ -34,8 +34,9 @@ catalogs:
     eslint-plugin-pnpm: 1.6.1
     jiti: 2.7.0
     lint-staged: 17.0.8
-    oxc-parser: 0.142.0
-    oxfmt: 0.61.0
+    oxc-parser: 0.158.0
+    oxfmt: 0.78.0
+    oxlint-tsgolint: 7.0.2006
     simple-git-hooks: 2.13.1
     ts-api-utils: 2.5.0
     tsdown: 0.22.9
@@ -58,7 +59,7 @@ catalogs:
     eslint-plugin-toml: 1.4.0
     eslint-plugin-yml: 3.5.0
     eslint-vitest-rule-tester: 3.1.0
-    oxlint: 1.78.0
+    oxlint: 1.93.0
     publint: 0.3.21
     unplugin-unused: 0.5.7
     vitest: 4.1.9

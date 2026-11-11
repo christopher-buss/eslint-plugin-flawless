@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run, runMarkdown } from "../test";
-import { noEmDash, RULE_NAME } from "./rule";
+import { run, runMarkdown } from "../test.ts";
+import { noEmDash, RULE_NAME } from "./rule.ts";
 
 const messageId = "emDash";
 
@@ -40,14 +41,14 @@ const invalid: Array<InvalidTestCase> = [
 		errors: [{ column: 19, endColumn: 31, endLine: 1, line: 1, messageId }],
 	},
 	{
-		// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
+		// oxlint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
 		code: "export const t = `a \u2014 ${b}`;",
 		output: null,
 		errors: [{ column: 19, endColumn: 22, endLine: 1, line: 1, messageId }],
 	},
 	// The sentence stops at the `${` and `}` around an expression.
 	{
-		// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
+		// oxlint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
 		code: "export const t = `${a} x \u2014 y ${b} z`;",
 		output: null,
 		errors: [{ column: 24, endColumn: 29, endLine: 1, line: 1, messageId }],

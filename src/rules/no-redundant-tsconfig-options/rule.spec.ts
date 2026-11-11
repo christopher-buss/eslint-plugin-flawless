@@ -1,8 +1,9 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 
-import { runJsonc } from "../test";
-import { noRedundantTsconfigOptions, RULE_NAME } from "./rule";
+import { runJsonc } from "../test.ts";
+import { noRedundantTsconfigOptions, RULE_NAME } from "./rule.ts";
 
 const messageId = "redundant";
 

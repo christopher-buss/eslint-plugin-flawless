@@ -1,11 +1,13 @@
-import { Linter } from "eslint";
+import { TSESLint } from "@typescript-eslint/utils";
+
 import yml from "eslint-plugin-yml";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { describe, expect, it } from "vitest";
 
-import plugin from "../../index";
-import { runYaml } from "../test";
-import { RULE_NAME, yamlBlockKeyBlankLines } from "./rule";
+import plugin from "../../index.ts";
+import { runYaml } from "../test.ts";
+import { RULE_NAME, yamlBlockKeyBlankLines } from "./rule.ts";
 
 const messageId = "blankLine";
 
@@ -131,17 +133,14 @@ runYaml({
 });
 
 describe("yaml language mode (Languages API)", () => {
-	// The plugin objects mix `@eslint/core` type versions (TSESLint vs
-	// eslint-plugin-yml), so the flat-config `plugins` map is cast to bridge
-	// them.
-	const config: Linter.Config = {
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.yaml"],
 		language: "yaml/yaml",
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges mismatched `@eslint/core` plugin types; see above.
+
 		plugins: {
 			flawless: plugin,
 			yaml: yml,
-		} as unknown as NonNullable<Linter.Config["plugins"]>,
+		},
 		rules: {
 			"flawless/yaml-block-key-blank-lines": "error",
 		},
@@ -154,14 +153,14 @@ describe("yaml language mode (Languages API)", () => {
 	`;
 
 	it("reports under the language provider", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const messages = linter.verify(code, config, { filename: "file.yaml" });
 		expect(messages).toHaveLength(1);
 		expect(messages[0]?.messageId).toBe(messageId);
 	});
 
 	it("fixes identically to parser mode", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const { output } = linter.verifyAndFix(code, config, { filename: "file.yaml" });
 		expect(output).toBe(
 			unindent`

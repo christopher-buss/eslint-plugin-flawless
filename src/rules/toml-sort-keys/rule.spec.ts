@@ -1,11 +1,13 @@
-import { Linter } from "eslint";
+import { TSESLint } from "@typescript-eslint/utils";
+
 import toml from "eslint-plugin-toml";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { describe, expect, it } from "vitest";
 
-import plugin from "../../index";
-import { runToml } from "../test";
-import { RULE_NAME, tomlSortKeys } from "./rule";
+import plugin from "../../index.ts";
+import { runToml } from "../test.ts";
+import { RULE_NAME, tomlSortKeys } from "./rule.ts";
 
 const messageId = "unsorted";
 
@@ -214,17 +216,14 @@ runToml({
 });
 
 describe("toml language mode (Languages API)", () => {
-	// The plugin objects mix `@eslint/core` type versions (TSESLint vs
-	// eslint-plugin-toml), so the flat-config `plugins` map is cast to bridge
-	// them.
-	const config: Linter.Config = {
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.toml"],
 		language: "toml/toml",
-		// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges mismatched `@eslint/core` plugin types; see above.
+
 		plugins: {
 			flawless: plugin,
 			toml,
-		} as unknown as NonNullable<Linter.Config["plugins"]>,
+		},
 		rules: {
 			"flawless/toml-sort-keys": ["error", ...options],
 		},
@@ -237,14 +236,14 @@ describe("toml language mode (Languages API)", () => {
 	`;
 
 	it("reports under the language provider", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const messages = linter.verify(code, config, { filename: "file.toml" });
 		expect(messages).toHaveLength(1);
 		expect(messages[0]?.messageId).toBe(messageId);
 	});
 
 	it("fixes identically to parser mode", () => {
-		const linter = new Linter();
+		const linter = new TSESLint.Linter();
 		const { output } = linter.verifyAndFix(code, config, { filename: "file.toml" });
 		expect(output).toBe(
 			unindent`

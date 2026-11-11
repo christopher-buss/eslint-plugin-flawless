@@ -1,7 +1,7 @@
 import type { TSESLint } from "@typescript-eslint/utils";
 
-import type { FlawlessPlugin } from "../plugin";
-import { plugin, PLUGIN_NAME } from "../plugin";
+import type { FlawlessPlugin } from "../plugin.ts";
+import { plugin, PLUGIN_NAME } from "../plugin.ts";
 
 /** The shareable configs the plugin exposes. */
 export interface FlawlessConfigs {

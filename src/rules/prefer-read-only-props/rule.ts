@@ -5,10 +5,10 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type { Declaration, Type } from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { MutableMembers } from "./readonly-type";
-import { collectMutableProperties, isTypeFullyReadonly } from "./readonly-type";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { MutableMembers } from "./readonly-type.ts";
+import { collectMutableProperties, isTypeFullyReadonly } from "./readonly-type.ts";
 
 export const RULE_NAME = "prefer-read-only-props";
 
@@ -307,8 +307,12 @@ function create(
 			return undefined;
 		}
 
-		const node = services.tsNodeToESTreeNodeMap.get(declaration) as TSESTree.Node | undefined;
-		if (node?.type !== expected) {
+		if (!services.tsNodeToESTreeNodeMap.has(declaration)) {
+			return undefined;
+		}
+
+		const node = services.tsNodeToESTreeNodeMap.get(declaration);
+		if (node.type !== expected) {
 			return undefined;
 		}
 
@@ -439,7 +443,6 @@ export const preferReadOnlyProps: EslintRuleModule<Options, MessageIds> = create
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

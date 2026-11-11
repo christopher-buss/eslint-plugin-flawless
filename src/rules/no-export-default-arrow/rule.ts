@@ -1,10 +1,11 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 import path from "node:path";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { unwrapAssertedExpression } from "../shared/dictionary-types";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { unwrapAssertedExpression } from "../shared/dictionary-types.ts";
 
 export const RULE_NAME = "no-export-default-arrow";
 
@@ -214,8 +215,8 @@ export const noExportDefaultArrow: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow anonymous arrow functions as export default declarations",
 			recommended: false,

@@ -1,18 +1,13 @@
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getNodeName,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "prefer-ending-with-an-expect";
 
@@ -234,7 +229,6 @@ export const preferEndingWithAnExpect: FlawlessRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

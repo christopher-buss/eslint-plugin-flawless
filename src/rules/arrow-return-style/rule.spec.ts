@@ -1,11 +1,13 @@
 import tsParser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import { describe, expect, it } from "vitest";
 
-import { run } from "../test";
-import { arrowReturnStyle, type Options, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { arrowReturnStyle, RULE_NAME } from "./rule.ts";
+import type { Options } from "./rule.ts";
 
 // TDD target for the port of `arrow-return-style` from
 // eslint-plugin-arrow-return-style-x. Decided semantics (differences from the
@@ -1048,7 +1050,7 @@ interface OxfmtModule {
 	) => Promise<{ code: string; errors: Array<unknown> }>;
 }
 
-function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
+function toFlatConfig(options: Options[0] | undefined): Array<TSESLint.FlatConfig.Config> {
 	return [
 		{
 			files: ["**/*.tsx"],
@@ -1061,10 +1063,9 @@ function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
 				},
 			},
 			plugins: {
-				// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges TSESLint rule types to the ESLint `Linter.Config` plugin type.
 				flawless: {
 					rules: { [RULE_NAME]: arrowReturnStyle },
-				} as unknown as NonNullable<Linter.Config["plugins"]>[string],
+				},
 			},
 			rules: {
 				[`flawless/${RULE_NAME}`]: options === undefined ? "error" : ["error", options],
@@ -1074,7 +1075,7 @@ function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
 }
 
 describe(`${RULE_NAME} fixpoint`, () => {
-	const linter = new Linter();
+	const linter = new TSESLint.Linter();
 
 	const cases = invalid.filter(
 		(

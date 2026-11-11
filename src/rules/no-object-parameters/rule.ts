@@ -1,9 +1,10 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { parameterAnnotation, parameterName } from "../shared/function-parameters";
-import { lookupAlias } from "../shared/type-bindings";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { parameterAnnotation, parameterName } from "../shared/function-parameters.ts";
+import { lookupAlias } from "../shared/type-bindings.ts";
 
 export const RULE_NAME = "no-object-parameters";
 
@@ -144,6 +145,7 @@ function openObjectType(
 		}
 
 		const nextVisited = new Set(currentVisited);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
 		nextVisited.add(alias);
 		current = alias.typeAnnotation;
 		currentVisited = nextVisited;
@@ -195,8 +197,8 @@ export const noObjectParameters: FlawlessRuleModule<Options, MessageIds> = creat
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow function parameters that accept any object shape",
 			recommended: false,

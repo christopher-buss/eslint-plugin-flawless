@@ -28,9 +28,9 @@ import {
 	TypeFlags,
 } from "typescript";
 
-import { resolveReactPackage } from "../../../utils/react-package";
-import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
-import type { Context } from "./types";
+import { resolveReactPackage } from "../../../utils/react-package.ts";
+import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol.ts";
+import type { Context } from "./types.ts";
 
 /**
  * Packages whose declarations count as React. Component types, component base

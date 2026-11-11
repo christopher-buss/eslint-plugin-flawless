@@ -1,7 +1,7 @@
 import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { reactNamespace, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { reactNamespace, RULE_NAME } from "./rule.ts";
 
 const runtimeNamespace = "runtimeNamespace";
 const typeNamedImport = "typeNamedImport";

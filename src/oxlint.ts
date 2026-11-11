@@ -1,7 +1,7 @@
 import type { Plugin, Rule } from "@oxlint/plugins";
 import { definePlugin } from "@oxlint/plugins";
 
-import { plugin, PLUGIN_NAME } from "./plugin";
+import { plugin, PLUGIN_NAME } from "./plugin.ts";
 
 function isDualRuntimeRule(rule: object): rule is Rule {
 	return "createOnce" in rule;

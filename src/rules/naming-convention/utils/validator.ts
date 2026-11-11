@@ -5,15 +5,15 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type ts from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { MessageIds } from "../rule";
-import { isComponentPropertyMember } from "./component-property";
+import type { MessageIds } from "../rule.ts";
+import { isComponentPropertyMember } from "./component-property.ts";
 import type {
 	ModifierType,
 	PredefinedFormatType,
 	SelectorString,
 	SelectorType,
 	TypeModifierType,
-} from "./enums";
+} from "./enums.ts";
 import {
 	MetaSelector,
 	Modifier,
@@ -21,12 +21,16 @@ import {
 	Selector,
 	TypeModifier,
 	UnderscoreOption,
-} from "./enums";
-import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format";
-import { isMetaSelector, isMethodOrPropertySelector, selectorTypeToMessageString } from "./shared";
-import { symbolDeclaredIn } from "./symbol";
-import { isInMatchingTypeArgument } from "./type-argument";
-import type { Context, NormalizedSelector, TypeReference } from "./types";
+} from "./enums.ts";
+import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format.ts";
+import {
+	isMetaSelector,
+	isMethodOrPropertySelector,
+	selectorTypeToMessageString,
+} from "./shared.ts";
+import { symbolDeclaredIn } from "./symbol.ts";
+import { isInMatchingTypeArgument } from "./type-argument.ts";
+import type { Context, NormalizedSelector, TypeReference } from "./types.ts";
 
 // Flag tests avoid `checker.typeToString`, which prints the full structure of
 // object types only to compare the text against a primitive name.
@@ -51,6 +55,7 @@ export function createValidator(
 	// `objectStyleEnumMember` config carries the higher selector value and so
 	// sorts ahead of the `enumMember` fallback below.
 	const matchedSelectors =
+		// oxlint-disable-next-line oxc/bad-bitwise-operator -- selectors are bit flags; this matches either one
 		type === "objectStyleEnumMember" ? selectorType | Selector.enumMember : selectorType;
 	const configs = allConfigs
 		// gather all of the applicable selectors

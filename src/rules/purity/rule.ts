@@ -1,14 +1,9 @@
 import * as core from "@eslint-react/core";
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "purity";
 
@@ -227,8 +222,7 @@ function isRenderContext(reactContext: ReactContext, func: FunctionNode): boolea
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
-	// eslint-disable-next-line ts/no-unsafe-type-assertion -- `@eslint-react/core` types its context separately; the runtime object is the same.
-	const reactContext = context as unknown as ReactContext;
+	const reactContext: ReactContext = context;
 
 	// Built per file in `before`, since it depends on `context.options` which
 	// must not be read in the `createOnce` body.
@@ -297,7 +291,6 @@ export const purity: FlawlessRuleModule<Options, MessageIds> = createFlawlessRul
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

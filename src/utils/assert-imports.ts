@@ -1,4 +1,5 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 /** The Node `assert` modules, mapped to whether each is a `strict` variant. */
 const ASSERT_SOURCES: ReadonlyMap<string, boolean> = new Map([

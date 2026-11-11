@@ -1,10 +1,11 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { run } from "../test";
-import { noMaterializedFilterMap, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noMaterializedFilterMap, RULE_NAME } from "./rule.ts";
 
 const messageId = "materialized";
 const noHelpersMessageId = "materializedNoHelpers";
