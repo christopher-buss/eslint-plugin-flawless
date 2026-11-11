@@ -310,6 +310,14 @@ export const corpus: ReadonlyArray<CorpusCase> = [
 		`,
 	},
 	{
+		name: "generic argument of a non-generic call",
+		code: unindent`
+			interface Removal { name: string }
+			declare function createRemoval(name: string, names: Set<string>): Removal;
+			const removal: Removal = createRemoval("a", new Set(["b"]));
+		`,
+	},
+	{
 		name: "non-generic inner call in generic cb",
 		code: unindent`
 			declare function map<T, R>(items: T[], fn: (item: T) => R): R[];

@@ -827,6 +827,17 @@ const valid: Array<ValidTestCase> = [
 			read(n: number): void {}
 		};
 	`,
+	// A generic callee, or an overload set with a generic member, can give a
+	// generic argument its context from the annotation.
+	unindent`
+		declare function size<T>(items: Set<T>): number;
+		const count: number = size(new Set());
+	`,
+	unindent`
+		declare function pick(items: Set<string>): string;
+		declare function pick<T>(items: Set<T>, fallback: T): T;
+		const picked: string = pick(new Set());
+	`,
 	// The annotation gives a callback argument its context, so the verifier
 	// keeps it.
 	unindent`
@@ -1226,6 +1237,33 @@ const invalid: Array<InvalidTestCase> = [
 			const value = tag\`\`;
 		`,
 	},
+	// A callee that is not generic gives a generic argument its context from
+	// the parameter type, not from the annotation.
+	{
+		code: unindent`
+			interface Removal { name: string }
+			declare function createRemoval(name: string, names: Set<string>): Removal;
+			const removal: Removal = createRemoval("a", new Set(["b"]));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			interface Removal { name: string }
+			declare function createRemoval(name: string, names: Set<string>): Removal;
+			const removal = createRemoval("a", new Set(["b"]));
+		`,
+	},
+	// Written type arguments stop inference, also under a generic callee.
+	{
+		code: unindent`
+			declare function size<T>(items: Set<T>): number;
+			const count: number = size(new Set<string>());
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function size<T>(items: Set<T>): number;
+			const count = size(new Set<string>());
+		`,
+	},
 	// Both annotations go: the parameter's context comes from `wrap`, not from
 	// the variable, so neither removal depends on the other.
 	{
@@ -1516,6 +1554,27 @@ const invalid: Array<InvalidTestCase> = [
 			"declare const items: Array<Item>;",
 			...Array.from({ length: 11 }, (_, index) => {
 				return `const kept${index} = items.filter((item) => item.ok);`;
+			}),
+		].join("\n"),
+	},
+	// A callback inside a generic argument of a callee that is not generic
+	// still needs proof.
+	{
+		code: [
+			"interface Removal { name: string }",
+			"declare function createRemoval(name: string, names: Set<string>): Removal;",
+			"declare function collect<T>(fill: (add: (item: T) => void) => void): Set<T>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const removal${index}: Removal = createRemoval("a", collect((add) => add("b")));`;
+			}),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
+		output: [
+			"interface Removal { name: string }",
+			"declare function createRemoval(name: string, names: Set<string>): Removal;",
+			"declare function collect<T>(fill: (add: (item: T) => void) => void): Set<T>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const removal${index} = createRemoval("a", collect((add) => add("b")));`;
 			}),
 		].join("\n"),
 	},

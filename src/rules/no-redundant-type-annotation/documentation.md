@@ -145,6 +145,21 @@ parameter, as `Array.from({ length })` does. The arguments then infer the type
 parameters before the context is consulted, so
 `const value: string = first(items)` is checked. A mention behind an alias, a
 mapped type, or a conditional type is not seen, so such a call is still skipped.
+
+Such a call as an argument is checked when the outer callee has no generic
+signature, or the outer call writes its type arguments out. The parameter type
+then gives the argument its context, and the annotation cannot reach it:
+
+```ts
+interface Removal {
+	readonly name: string;
+}
+
+declare function createRemoval(name: string, names: Set<string>): Removal;
+
+const removal: Removal = createRemoval("a", new Set(["b"])); // reported
+```
+
 These are filters that save work; the verifier described below decides every
 removal.
 
