@@ -13,11 +13,23 @@ export interface Candidate {
 		| ts.ParameterDeclaration
 		| ts.VariableDeclaration;
 	readonly range: readonly [number, number];
+	/**
+	 * The removal is reported only when it is proven safe alone. It is
+	 * selected first. A coupled one is checked alone before the combined
+	 * check, and an uncoupled one when a combined check finds a problem with
+	 * it. These checks are apart from the work limit of the other checks.
+	 */
+	readonly requiresProof?: boolean;
 }
 
 export interface Verification<C extends Candidate> {
 	/** Removals proven safe; these may be autofixed. */
 	readonly accepted: ReadonlyArray<C>;
+	/**
+	 * Removals that require proof, proven safe alone but not in the combined
+	 * fix. These may be reported, but never autofixed.
+	 */
+	readonly acceptedAlone: ReadonlyArray<C>;
 	/** Removals that change a type or need their annotation; not reported. */
 	readonly rejected: ReadonlyArray<{ readonly candidate: C; readonly reason: string }>;
 	/**
@@ -52,6 +64,10 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
+// The check alone of a removal that requires proof is not in this budget.
+// Each selected removal gets at most one check alone, and each combined check
+// restores at least one removal, so one lint creates at most
+// 2 * (MAX_PROGRAMS - 2) programs.
 const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
@@ -87,7 +103,7 @@ export function verifyAnnotations<C extends Candidate>(
 	}
 
 	if (candidates.length === 0) {
-		return { accepted: [], rejected, unverified };
+		return { accepted: [], acceptedAlone: [], rejected, unverified };
 	}
 
 	// TypeScript numbers nodes and symbols from module-level counters. A
@@ -96,6 +112,7 @@ export function verifyAnnotations<C extends Candidate>(
 	if (!sharesCompiler(source)) {
 		return {
 			accepted: [],
+			acceptedAlone: [],
 			rejected,
 			unverified: candidates.map((candidate) => ({ candidate, reason: FOREIGN_COMPILER })),
 		};
@@ -108,7 +125,12 @@ export function verifyAnnotations<C extends Candidate>(
 		const speculate = speculativeProgramFactory(program, source);
 		const print = createTypePrinter();
 		const assertionTargets = requiredAssertionTargets(checker, source, candidates);
-		const eligible = candidates.filter((candidate) => {
+		// A removal that requires proof goes first, so other removals cannot
+		// push it past the work limit.
+		const eligible = [
+			...candidates.filter(({ requiresProof }) => requiresProof === true),
+			...candidates.filter(({ requiresProof }) => requiresProof !== true),
+		].filter((candidate) => {
 			if (assertionTargets.has(candidate.owner)) {
 				recordRejection(candidate, "Assertion call targets require an explicit annotation");
 				return false;
@@ -157,9 +179,7 @@ export function verifyAnnotations<C extends Candidate>(
 				];
 			}),
 		);
-		let programs = 0;
 		function check(group: ReadonlyArray<C>): Map<C, string> {
-			programs += 1;
 			const ranges = group.map(({ range }) => range).sort((a, b) => a[0] - b[0]);
 			const modified = speculate(removeRanges(source.text, ranges));
 			const after = modified.getSourceFile(source.fileName);
@@ -247,41 +267,101 @@ export function verifyAnnotations<C extends Candidate>(
 		// Bound speculative work independently of the number of annotations in
 		// the file. Additional candidates are reported without a fix; a later
 		// fix pass verifies them once earlier fixes are applied.
-		let accepted = selected;
 		for (const candidate of eligible.slice(MAX_PROGRAMS - 2)) {
 			unverified.push({ candidate, reason: "The verification work limit was reached" });
 		}
 
 		// An editor applies one fix at a time. Removals that cannot influence
 		// one another are safe alone when they are safe together, so only
-		// coupled removals need a program of their own.
+		// coupled removals need a program of their own. A removal that
+		// requires proof is reported only when it is safe alone. Its program
+		// is not in the budget, so other removals cannot use up its check.
+		let programs = 0;
+		const safeAlone = new Set<C>();
 		const coupled = coupledCandidates(selected, references, narrowed);
-		if (coupled.size > 0) {
-			accepted = accepted.filter((candidate) => {
-				if (!coupled.has(candidate)) {
-					return true;
-				}
-
-				const reason = check([candidate]).get(candidate);
-				if (reason !== undefined) {
-					recordRejection(candidate, reason);
-					return false;
-				}
-
+		let accepted = selected.filter((candidate) => {
+			if (!coupled.has(candidate)) {
 				return true;
-			});
+			}
+
+			const requiresProof = candidate.requiresProof === true;
+			if (!requiresProof) {
+				programs += 1;
+			}
+
+			const reason = check([candidate]).get(candidate);
+			if (reason !== undefined) {
+				recordRejection(candidate, reason);
+				return false;
+			}
+
+			if (requiresProof) {
+				safeAlone.add(candidate);
+			}
+
+			return true;
+		});
+		// A removal that requires proof and is safe alone, but not verified
+		// in the combined fix, is reported without a fix.
+		const acceptedAlone: Array<C> = [];
+		function leaveUnfixed(candidate: C, reason: string): void {
+			if (safeAlone.has(candidate)) {
+				acceptedAlone.push(candidate);
+			} else {
+				unverified.push({ candidate, reason });
+			}
 		}
 
 		while (accepted.length > 0 && programs < MAX_PROGRAMS) {
+			programs += 1;
 			const problems = check(accepted);
 			if (problems.size === 0) {
-				return { accepted, rejected, unverified };
+				return { accepted, acceptedAlone, rejected, unverified };
 			}
 
-			// No other removal can cause an uncoupled candidate's problem, so
-			// restore all of those at once. Among coupled candidates, restore
-			// one annotation first: restoring a context provider can make the
-			// other removals safe.
+			// The coupled removals use at most ten programs above, so this
+			// check runs at least once. An uncoupled removal without a problem
+			// here is safe alone.
+			for (const candidate of accepted) {
+				if (
+					candidate.requiresProof === true &&
+					!coupled.has(candidate) &&
+					!problems.has(candidate)
+				) {
+					safeAlone.add(candidate);
+				}
+			}
+
+			// The coupling analysis does not follow all data flow, so another
+			// removal can cause the problem of an uncoupled removal that
+			// requires proof. Check such a removal alone before it is
+			// rejected. A removal that requires proof thus gets at most one
+			// check alone: here, or above when it is coupled.
+			const unchecked = accepted.filter((candidate) => {
+				return (
+					problems.has(candidate) &&
+					candidate.requiresProof === true &&
+					!safeAlone.has(candidate)
+				);
+			});
+			for (const candidate of unchecked) {
+				const reason = check([candidate]).get(candidate);
+				if (reason === undefined) {
+					safeAlone.add(candidate);
+					acceptedAlone.push(candidate);
+				} else {
+					recordRejection(candidate, reason);
+				}
+
+				problems.delete(candidate);
+			}
+
+			accepted = accepted.filter((candidate) => !unchecked.includes(candidate));
+
+			// Other removals cannot cause the problem of an uncoupled
+			// candidate, so restore all of those at once. Among coupled
+			// candidates, restore one annotation first: restoring a context
+			// provider can make the other removals safe.
 			const independent = accepted.filter((candidate) => {
 				return problems.has(candidate) && !coupled.has(candidate);
 			});
@@ -296,18 +376,22 @@ export function verifyAnnotations<C extends Candidate>(
 			}
 
 			for (const candidate of restoring) {
-				recordRejection(
-					candidate,
-					problems.get(candidate) ?? "The combined removal changes a type",
-				);
+				const reason = problems.get(candidate) ?? "The combined removal changes a type";
+				if (safeAlone.has(candidate)) {
+					leaveUnfixed(candidate, reason);
+				} else {
+					recordRejection(candidate, reason);
+				}
 			}
 
 			accepted = accepted.filter((candidate) => !restoring.includes(candidate));
 		}
 
 		for (const candidate of accepted) {
-			unverified.push({ candidate, reason: "The verification work limit was reached" });
+			leaveUnfixed(candidate, "The verification work limit was reached");
 		}
+
+		return { accepted: [], acceptedAlone, rejected, unverified };
 	} catch (err) {
 		// A host/API mismatch or an unsupported compiler must never turn an
 		// unverified removal into an autofix or into a report the user cannot
@@ -321,7 +405,7 @@ export function verifyAnnotations<C extends Candidate>(
 		}
 	}
 
-	return { accepted: [], rejected, unverified };
+	return { accepted: [], acceptedAlone: [], rejected, unverified };
 }
 
 /**

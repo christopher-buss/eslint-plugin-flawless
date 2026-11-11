@@ -92,6 +92,8 @@ interface Removal {
 	readonly annotation: TSESTree.TSTypeAnnotation;
 	/** The report's message identifier. */
 	readonly messageId: MessageIds;
+	/** Report only when the verifier accepts the removal. */
+	readonly requiresProof?: boolean;
 	/** The annotated type to show in the report. */
 	readonly type: Type;
 }
@@ -115,6 +117,12 @@ const messages = {
 	[RETURN_MESSAGE_ID]:
 		"The `{{typeName}}` return type restates the type the function already returns. Remove it and let inference carry the type.",
 };
+
+/**
+ * How an expression depends on the annotation's context: not at all, surely,
+ * or through an untyped callback argument that only the verifier can clear.
+ */
+type ContextDependence = "dependent" | "independent" | "unproven";
 
 /**
  * Reports whether a parameter carries no type annotation of its own.
@@ -736,6 +744,74 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
 }
 
 /**
+ * Finds the operands that an expression hands its own contextual type to.
+ *
+ * These are both branches of a conditional, both operands of a logical
+ * expression, the last expression of a sequence, and the operand of `await`,
+ * `!`, `as const`, and an optional chain.
+ *
+ * @param node - The expression to inspect.
+ * @returns The operands, or undefined when the expression forwards no
+ *   context.
+ */
+function contextForwardedOperands(node: TSESTree.Node): ReadonlyArray<TSESTree.Node> | undefined {
+	if (node.type === AST_NODE_TYPES.ConditionalExpression) {
+		return [node.consequent, node.alternate];
+	}
+
+	if (node.type === AST_NODE_TYPES.LogicalExpression) {
+		return [node.left, node.right];
+	}
+
+	if (node.type === AST_NODE_TYPES.SequenceExpression) {
+		return node.expressions.slice(-1);
+	}
+
+	if (node.type === AST_NODE_TYPES.AwaitExpression) {
+		return [node.argument];
+	}
+
+	// An optional chain wraps the call it makes.
+	if (
+		node.type === AST_NODE_TYPES.ChainExpression ||
+		node.type === AST_NODE_TYPES.TSNonNullExpression ||
+		isConstAssertion(node)
+	) {
+		return [node.expression];
+	}
+
+	return undefined;
+}
+
+/**
+ * Combines the dependence of several expressions. A sure dependence wins and
+ * stops the walk, then an unproven one.
+ *
+ * @template T - The type of the expressions.
+ * @param items - The expressions to inspect.
+ * @param dependence - Finds the dependence of one expression.
+ * @returns The strongest dependence of the expressions.
+ */
+function strongestDependence<T>(
+	items: ReadonlyArray<T>,
+	dependence: (item: T, index: number) => ContextDependence,
+): ContextDependence {
+	let result: ContextDependence = "independent";
+	for (const [index, item] of items.entries()) {
+		const next = dependence(item, index);
+		if (next === "dependent") {
+			return next;
+		}
+
+		if (next === "unproven") {
+			result = next;
+		}
+	}
+
+	return result;
+}
+
+/**
  * Reports whether a function declares a `this` parameter.
  *
  * @param node - The function to inspect.
@@ -819,7 +895,7 @@ function create(
 	 * @param removal - The removal to verify.
 	 */
 	function collect(removal: Removal): void {
-		const { annotation } = removal;
+		const { annotation, requiresProof } = removal;
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (
 			isVariableDeclaration(owner) ||
@@ -834,8 +910,10 @@ function create(
 		}
 
 		// The verifier cannot model this owner. Report without a fix rather
-		// than dropping the report.
-		report(removal, false);
+		// than dropping the report, unless only a proof can justify it.
+		if (requiresProof !== true) {
+			report(removal, false);
+		}
 	}
 
 	/**
@@ -1484,59 +1562,154 @@ function create(
 	 * annotation, which governs excess property checking and literal widening:
 	 * `no-known-value-widening`'s subject, not a restatement. A function there
 	 * takes its `this` and return values from the annotation too. This is kept
-	 * apart from `isContextDependent` because that also runs on call arguments,
+	 * apart from `contextDependence` because that also runs on call arguments,
 	 * where a literal or a callback takes its context from the callee instead.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns True when the annotation shapes the expression's type.
+	 * @returns `"unproven"` when only the verifier can tell whether it does.
 	 */
-	function receivesAnnotationContext(node: TSESTree.Node): boolean {
+	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return (
-				node.params.some(isUntypedParameter) ||
+			return node.params.some(isUntypedParameter) ||
 				usesContextualThis(node) ||
 				returnsContextTypedValue(node)
-			);
+				? "dependent"
+				: "independent";
 		}
 
 		// A template expression is a template type only because the context
 		// asks for one.
 		if (node.type === AST_NODE_TYPES.TemplateLiteral) {
-			return hasTemplateType(services.getTypeAtLocation(node));
+			return hasTemplateType(services.getTypeAtLocation(node)) ? "dependent" : "independent";
 		}
 
 		if (
 			node.type === AST_NODE_TYPES.ObjectExpression ||
 			node.type === AST_NODE_TYPES.ArrayExpression
 		) {
+			return "dependent";
+		}
+
+		const operands = contextForwardedOperands(node);
+		if (operands !== undefined) {
+			return strongestDependence(operands, annotationContextDependence);
+		}
+
+		return contextDependence(node);
+	}
+
+	/**
+	 * Reports whether the annotation's contextual type may reach an expression
+	 * and shape its type. A dependence that only the verifier can rule out
+	 * counts.
+	 *
+	 * @param node - The expression to inspect.
+	 * @returns True unless the expression is independent of the annotation.
+	 */
+	function receivesAnnotationContext(node: TSESTree.Node): boolean {
+		return annotationContextDependence(node) !== "independent";
+	}
+
+	/**
+	 * Reports whether a callback argument gets the same context from its call
+	 * with or without the variable's annotation.
+	 *
+	 * The context is fixed when the call has explicit type arguments, or no
+	 * callee signature is generic: then overload choice and the callback's
+	 * parameter type do not use the contextual type. With one generic
+	 * signature, the context is fixed when each type the callback takes from
+	 * it is the same type object before and after inference. Instantiation
+	 * gives back the same object for a type that names no inferred type
+	 * parameter, so a false answer only means "not proven".
+	 *
+	 * @param call - The call that receives the callback.
+	 * @param index - The callback's argument position.
+	 * @param callback - The function passed at that position.
+	 * @returns True when the annotation cannot change the callback's context.
+	 */
+	function isCallbackContextFixed(
+		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		index: number,
+		callback: ContextualFunction,
+	): boolean {
+		if (call.typeArguments !== undefined) {
 			return true;
 		}
 
-		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
+		const signatures = getCalleeSignatures(call);
+		if (!signatures.some(isGeneric)) {
+			return true;
+		}
+
+		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
+		const spread = call.arguments
+			.slice(0, index + 1)
+			.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement);
+		if (
+			declared === undefined ||
+			spread ||
+			index >= declared.parameters.length ||
+			isRestParameter(declared, index)
+		) {
+			return false;
+		}
+
+		const location = services.esTreeNodeToTSNodeMap.get(call);
+		const resolved = checker.getResolvedSignature(location);
+		const parameter = declared.parameters[index];
+		const target = resolved?.parameters[index];
+		if (parameter === undefined || target === undefined) {
+			return false;
+		}
+
+		const parameterType = checker.getNonNullableType(
+			checker.getTypeOfSymbolAtLocation(parameter, location),
+		);
+		const targetType = checker.getNonNullableType(
+			checker.getTypeOfSymbolAtLocation(target, location),
+		);
+		if (parameterType === targetType) {
+			return true;
+		}
+
+		const before = getCallbackSignature(parameter);
+		const after = getCallbackSignature(target);
+		if (before === undefined || after === undefined) {
+			return false;
+		}
+
+		const parameters = getPositionalParameters(callback);
+		// A rest parameter is last, and it types every position from its own.
+		const last = before.parameters.length - 1;
+		const restStart = isRestParameter(before, last) ? last : Number.POSITIVE_INFINITY;
+		const parametersFixed = parameters.every((node, position) => {
+			if (!isUntypedParameter(node)) {
+				return true;
+			}
+
+			if (node.type === AST_NODE_TYPES.RestElement || position >= restStart) {
+				return false;
+			}
+
+			const from = before.parameters[position];
+			const to = after.parameters[position];
+			if (from === undefined || to === undefined) {
+				return from === to;
+			}
+
 			return (
-				receivesAnnotationContext(node.consequent) ||
-				receivesAnnotationContext(node.alternate)
+				checker.getTypeOfSymbolAtLocation(from, location) ===
+				checker.getTypeOfSymbolAtLocation(to, location)
 			);
-		}
+		});
 
-		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return receivesAnnotationContext(node.left) || receivesAnnotationContext(node.right);
-		}
-
-		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return receivesAnnotationContext(node.argument);
-		}
-
-		if (node.type === AST_NODE_TYPES.TSNonNullExpression || isConstAssertion(node)) {
-			return receivesAnnotationContext(node.expression);
-		}
-
-		if (node.type === AST_NODE_TYPES.SequenceExpression) {
-			const last = node.expressions.at(-1);
-			return last !== undefined && receivesAnnotationContext(last);
-		}
-
-		return isContextDependent(node);
+		return (
+			parametersFixed &&
+			(!usesContextualThis(callback) || hasSameThisType(before, after)) &&
+			(!returnsContextTypedValue(callback) ||
+				checker.getReturnTypeOfSignature(before) ===
+					checker.getReturnTypeOfSignature(after))
+		);
 	}
 
 	/**
@@ -1545,52 +1718,48 @@ function create(
 	 * itself.
 	 *
 	 * The walk follows only the positions the annotation's contextual type
-	 * actually reaches: the initializer, both branches of a conditional or
-	 * logical expression, through `await`, `!`, `as const`, and an optional
-	 * chain, and into call arguments.
+	 * actually reaches: the initializer, the operands that
+	 * `contextForwardedOperands` finds, and call arguments.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns True when the expression depends on its context.
+	 * @returns `"unproven"` when only an untyped callback argument, whose
+	 *   context the call may take from the annotation, makes the expression
+	 *   depend on its context.
 	 */
-	function isContextDependent(node: TSESTree.Node): boolean {
+	function contextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter);
+			return node.params.some(isUntypedParameter) ? "dependent" : "independent";
 		}
 
 		if (
 			node.type === AST_NODE_TYPES.CallExpression ||
 			node.type === AST_NODE_TYPES.NewExpression
 		) {
-			return isInferenceSensitiveCall(node) || node.arguments.some(isContextDependent);
+			if (isInferenceSensitiveCall(node)) {
+				return "dependent";
+			}
+
+			return strongestDependence(node.arguments, (argument, index) => {
+				if (!isContextualFunction(argument)) {
+					return contextDependence(argument);
+				}
+
+				return !argument.params.some(isUntypedParameter) ||
+					isCallbackContextFixed(node, index, argument)
+					? "independent"
+					: "unproven";
+			});
 		}
 
 		// A tagged template calls its tag, so a generic tag infers the same way.
 		if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return isInferenceSensitiveCall(node);
+			return isInferenceSensitiveCall(node) ? "dependent" : "independent";
 		}
 
-		if (node.type === AST_NODE_TYPES.ConditionalExpression) {
-			return isContextDependent(node.consequent) || isContextDependent(node.alternate);
-		}
-
-		if (node.type === AST_NODE_TYPES.LogicalExpression) {
-			return isContextDependent(node.left) || isContextDependent(node.right);
-		}
-
-		if (node.type === AST_NODE_TYPES.AwaitExpression) {
-			return isContextDependent(node.argument);
-		}
-
-		// An optional chain wraps the call it makes.
-		if (
-			node.type === AST_NODE_TYPES.ChainExpression ||
-			node.type === AST_NODE_TYPES.TSNonNullExpression ||
-			isConstAssertion(node)
-		) {
-			return isContextDependent(node.expression);
-		}
-
-		return false;
+		const operands = contextForwardedOperands(node);
+		return operands === undefined
+			? "independent"
+			: strongestDependence(operands, contextDependence);
 	}
 
 	/**
@@ -2436,7 +2605,7 @@ function create(
 		},
 		"Program:exit": function (node: TSESTree.Program): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
-			const { accepted, unverified } = verifyAnnotations(
+			const { accepted, acceptedAlone, unverified } = verifyAnnotations(
 				services.program,
 				source,
 				candidates,
@@ -2445,9 +2614,20 @@ function create(
 				report(candidate, true);
 			}
 
+			// A user or an editor can apply this fix alone, but the combined
+			// fix of `eslint --fix` is not verified.
+			for (const candidate of acceptedAlone) {
+				report(candidate, false);
+			}
+
 			// Unverified is not proven unsafe. Keep the report visible, but
-			// never autofix it.
+			// never autofix it. A candidate that needs proof stays silent: a
+			// later fix pass can verify it.
 			for (const { candidate } of unverified) {
+				if (candidate.requiresProof === true) {
+					continue;
+				}
+
 				report(candidate, false);
 			}
 		},
@@ -2481,7 +2661,10 @@ function create(
 				return;
 			}
 
-			if (receivesAnnotationContext(node.init)) {
+			// A callback whose context is not proven fixed does not skip the
+			// variable. It makes only a verified removal reportable.
+			const dependence = annotationContextDependence(node.init);
+			if (dependence === "dependent") {
 				return;
 			}
 
@@ -2547,7 +2730,12 @@ function create(
 				return;
 			}
 
-			collect({ annotation, messageId: MESSAGE_ID, type: annotationType });
+			collect({
+				annotation,
+				messageId: MESSAGE_ID,
+				requiresProof: dependence === "unproven",
+				type: annotationType,
+			});
 		},
 	};
 }

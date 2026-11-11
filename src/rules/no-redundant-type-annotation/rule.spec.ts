@@ -746,6 +746,39 @@ const valid: Array<ValidTestCase> = [
 			read(n: number): void {}
 		};
 	`,
+	// The annotation gives a callback argument its context, so the verifier
+	// keeps it.
+	unindent`
+		declare const items: Array<number>;
+		const v1: Array<"a"> = items.map(() => "a");
+	`,
+	unindent`
+		declare const items: Array<number>;
+		const v2: Array<{ k: "a" }> = items.map(() => ({ k: "a" }));
+	`,
+	unindent`
+		declare function wrap<F>(f: F): F;
+		const h: (x: number) => number = wrap((x) => x);
+	`,
+	unindent`
+		declare function make<T>(cb: (x: T) => void): T;
+		const v3: string = make((x) => {});
+	`,
+	unindent`
+		declare function pick<T>(cb: (x: T) => void): T;
+		declare function pick(cb: (x: number) => void, n: number): number;
+		const v4: string = pick((x) => {});
+	`,
+	"const p1: Promise<number> = new Promise((resolve) => resolve(1));",
+	unindent`
+		declare const items: Array<number>;
+		declare function id<T>(x: T): T;
+		const v5: Array<"a"> = id(items.map(() => "a"));
+	`,
+	unindent`
+		declare function on2<E = string>(cb: (e: E) => void): E;
+		const v6: number = on2((e) => {});
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -1162,6 +1195,290 @@ const invalid: Array<InvalidTestCase> = [
 				return this.x;
 			});
 		`,
+	},
+
+	// An untyped callback takes its parameters from the receiver, not from
+	// the variable's annotation.
+	{
+		code: unindent`
+			type Option = "a" | "b";
+			declare const options: ReadonlyArray<{ value: Option }>;
+			const values: Array<Option> = options.map(({ value }) => value);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			type Option = "a" | "b";
+			declare const options: ReadonlyArray<{ value: Option }>;
+			const values = options.map(({ value }) => value);
+		`,
+	},
+
+	{
+		code: unindent`
+			interface Item { name: string }
+			declare const items: Array<Item>;
+			const v: Array<string> = items.map((i) => { return i.name; });
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			interface Item { name: string }
+			declare const items: Array<Item>;
+			const v = items.map((i) => { return i.name; });
+		`,
+	},
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const v: Array<"a" | "b"> = items.map((i) => (i.ok ? "a" : "b"));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const v = items.map((i) => (i.ok ? "a" : "b"));
+		`,
+	},
+	{
+		code: unindent`
+			interface Item { name: string }
+			declare const items: Array<Item>;
+			const s: Set<string> = new Set(items.map((i) => i.name));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			interface Item { name: string }
+			declare const items: Array<Item>;
+			const s = new Set(items.map((i) => i.name));
+		`,
+	},
+	{
+		code: unindent`
+			declare function run(cb: (x: number) => string): string;
+			const s: string = run((x) => String(x));
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function run(cb: (x: number) => string): string;
+			const s = run((x) => String(x));
+		`,
+	},
+	{
+		code: unindent`
+			declare function on(cb: (x: string) => void): 1;
+			declare function on(cb: (x: number) => void, n: number): 2;
+			const v: 1 = on((x) => {});
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function on(cb: (x: string) => void): 1;
+			declare function on(cb: (x: number) => void, n: number): 2;
+			const v = on((x) => {});
+		`,
+	},
+	// A generic or overloaded call can take the callback's context from the
+	// annotation, so these are reported only when the removal is verified.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const f: Array<Item> = items.filter((i) => i.ok);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			const f = items.filter((i) => i.ok);
+		`,
+	},
+	{
+		code: unindent`
+			declare const nums: Array<number>;
+			const total: number = nums.reduce((a, b) => a + b, 0);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const nums: Array<number>;
+			const total = nums.reduce((a, b) => a + b, 0);
+		`,
+	},
+	{
+		code: unindent`
+			declare function pipe<T>(x: T, f: (v: T) => T): T;
+			const r: number = pipe(1, (v) => v);
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function pipe<T>(x: T, f: (v: T) => T): T;
+			const r = pipe(1, (v) => v);
+		`,
+	},
+
+	// Past the verification work limit, a removal is not verified. It is
+	// reported without a fix, and the next fix pass verifies and removes it.
+	// A variable that needs proof is verified first, so other candidates do
+	// not hide it.
+	...[
+		{
+			code: "const last: Array<Item> = items.filter((item) => item.ok);",
+			errors: 11,
+			fixed: "const last = items.filter((item) => item.ok);",
+		},
+		{
+			code: "const last: Array<string> = items.map((item) => item.name);",
+			errors: 11,
+			fixed: "const last = items.map((item) => item.name);",
+		},
+		// A sequence hands its context to its last expression, so this
+		// callback also takes its context from the annotation. The removal
+		// changes the type, so it is not reported.
+		{
+			code: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
+			errors: 10,
+			fixed: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
+		},
+	].map(({ code, errors, fixed }) => {
+		const prefix = unindent`
+			interface Item { name: string; ok: boolean }
+			declare const items: Array<Item>;
+			declare function read(): number;
+		`;
+		const reads = Array.from({ length: 10 }, (_, index) => `const n${index}`);
+		return {
+			code: [prefix, ...reads.map((name) => `${name}: number = read();`), code].join("\n"),
+			errors: Array.from({ length: errors }, () => ({ messageId })),
+			output: [prefix, ...reads.map((name) => `${name} = read();`), fixed].join("\n"),
+		};
+	}),
+
+	// Past the work limit, a variable that needs proof is not verified, so it
+	// is not reported. The next fix pass verifies it.
+	{
+		code: [
+			"interface Item { ok: boolean }",
+			"declare const items: Array<Item>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const kept${index}: Array<Item> = items.filter((item) => item.ok);`;
+			}),
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
+		output: [
+			"interface Item { ok: boolean }",
+			"declare const items: Array<Item>;",
+			...Array.from({ length: 11 }, (_, index) => {
+				return `const kept${index} = items.filter((item) => item.ok);`;
+			}),
+		].join("\n"),
+	},
+
+	// Each removal of a pair is safe alone, but not together, so the pairs
+	// use all the programs of the combined check. A variable that needs
+	// proof is reported when its removal alone is safe, so it is still
+	// reported, without a fix. This holds also for two such variables that
+	// are coupled.
+	...[
+		{
+			errors: [3, 6, 12, 18, 24],
+			kept: ["const kept: Array<Item> = items.filter((item) => item.ok);"],
+		},
+		{
+			errors: [3, 4, 7, 13, 19, 25],
+			kept: [
+				"const kept: Array<Item> = items.filter((item) => item.ok);",
+				"const more: Array<Item> = kept.filter((item) => item.ok);",
+			],
+		},
+	].map(({ errors, kept }) => {
+		return {
+			code: [
+				"interface Item { ok: boolean }",
+				"declare const items: Array<Item>;",
+				...kept,
+				...Array.from({ length: 4 }, (_, index) => {
+					return [
+						`function narrow${index}(v: string | number) {`,
+						`const ok${index}: boolean = typeof v === "string";`,
+						`const same${index}: boolean = ok${index};`,
+						`if (!same${index}) return "none";`,
+						"return v;",
+						"}",
+					];
+				}).flat(),
+			].join("\n"),
+			errors: errors.map((line) => ({ line, messageId })),
+			output: null,
+		};
+	}),
+
+	// The removal of isNum narrows v in its block, which the narrowing of ok
+	// also observes. The two are coupled, so the problem of isNum does not
+	// reject ok.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			declare const v: string | number;
+			const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+			if (ok) {}
+			const isNum: boolean = typeof v === "number";
+			if (isNum) { console.log(v); }
+		`,
+		errors: [{ line: 4, messageId }],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			declare const v: string | number;
+			const ok = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+			if (ok) {}
+			const isNum: boolean = typeof v === "number";
+			if (isNum) { console.log(v); }
+		`,
+	},
+	// Each removal alone is safe, but not both: without both annotations, same
+	// narrows v. The fix of same is verified. ok, which needs proof, is safe
+	// alone, so it is reported without a fix.
+	{
+		code: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			export function narrow(v: string | number) {
+				const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+				const same: boolean = ok;
+				if (!same) return "none";
+				return v;
+			}
+		`,
+		errors: [
+			{ line: 4, messageId },
+			{ line: 5, messageId },
+		],
+		output: unindent`
+			interface Item { ok: boolean }
+			declare const items: Array<Item>;
+			export function narrow(v: string | number) {
+				const ok: boolean = typeof v === "string" && items.reduce((a, i) => a && i.ok, true);
+				const same = ok;
+				if (!same) return "none";
+				return v;
+			}
+		`,
+	},
+
+	// The removal of q widens w, which is not a candidate, so the static
+	// coupling does not see that p reads it. The combined check gives the
+	// problem of q to p. p is then checked alone, and its removal alone is
+	// safe, so it is reported without a fix.
+	{
+		code: unindent`
+			declare function use(...values: Array<unknown>): void;
+			const q: "a" = "a";
+			let w = q;
+			const p: Array<"a"> = [w].filter((x) => x.length > 0);
+			use(p, w);
+			export {};
+		`,
+		errors: [{ line: 4, messageId }],
+		output: null,
 	},
 
 	// --- parameters ---
