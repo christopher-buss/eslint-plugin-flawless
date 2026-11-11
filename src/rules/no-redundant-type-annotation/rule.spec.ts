@@ -1337,6 +1337,27 @@ const invalid: Array<InvalidTestCase> = [
 			errors: 10,
 			fixed: 'const last: Array<"a"> = items.map((0, (item) => "a"));',
 		},
+		// A callback without untyped parameters can still take the type of
+		// its returned value from the annotation. These removals change the
+		// type, so they are not reported.
+		...[
+			'const last: Array<"a"> = items.map(() => "a");',
+			'const last: Array<{ k: "a" }> = items.map(() => ({ k: "a" }));',
+			'const last: Array<["a"]> = items.map(() => ["a"]);',
+			// A sequence or a conditional hands the context on to the callback.
+			'const last: Array<"a"> = items.map((0, () => "a"));',
+			'const last: Array<"a" | "b"> = items.map(read() > 0 ? () => "a" : () => "b");',
+			'const last: Array<"a"> = items.map((0, (item: Item) => "a"));',
+			// A tagged template hands a substitution the context of a parameter.
+			...["() =>", "(x) =>"].map((callback) => {
+				return [
+					"declare function tag<T>(s: TemplateStringsArray, cb: (x: number) => T): Array<T>;",
+					`const last: Array<"a"> = tag\`\${${callback} "a"}\`;`,
+				].join(" ");
+			}),
+		].map((code) => {
+			return { code, errors: 10, fixed: code };
+		}),
 	].map(({ code, errors, fixed }) => {
 		const prefix = unindent`
 			interface Item { name: string; ok: boolean }

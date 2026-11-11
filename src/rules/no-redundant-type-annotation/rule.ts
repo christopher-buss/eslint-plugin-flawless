@@ -77,6 +77,12 @@ type CallLike =
 	| TSESTree.NewExpression
 	| TSESTree.TaggedTemplateExpression;
 
+/** A call that passes values to the parameters of a signature. */
+type ArgumentCall =
+	| TSESTree.CallExpression
+	| TSESTree.NewExpression
+	| TSESTree.TaggedTemplateExpression;
+
 /** A function that can carry a return type annotation and has a body. */
 type ReturnTypedFunction =
 	| TSESTree.ArrowFunctionExpression
@@ -120,7 +126,8 @@ const messages = {
 
 /**
  * How an expression depends on the annotation's context: not at all, surely,
- * or through an untyped callback argument that only the verifier can clear.
+ * or through a callback that takes context from a call, which only the
+ * verifier can clear.
  */
 type ContextDependence = "dependent" | "independent" | "unproven";
 
@@ -812,6 +819,19 @@ function strongestDependence<T>(
 }
 
 /**
+ * Finds the values a call passes, by parameter position. A tagged template
+ * passes its strings first, which have no node.
+ *
+ * @param call - The call to inspect.
+ * @returns The value at each parameter position.
+ */
+function getPassedValues(call: ArgumentCall): ReadonlyArray<TSESTree.Node | undefined> {
+	return call.type === AST_NODE_TYPES.TaggedTemplateExpression
+		? [undefined, ...call.quasi.expressions]
+		: call.arguments;
+}
+
+/**
  * Reports whether a function declares a `this` parameter.
  *
  * @param node - The function to inspect.
@@ -1499,6 +1519,22 @@ function create(
 	}
 
 	/**
+	 * Reports whether a function takes something from its contextual type:
+	 * the type of an untyped parameter, an untyped `this`, or the type of a
+	 * returned value, such as a literal.
+	 *
+	 * @param node - The function to inspect.
+	 * @returns True when the function depends on its context.
+	 */
+	function takesContext(node: ContextualFunction): boolean {
+		return (
+			node.params.some(isUntypedParameter) ||
+			usesContextualThis(node) ||
+			returnsContextTypedValue(node)
+		);
+	}
+
+	/**
 	 * Reports whether a function's return value takes its type from the
 	 * function's contextual type.
 	 *
@@ -1570,11 +1606,7 @@ function create(
 	 */
 	function annotationContextDependence(node: TSESTree.Node): ContextDependence {
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter) ||
-				usesContextualThis(node) ||
-				returnsContextTypedValue(node)
-				? "dependent"
-				: "independent";
+			return takesContext(node) ? "dependent" : "independent";
 		}
 
 		// A template expression is a template type only because the context
@@ -1628,7 +1660,7 @@ function create(
 	 * @returns True when the annotation cannot change the callback's context.
 	 */
 	function isCallbackContextFixed(
-		call: TSESTree.CallExpression | TSESTree.NewExpression,
+		call: ArgumentCall,
 		index: number,
 		callback: ContextualFunction,
 	): boolean {
@@ -1642,9 +1674,9 @@ function create(
 		}
 
 		const declared = signatures.length === 1 ? signatures.at(0) : undefined;
-		const spread = call.arguments
+		const spread = getPassedValues(call)
 			.slice(0, index + 1)
-			.some((argument) => argument.type === AST_NODE_TYPES.SpreadElement);
+			.some((value) => value?.type === AST_NODE_TYPES.SpreadElement);
 		if (
 			declared === undefined ||
 			spread ||
@@ -1713,6 +1745,36 @@ function create(
 	}
 
 	/**
+	 * Finds the dependence of a call argument, or of an operand that the
+	 * argument hands its context to. A callback there gets its context from
+	 * the parameter at the argument's position, so the verifier can compare
+	 * that context before and after inference.
+	 *
+	 * @param call - The call that receives the argument.
+	 * @param index - The argument's position.
+	 * @param node - The argument, or an operand that it forwards to.
+	 * @returns The dependence of the expression.
+	 */
+	function argumentDependence(
+		call: ArgumentCall,
+		index: number,
+		node: TSESTree.Node,
+	): ContextDependence {
+		if (isContextualFunction(node)) {
+			return !takesContext(node) || isCallbackContextFixed(call, index, node)
+				? "independent"
+				: "unproven";
+		}
+
+		const operands = contextForwardedOperands(node);
+		if (operands === undefined) {
+			return contextDependence(node);
+		}
+
+		return strongestDependence(operands, (operand) => argumentDependence(call, index, operand));
+	}
+
+	/**
 	 * Reports whether removing the annotation could change what the initializer
 	 * means, because some part of it is typed by its context rather than by
 	 * itself.
@@ -1722,38 +1784,36 @@ function create(
 	 * `contextForwardedOperands` finds, and call arguments.
 	 *
 	 * @param node - The expression to inspect.
-	 * @returns `"unproven"` when only an untyped callback argument, whose
-	 *   context the call may take from the annotation, makes the expression
-	 *   depend on its context.
+	 * @returns `"unproven"` when only a callback that takes context from a
+	 *   call, whose context the call may take from the annotation, makes the
+	 *   expression depend on its context.
 	 */
 	function contextDependence(node: TSESTree.Node): ContextDependence {
+		// A function here is not a call argument, so its context cannot be
+		// compared before and after inference.
 		if (isContextualFunction(node)) {
-			return node.params.some(isUntypedParameter) ? "dependent" : "independent";
+			return takesContext(node) ? "dependent" : "independent";
 		}
 
+		// A tagged template calls its tag, so a generic tag infers the same way.
 		if (
 			node.type === AST_NODE_TYPES.CallExpression ||
-			node.type === AST_NODE_TYPES.NewExpression
+			node.type === AST_NODE_TYPES.NewExpression ||
+			node.type === AST_NODE_TYPES.TaggedTemplateExpression
 		) {
 			if (isInferenceSensitiveCall(node)) {
 				return "dependent";
 			}
 
-			return strongestDependence(node.arguments, (argument, index) => {
-				if (!isContextualFunction(argument)) {
-					return contextDependence(argument);
-				}
+			const call = node;
+			function dependenceOf(
+				value: TSESTree.Node | undefined,
+				index: number,
+			): ContextDependence {
+				return value === undefined ? "independent" : argumentDependence(call, index, value);
+			}
 
-				return !argument.params.some(isUntypedParameter) ||
-					isCallbackContextFixed(node, index, argument)
-					? "independent"
-					: "unproven";
-			});
-		}
-
-		// A tagged template calls its tag, so a generic tag infers the same way.
-		if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-			return isInferenceSensitiveCall(node) ? "dependent" : "independent";
+			return strongestDependence(getPassedValues(node), dependenceOf);
 		}
 
 		const operands = contextForwardedOperands(node);

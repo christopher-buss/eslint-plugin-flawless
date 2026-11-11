@@ -77,6 +77,10 @@ const values: Array<Option> = options.map(({ value }) => value); // reported
 When a generic or overloaded call can give the callback its context from the
 annotation, as `filter` and `reduce` can, the variable is reported only if the
 verifier proves that the removal of its annotation alone is safe (see below).
+This also applies to a callback that has no untyped parameters, but returns a
+value whose type the context shapes, such as `items.map(() => "a")`, and to a
+callback that a conditional or a sequence passes to the call, or that a tagged
+template substitution passes to its tag.
 
 ### `any` is never redundant
 
