@@ -160,6 +160,27 @@ describe("annotation verification", () => {
 		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
 	});
 
+	it("resolves a package import with the import condition of the file", () => {
+		// The package has other declarations for `require`. A removal is safe
+		// only when each speculative program resolves the same ones.
+		const { candidates, program, source } = project(
+			'import { createSyncFn } from "synckit"; const make: typeof createSyncFn = createSyncFn;',
+		);
+		expect(program.getSemanticDiagnostics(source)).toStrictEqual([]);
+		expect(verifyAnnotations(program, source, candidates).accepted).toHaveLength(1);
+	});
+
+	it("resolves package imports when the program has no resolution cache", () => {
+		const { candidates, program, source } = project(
+			'import { createSyncFn } from "synckit"; const make: typeof createSyncFn = createSyncFn;',
+		);
+		// The resolution cache of a program is internal to the compiler.
+		const bare = Object.assign(Object.create(program) as ts.Program, {
+			getModuleResolutionCache: undefined,
+		});
+		expect(verifyAnnotations(bare, source, candidates).accepted).toHaveLength(1);
+	});
+
 	it("verifies an unsaved file from the parser's project service", () => {
 		const linter = new Linter({ configType: "flat" });
 		// Keep the variable local: isolatedDeclarations requires annotations

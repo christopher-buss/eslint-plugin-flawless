@@ -72,6 +72,8 @@ const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
 const LOOP_REPLAY_VERSIONS = new Set(["5.9", "6.0"]);
+// Compiler hosts can resolve module name literals from TypeScript 5.0.
+const RESOLVES_LITERALS = Number(ts.versionMajorMinor.split(".")[0]) >= 5;
 const EMIT_FLAGS =
 	ts.NodeBuilderFlags.MultilineObjectLiterals |
 	ts.NodeBuilderFlags.WriteClassExpressionAsTypeLiteral |
@@ -589,11 +591,27 @@ function sharedHost(old: ts.Program): SharedHost {
 		),
 		fileExists: memoize((name) => base.fileExists(name)),
 		files: new Map(old.getSourceFiles().map((file) => [fileKey(file.fileName), file])),
-		moduleResolution: ts.createModuleResolutionCache(
-			old.getCurrentDirectory(),
-			(name) => base.getCanonicalFileName(name),
-			options,
-		),
+		moduleResolution: RESOLVES_LITERALS
+			? ts.createModuleResolutionCache(
+					old.getCurrentDirectory(),
+					(name) => base.getCanonicalFileName(name),
+					options,
+					// The parser program read the package.json scope of each of
+					// its files already. Its cache is internal, so it can be
+					// absent. TypeScript 5.0 ignores this argument.
+					(
+						old as {
+							getModuleResolutionCache?: () => ts.ModuleResolutionCache | undefined;
+						}
+					)
+						.getModuleResolutionCache?.()
+						?.getPackageJsonInfoCache(),
+				)
+			: ts.createModuleResolutionCache(
+					old.getCurrentDirectory(),
+					(name) => base.getCanonicalFileName(name),
+					options,
+				),
 		parsedReferences,
 	};
 	sharedHosts.set(old, host);
@@ -655,6 +673,40 @@ function speculativeProgramFactory(
 	};
 	if (projectReferences !== undefined) {
 		programOptions.projectReferences = projectReferences;
+	}
+
+	// createProgram uses the host's resolution cache only when the host also
+	// resolves modules. Otherwise each program makes a new cache and reads
+	// each package.json again to find the module format of each file. This is
+	// the default resolution of the compiler, with the shared cache. The cache
+	// belongs to one parser program, so it holds at most the resolutions of
+	// that program's files.
+	if (RESOLVES_LITERALS) {
+		host.resolveModuleNameLiterals = (
+			...[literals, containingFile, redirectedReference, options, containingSourceFile]
+		) => {
+			const modeOptions = redirectedReference?.commandLine.options ?? options;
+			const resolved = new Map<string, ts.ResolvedModuleWithFailedLookupLocations>();
+			return literals.map((literal) => {
+				const mode = ts.getModeForUsageLocation(containingSourceFile, literal, modeOptions);
+				const key = `${mode ?? ""}|${literal.text}`;
+				let resolution = resolved.get(key);
+				if (resolution === undefined) {
+					resolution = ts.resolveModuleName(
+						literal.text,
+						containingFile,
+						options,
+						host,
+						moduleResolution,
+						redirectedReference,
+						mode,
+					);
+					resolved.set(key, resolution);
+				}
+
+				return resolution;
+			});
+		};
 	}
 
 	return (replacement) => {
