@@ -443,6 +443,25 @@ async function main() {
 			return;
 		}
 
+		// Windows has no process groups, and killing the shell alone leaves its children running.
+		if (process.platform === "win32") {
+			// Once the shell exits, its PID can go to an unrelated process.
+			if (child.exitCode !== null || child.signalCode !== null) {
+				return;
+			}
+
+			try {
+				execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+					stdio: "ignore",
+					windowsHide: true,
+				});
+			} catch {
+				child.kill("SIGKILL");
+			}
+
+			return;
+		}
+
 		try {
 			process.kill(-child.pid, "SIGKILL");
 		} catch {
@@ -529,7 +548,13 @@ async function main() {
 				killTests();
 			}, timeoutSeconds * 1000);
 
-			child = spawn(test, { detached: true, shell: true, stdio: "ignore" });
+			child = spawn(test, {
+				// On Windows, detached only opens a new console window, and taskkill finds the tree without it.
+				detached: process.platform !== "win32",
+				shell: true,
+				stdio: "ignore",
+				windowsHide: true,
+			});
 			// Without a listener, a failed spawn would crash the run.
 			child.on("error", () => {
 				resolve("fail");
