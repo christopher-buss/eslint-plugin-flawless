@@ -5,8 +5,8 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type ts from "typescript";
 import { SyntaxKind } from "typescript";
 
-import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
-import type { Context, TypeArgumentReference } from "./types";
+import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol.ts";
+import type { Context, TypeArgumentReference } from "./types.ts";
 
 /**
  * `export default function withAttributes() {}` binds the export under this
@@ -15,10 +15,11 @@ import type { Context, TypeArgumentReference } from "./types";
 const DEFAULT_EXPORT_SYMBOL_NAME = "default";
 
 /**
- * Resolved callee symbols, keyed by the callee node. A type literal passed as a
- * type argument names many properties, and every one of them walks back out to
- * the same callee - resolve it once per node instead. Keys are AST nodes, which
- * a re-parse replaces wholesale, so a stale program can never be read from here.
+ * Resolved callee symbols, keyed by the callee node. A type literal passed as
+ * a type argument names many properties, and every one of them walks back out
+ * to the same callee - resolve it once per node instead. Keys are AST nodes,
+ * which a re-parse replaces wholesale, so a stale program can never be read
+ * from here.
  */
 const calleeSymbolCache = new WeakMap<TSESTree.Node, null | ts.Symbol>();
 
@@ -120,13 +121,12 @@ function resolveCalleeSymbol(callee: TSESTree.Expression, context: Context): ts.
  * @param declaration - A declaration of the callee symbol.
  * @returns The identifier the declaration was written with, when it has one.
  */
-function getDeclaredName(declaration: ts.Declaration): string | undefined {
-	const { name } = declaration as { name?: ts.Node };
+function getDeclaredName({ name }: ts.NamedDeclaration): string | undefined {
 	if (name?.kind !== SyntaxKind.Identifier) {
 		return undefined;
 	}
 
-	return (name as ts.Identifier).text;
+	return name.text;
 }
 
 /**

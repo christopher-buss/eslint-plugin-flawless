@@ -4,8 +4,8 @@ import type {
 	MetaSelectorType,
 	SelectorString,
 	SelectorType,
-} from "./enums";
-import { MetaSelector } from "./enums";
+} from "./enums.ts";
+import { MetaSelector } from "./enums.ts";
 
 export function isMetaSelector(
 	selector: IndividualAndMetaSelectorsString | MetaSelectorType | SelectorType,

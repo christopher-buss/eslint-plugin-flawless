@@ -1,14 +1,10 @@
-import {
-	AST_NODE_TYPES,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { FunctionNode } from "./core-ast-utils";
-import { getFunctionHeadLoc, getFunctionNameWithKind, upperCaseFirst } from "./core-ast-utils";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { FunctionNode } from "./core-ast-utils.ts";
+import { getFunctionHeadLoc, getFunctionNameWithKind, upperCaseFirst } from "./core-ast-utils.ts";
 
 export const RULE_NAME = "max-lines-per-function";
 
@@ -22,13 +18,14 @@ export type CountFrom = "body" | "function";
 export interface MaxLinesPerFunctionOptions {
 	/**
 	 * Where the counted range begins. `"body"` (the default) counts from the
-	 * line holding the body's opening brace through the line holding its closing
-	 * brace, so lines spent purely on the signature — destructured parameters, a
-	 * long parameter list, multi-line generics or return types, decorators — do
-	 * not count against `max`. Note the opening-brace line is still counted, and
-	 * it is usually also the last line of the signature (`): void {`), so exactly
-	 * one signature line always remains in the total. `"function"` counts the
-	 * whole function node instead, matching ESLint core.
+	 * line holding the body's opening brace through the line holding its
+	 * closing brace, so lines spent purely on the signature — destructured
+	 * parameters, a long parameter list, multi-line generics or return types,
+	 * decorators — do not count against `max`. Note the opening-brace line is
+	 * still counted, and it is usually also the last line of the signature
+	 * (`): void {`), so exactly one signature line always remains in the
+	 * total. `"function"` counts the whole function node instead, matching
+	 * ESLint core.
 	 */
 	readonly countFrom?: CountFrom;
 	/**
@@ -304,7 +301,6 @@ export const maxLinesPerFunction: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

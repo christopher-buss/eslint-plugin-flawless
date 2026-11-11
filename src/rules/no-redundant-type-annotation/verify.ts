@@ -73,7 +73,7 @@ const MAX_PROGRAMS = 12;
 // versions against full diagnostics before enabling loop replay on them.
 const LOOP_REPLAY_VERSIONS = new Set(["5.9", "6.0"]);
 // Compiler hosts can resolve module name literals from TypeScript 5.0.
-const RESOLVES_LITERALS = Number(ts.versionMajorMinor.split(".")[0]) >= 5;
+const RESOLVES_LITERALS = Number(ts.versionMajorMinor.split(".", 1)[0]) >= 5;
 const EMIT_FLAGS =
 	ts.NodeBuilderFlags.MultilineObjectLiterals |
 	ts.NodeBuilderFlags.WriteClassExpressionAsTypeLiteral |
@@ -213,21 +213,45 @@ export function verifyAnnotations<C extends Candidate>(
 				);
 			}
 
+			/**
+			 * Finds the first observed type that the removal changes.
+			 * @param candidate - The removal to check.
+			 * @returns A description of the change, or undefined when none.
+			 */
+			function findObservedChange(candidate: C): string | undefined {
+				const observed = snapshots.get(candidate) ?? [];
+				for (const { node, omitThis, original } of observed) {
+					const replacement = mapped(node);
+					const inferred =
+						replacement === undefined
+							? undefined
+							: print(fresh, replacement, originalKey, omitThis);
+					const type = original();
+					if (inferred !== type) {
+						return `Removing the annotation changes an observed type: ${type} -> ${inferred ?? "missing node"}`;
+					}
+				}
+
+				return undefined;
+			}
+
 			// Queries populate checker caches. Replay every affected loop's scope
 			// before querying any candidate, including candidates outside loops.
 			const replayed = new Set<ts.Node>();
 			for (const candidate of group) {
-				if (insideLoop(candidate.owner)) {
-					const root = loopScope(candidate.owner);
-					const replacement = ts.isSourceFile(root) ? after : mapped(root);
-					if (replacement === undefined) {
-						throw new Error("Cannot locate the affected function");
-					}
+				if (!insideLoop(candidate.owner)) {
+					continue;
+				}
 
-					if (!replayed.has(replacement)) {
-						replay(fresh, replacement);
-						replayed.add(replacement);
-					}
+				const root = loopScope(candidate.owner);
+				const replacement = ts.isSourceFile(root) ? after : mapped(root);
+				if (replacement === undefined) {
+					throw new Error("Cannot locate the affected function");
+				}
+
+				if (!replayed.has(replacement)) {
+					replay(fresh, replacement);
+					replayed.add(replacement);
 				}
 			}
 
@@ -246,20 +270,9 @@ export function verifyAnnotations<C extends Candidate>(
 					}
 				}
 
-				for (const { node, omitThis, original } of snapshots.get(candidate) ?? []) {
-					const replacement = mapped(node);
-					const inferred =
-						replacement === undefined
-							? undefined
-							: print(fresh, replacement, originalKey, omitThis);
-					const type = original();
-					if (inferred !== type) {
-						problems.set(
-							candidate,
-							`Removing the annotation changes an observed type: ${type} -> ${inferred ?? "missing node"}`,
-						);
-						break;
-					}
+				const change = findObservedChange(candidate);
+				if (change !== undefined) {
+					problems.set(candidate, change);
 				}
 			}
 
@@ -317,7 +330,8 @@ export function verifyAnnotations<C extends Candidate>(
 		// Bound speculative work independently of the number of annotations in
 		// the file. Additional candidates are reported without a fix; a later
 		// fix pass verifies them once earlier fixes are applied.
-		for (const candidate of eligible.slice(MAX_PROGRAMS - 2)) {
+		const overLimit = eligible.slice(MAX_PROGRAMS - 2);
+		for (const candidate of overLimit) {
 			unverified.push({ candidate, reason: "The verification work limit was reached" });
 		}
 
@@ -417,12 +431,11 @@ export function verifyAnnotations<C extends Candidate>(
 				return problems.has(candidate) && !coupled.has(candidate);
 			});
 			const restored =
-				accepted.find(
-					(candidate) =>
-						problems.has(candidate) && ts.isVariableDeclaration(candidate.owner),
-				) ?? accepted.find((candidate) => problems.has(candidate));
+				accepted.find((candidate) => {
+					return problems.has(candidate) && ts.isVariableDeclaration(candidate.owner);
+				}) ?? accepted.find((candidate) => problems.has(candidate));
 			let restoring = independent;
-			if (restoring.length === 0 && restored !== undefined) {
+			if (restored !== undefined && restoring.length === 0) {
 				restoring = [restored];
 			}
 
@@ -459,6 +472,16 @@ export function verifyAnnotations<C extends Candidate>(
 	return { accepted: [], acceptedAlone: [], rejected, unverified };
 }
 
+function bindingNames(binding: ts.BindingName): Array<ts.Identifier> {
+	if (ts.isIdentifier(binding)) {
+		return [binding];
+	}
+
+	return binding.elements.flatMap((element) => {
+		return ts.isBindingElement(element) ? bindingNames(element.name) : [];
+	});
+}
+
 /**
  * Declarations needed to meet assertion calls' syntactic requirements.
  * @param checker - The original checker, with the annotations still present.
@@ -476,16 +499,6 @@ function requiredAssertionTargets(
 		string,
 		Array<{ owner: Candidate["owner"]; symbol: ts.Symbol | undefined }>
 	>();
-	function names(binding: ts.BindingName): Array<ts.Identifier> {
-		if (ts.isIdentifier(binding)) {
-			return [binding];
-		}
-
-		return binding.elements.flatMap((element) => {
-			return ts.isBindingElement(element) ? names(element.name) : [];
-		});
-	}
-
 	function asserts(signature: ts.Signature | undefined): boolean {
 		const predicate =
 			signature === undefined ? undefined : checker.getTypePredicateOfSignature(signature);
@@ -509,7 +522,7 @@ function requiredAssertionTargets(
 		// A method named by a string or computed key binds no name.
 		let bound: Array<ts.Identifier> = [];
 		if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
-			bound = names(owner.name);
+			bound = bindingNames(owner.name);
 		} else if (ts.isIdentifier(owner.name)) {
 			bound = [owner.name];
 		}
@@ -592,18 +605,26 @@ function fileKey(name: string): string {
 // not resolve stays unresolved in speculative programs as well.
 const sharedHosts = new WeakMap<ts.Program, SharedHost>();
 
-/** The call that receives the callback whose parameter a candidate annotates. */
+/**
+ * The call that receives the callback whose parameter a candidate annotates.
+ */
 interface ReceivingCall {
 	/** The call's arguments that are arrows, without their parentheses. */
 	readonly arrows: ReadonlySet<ts.Node>;
 	readonly call: ts.CallExpression | ts.NewExpression;
 }
 
-function memoize<T>(read: (name: string) => T): (name: string) => T {
-	const cache = new Map<string, T>();
+/** The parts of a program that the compiler does not make public. */
+interface ProgramInternals extends ts.Program {
+	readonly getModuleResolutionCache?: () => ts.ModuleResolutionCache | undefined;
+}
+
+function memoize(read: (name: string) => boolean): (name: string) => boolean {
+	const cache = new Map<string, boolean>();
 	return (name) => {
-		if (cache.has(name)) {
-			return cache.get(name) as T;
+		const cached = cache.get(name);
+		if (cached !== undefined) {
+			return cached;
 		}
 
 		const value = read(name);
@@ -622,7 +643,8 @@ function sharedHost(old: ts.Program): SharedHost {
 	const base = ts.createCompilerHost(options, true);
 	const parsedReferences = new Map<string, ts.ParsedCommandLine>();
 	function collect(references: ReturnType<ts.Program["getResolvedProjectReferences"]>): void {
-		for (const reference of references ?? []) {
+		const list = references ?? [];
+		for (const reference of list) {
 			const key =
 				reference === undefined ? undefined : fileKey(reference.sourceFile.fileName);
 			if (reference !== undefined && key !== undefined && !parsedReferences.has(key)) {
@@ -633,6 +655,7 @@ function sharedHost(old: ts.Program): SharedHost {
 	}
 
 	collect(old.getResolvedProjectReferences());
+	const withInternals: ProgramInternals = old;
 	const host: SharedHost = {
 		base,
 		directoryExists: memoize(
@@ -648,13 +671,7 @@ function sharedHost(old: ts.Program): SharedHost {
 					// The parser program read the package.json scope of each of
 					// its files already. Its cache is internal, so it can be
 					// absent. TypeScript 5.0 ignores this argument.
-					(
-						old as {
-							getModuleResolutionCache?: () => ts.ModuleResolutionCache | undefined;
-						}
-					)
-						.getModuleResolutionCache?.()
-						?.getPackageJsonInfoCache(),
+					withInternals.getModuleResolutionCache?.()?.getPackageJsonInfoCache(),
 				)
 			: ts.createModuleResolutionCache(
 					old.getCurrentDirectory(),
@@ -1078,7 +1095,8 @@ function coupledCandidates<C extends Candidate>(
 	}
 
 	for (const [index, first] of scoped.entries()) {
-		for (const second of scoped.slice(index + 1)) {
+		const later = scoped.slice(index + 1);
+		for (const second of later) {
 			const overlaps = first.scopes.some((outer) => {
 				return second.scopes.some(
 					(inner) => contains(outer, inner) || contains(inner, outer),
@@ -1378,7 +1396,7 @@ function aliasNarrowedNodes(
 
 	collect(owner.initializer);
 	const readsThis = thisReads.length > 0;
-	if (symbols.size === 0 && !readsThis) {
+	if (!readsThis && symbols.size === 0) {
 		return [];
 	}
 
@@ -1412,7 +1430,7 @@ function aliasNarrowedNodes(
 		}
 
 		if (node.pos >= owner.end) {
-			if (node.kind === ts.SyntaxKind.ThisKeyword && readsThis) {
+			if (readsThis && node.kind === ts.SyntaxKind.ThisKeyword) {
 				observe(node);
 			} else if (ts.isIdentifier(node) && names.has(node.text)) {
 				const symbol = checker.getSymbolAtLocation(node);
@@ -1457,6 +1475,41 @@ function withoutThis(factory: ts.NodeFactory, node: ts.TypeNode): ts.TypeNode {
 	);
 }
 
+function declarations(
+	checker: ts.TypeChecker,
+	type: ts.Type,
+	locate: (declaration: ts.Node) => string,
+	omitThis: boolean,
+): string {
+	const keys = new Set<string>();
+	function add(name: ts.EntityName): void {
+		const identifier = ts.isQualifiedName(name) ? name.right : name;
+		// The node builder attaches the symbol each emitted name denotes.
+		const { symbol } = identifier as ts.Node & { symbol?: ts.Symbol };
+		const declaration = symbol?.declarations?.[0];
+		if (declaration !== undefined) {
+			keys.add(`${identifier.text}@${locate(declaration)}`);
+		}
+	}
+
+	function visit(current: ts.Node): void {
+		if (ts.isTypeReferenceNode(current)) {
+			add(current.typeName);
+		} else if (ts.isTypeQueryNode(current)) {
+			add(current.exprName);
+		}
+
+		ts.forEachChild(current, visit);
+	}
+
+	const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
+	if (node !== undefined) {
+		visit(omitThis ? withoutThis(ts.factory, node) : node);
+	}
+
+	return [...keys].sort().join(", ");
+}
+
 /**
  * Normalize property ordering, preserving every overload and intersection.
  * Names are qualified with their declarations, so two types that print the
@@ -1471,41 +1524,6 @@ function createTypePrinter(): (
 ) => string {
 	const cache = new Map<string, string>();
 	const printer = ts.createPrinter({ removeComments: true });
-	function declarations(
-		checker: ts.TypeChecker,
-		type: ts.Type,
-		locate: (declaration: ts.Node) => string,
-		omitThis: boolean,
-	): string {
-		const keys = new Set<string>();
-		function add(name: ts.EntityName): void {
-			const identifier = ts.isQualifiedName(name) ? name.right : name;
-			// The node builder attaches the symbol each emitted name denotes.
-			const { symbol } = identifier as ts.Node & { symbol?: ts.Symbol };
-			const declaration = symbol?.declarations?.[0];
-			if (declaration !== undefined) {
-				keys.add(`${identifier.text}@${locate(declaration)}`);
-			}
-		}
-
-		function visit(current: ts.Node): void {
-			if (ts.isTypeReferenceNode(current)) {
-				add(current.typeName);
-			} else if (ts.isTypeQueryNode(current)) {
-				add(current.exprName);
-			}
-
-			ts.forEachChild(current, visit);
-		}
-
-		const node = checker.typeToTypeNode(type, undefined, ts.NodeBuilderFlags.NoTruncation);
-		if (node !== undefined) {
-			visit(omitThis ? withoutThis(ts.factory, node) : node);
-		}
-
-		return [...keys].sort().join(", ");
-	}
-
 	return (checker, node, locate, omitThis = false) => {
 		const target =
 			ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
@@ -1576,7 +1594,7 @@ function createTypePrinter(): (
 									),
 								])
 							: root;
-					return ts.visitNode(stripped, visit) as ts.SourceFile;
+					return ts.visitNode(stripped, visit, ts.isSourceFile);
 				};
 			},
 		]);

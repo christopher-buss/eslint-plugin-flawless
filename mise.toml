@@ -6,4 +6,5 @@ experimental = true
 lockfile = true
 
 [tools]
-node = { version = "lts", postinstall = "corepack enable" }
+node = "lts"
+pnpm = "12.18.0"

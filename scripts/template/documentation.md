@@ -38,12 +38,7 @@ Example configuration with options:
 
 ```json
 {
-	"roblox-ts/{{RULE_NAME}}": [
-		"error",
-		{
-			/* optionName: optionValue */
-		}
-	]
+	"roblox-ts/{{RULE_NAME}}": ["error", {/* optionName: optionValue */}]
 }
 ```
 

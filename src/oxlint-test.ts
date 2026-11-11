@@ -62,10 +62,14 @@ interface OxlintFixture {
 	readonly filePath: string;
 }
 
+interface OxlintOutput {
+	diagnostics: Array<{ code?: string; message: string }>;
+}
+
 /**
- * Ensures the oxlint plugin entry has been built. The oxlint suite exercises the
- * shipped `dist/oxlint.mjs` (loaded by oxlint's `jsPlugins`), so a build is
- * required; build once if it is missing.
+ * Ensures the oxlint plugin entry has been built. The oxlint suite exercises
+ * the shipped `dist/oxlint.mjs` (loaded by oxlint's `jsPlugins`), so a build
+ * is required; build once if it is missing.
  */
 export function ensureOxlintPluginBuilt(): void {
 	if (existsSync(builtPluginPath)) {
@@ -150,25 +154,44 @@ function invokeOxlint(args: Array<string>, cwd: string): string {
 	} catch (err) {
 		// oxlint exits non-zero when diagnostics are found; stdout still holds
 		// them.
-		const { stdout } = err as { stdout?: string };
-		if (typeof stdout === "string") {
-			return stdout;
+		if (
+			typeof err === "object" &&
+			err !== null &&
+			"stdout" in err &&
+			typeof err.stdout === "string"
+		) {
+			return err.stdout;
 		}
 
 		throw err;
 	}
 }
 
+function isOxlintOutput(value: unknown): value is OxlintOutput {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"diagnostics" in value &&
+		Array.isArray(value.diagnostics)
+	);
+}
+
+function parseDiagnostics(value: unknown): OxlintOutput {
+	if (!isOxlintOutput(value)) {
+		throw new Error("Unexpected oxlint JSON output.");
+	}
+
+	return value;
+}
+
 function lint(configPath: string, filePath: string, cwd: string): Array<OxlintDiagnostic> {
 	const stdout = invokeOxlint(["--config", configPath, "-f", "json", filePath], cwd);
-	const parsed = JSON.parse(stdout) as {
-		diagnostics: Array<{ code?: string; message: string }>;
-	};
+	const parsed = parseDiagnostics(JSON.parse(stdout));
 	// A thrown plugin drops every remaining diagnostic for the file, so the
 	// rule under test would look silent instead of broken. Fail loudly.
-	const crash = parsed.diagnostics.find(({ message }) =>
-		message.includes("Error running JS plugin"),
-	);
+	const crash = parsed.diagnostics.find(({ message }) => {
+		return message.includes("Error running JS plugin");
+	});
 	if (crash !== undefined) {
 		throw new Error(crash.message);
 	}

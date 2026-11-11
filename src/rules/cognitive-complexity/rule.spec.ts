@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { cognitiveComplexity, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { cognitiveComplexity, RULE_NAME } from "./rule.ts";
 
 const messageId = "tooComplex";
 const filename = "file.tsx";
@@ -259,8 +260,8 @@ const invalid: Array<InvalidTestCase> = [
 	// Above the threshold: report.
 	{
 		code: "function f() { if (a) {} if (b) {} if (c) {} }",
-		errors: [{ data: { complexity: 3, threshold: 2 }, messageId }],
 		options: [{ threshold: 2 }],
+		errors: [{ data: { complexity: 3, threshold: 2 }, messageId }],
 	},
 	// Above the default threshold of 15.
 	{

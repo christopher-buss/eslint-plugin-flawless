@@ -57,15 +57,11 @@ which reports a copy followed by `every`, `find`, `forEach`, `some`, or
 Examples of **incorrect** code for this rule:
 
 ```ts
-const names = [...users.values()]
-	.filter((user) => user.active)
-	.map((user) => user.name);
+const names = [...users.values()].filter((user) => user.active).map((user) => user.name);
 
-const weights = new Map(
-	[...graph.nodes].map(([id, node]) => [id, node.weight]),
-);
+const weights = new Map(Array.from(graph.nodes, ([id, node]) => [id, node.weight]));
 
-const keys = Array.from(map.keys()).filter((key) => key !== "");
+const keys = [...map.keys()].filter((key) => key !== "");
 ```
 
 Examples of **correct** code for this rule:
@@ -77,9 +73,7 @@ const names = users
 	.map((user) => user.name)
 	.toArray();
 
-const weights = new Map(
-	graph.nodes.entries().map(([id, node]) => [id, node.weight]),
-);
+const weights = new Map(graph.nodes.entries().map(([id, node]) => [id, node.weight]));
 
 // An eager chain on an array is fine.
 const labels = items

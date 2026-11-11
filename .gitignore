@@ -9,7 +9,7 @@ lib-cov
 logs
 node_modules
 temp
-.eslintcache
+.eslintcache*
 
 .claude/worktrees
 

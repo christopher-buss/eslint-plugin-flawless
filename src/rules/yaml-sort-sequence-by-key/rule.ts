@@ -4,9 +4,9 @@ import type { YAMLSourceCode } from "eslint-plugin-yml";
 import naturalCompare from "natural-compare";
 import type { AST } from "yaml-eslint-parser";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { YamlContext } from "../../utils/types";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { YamlContext } from "../../utils/types.ts";
 
 export const RULE_NAME = "yaml-sort-sequence-by-key";
 
@@ -211,21 +211,48 @@ function bubbleSort(
 		for (let index = 1; index < result.length; index += 1) {
 			const previous = result[index - 1];
 			const next = result[index];
-			if (previous === undefined || next === undefined) {
-				continue;
+			if (
+				previous !== undefined &&
+				next !== undefined &&
+				!isValidOrder(previous, next) &&
+				!shouldKeepOrder(previous, next)
+			) {
+				result[index - 1] = next;
+				result[index] = previous;
+				swapped = true;
 			}
-
-			if (isValidOrder(previous, next) || shouldKeepOrder(previous, next)) {
-				continue;
-			}
-
-			result[index - 1] = next;
-			result[index] = previous;
-			swapped = true;
 		}
 	}
 
 	return result;
+}
+
+/**
+ * Extends the longest increasing subsequence ending at `index` from any
+ * earlier entry that gives a longer one.
+ *
+ * @param values - The target index of each entry, in source order.
+ * @param lengths - The subsequence length ending at each entry.
+ * @param previous - The predecessor of each entry in its subsequence.
+ * @param index - The entry to extend.
+ */
+function extendSubsequence(
+	values: ReadonlyArray<number>,
+	lengths: Array<number>,
+	previous: Array<number>,
+	index: number,
+): void {
+	for (let before = 0; before < index; before += 1) {
+		if (
+			(values[before] ?? 0) >= (values[index] ?? 0) ||
+			(lengths[before] ?? 0) + 1 <= (lengths[index] ?? 0)
+		) {
+			continue;
+		}
+
+		lengths[index] = (lengths[before] ?? 0) + 1;
+		previous[index] = before;
+	}
 }
 
 /**
@@ -240,15 +267,7 @@ function keptIndices(values: ReadonlyArray<number>): Set<number> {
 	const previous = values.map(() => -1);
 	let best = 0;
 	for (let index = 0; index < values.length; index += 1) {
-		for (let before = 0; before < index; before += 1) {
-			if (
-				(values[before] ?? 0) < (values[index] ?? 0) &&
-				(lengths[before] ?? 0) + 1 > (lengths[index] ?? 0)
-			) {
-				lengths[index] = (lengths[before] ?? 0) + 1;
-				previous[index] = before;
-			}
-		}
+		extendSubsequence(values, lengths, previous, index);
 
 		if ((lengths[index] ?? 0) > (lengths[best] ?? 0)) {
 			best = index;
@@ -300,6 +319,8 @@ function findTarget(
  * @param text - The source text, used for non-string keys.
  * @returns The path that `pathPattern` is tested against.
  */
+const IDENTIFIER_NAME = /^[$a-z_][\w$]*$/iu;
+
 function pathOf(node: AST.YAMLSequence, text: string): string {
 	let path = "";
 	let current: AST.YAMLNode = node;
@@ -315,11 +336,12 @@ function pathOf(node: AST.YAMLSequence, text: string): string {
 						: text.slice(...key.range);
 			}
 
-			path = /^[$a-z_][\w$]*$/iu.test(name)
+			path = IDENTIFIER_NAME.test(name)
 				? `.${name}${path}`
 				: `[${JSON.stringify(name)}]${path}`;
 		} else if (parent.type === "YAMLSequence") {
-			path = `[${parent.entries.indexOf(current as EntryNode)}]${path}`;
+			const entries: ReadonlyArray<AST.YAMLNode | null> = parent.entries;
+			path = `[${entries.indexOf(current)}]${path}`;
 		}
 
 		current = parent;
@@ -367,7 +389,7 @@ function create(context: Context): TSESLint.RuleListener {
 		const { caseSensitive = true, natural = false, type = "asc" } = spec.order ?? {};
 		const order: ResolvedOrder = { caseSensitive, natural, type };
 		// No `u` flag, matching yml: patterns such as `^a\-b$` stay valid.
-		return { ...spec, order, pattern: new RegExp(spec.pathPattern) };
+		return { key: spec.key, order, pattern: new RegExp(spec.pathPattern) };
 	});
 
 	/**
@@ -510,7 +532,6 @@ export const yamlSortSequenceByKey: EslintRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		defaultOptions: [],
 		docs: {
@@ -520,6 +541,9 @@ export const yamlSortSequenceByKey: EslintRuleModule<Options, MessageIds> = crea
 		},
 		fixable: "code",
 		hasSuggestions: false,
+		// Parser mode runs as `js/js`; `yml/yaml` is eslint-plugin-yml's
+		// language.
+		languages: ["js/js", "yml/yaml"],
 		messages,
 		schema,
 		type: "layout",

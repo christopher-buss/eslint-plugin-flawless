@@ -1,13 +1,17 @@
+autoInstallPeers: true
 catalogMode: prefer
 cleanupUnusedCatalogs: true
+dedupePeers: true
+enableGlobalVirtualStore: true
 enablePrePostScripts: true
-ignoreWorkspaceRootCheck: true
 
 minimumReleaseAgeExclude:
-  - eslint-plugin-eslint-plugin@7.4.1
   - "@isentinel/tsconfig@3.0.0"
 
+minimumReleaseAgeExcludePrune: true
 shellEmulator: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 10080
 
 packages:
   - "src/*"
@@ -16,26 +20,23 @@ overrides:
   eslint-plugin-flawless: link:.
   eslint-plugin-yml: catalog:testing
 
-allowBuilds:
-  esbuild: true
-  simple-git-hooks: true
-
 patchedDependencies:
   eslint-rule-benchmark@0.8.0: patches/eslint-rule-benchmark.patch
 
 catalogs:
   cli:
     "@antfu/ni": 30.2.0
-    "@isentinel/eslint-config": 5.2.0
-    "@typescript-eslint/eslint-plugin": 8.62.1
-    "@typescript-eslint/parser": 8.62.1
+    "@isentinel/eslint-config": 6.3.0
+    "@typescript-eslint/eslint-plugin": 8.72.2
+    "@typescript-eslint/parser": 8.72.2
     bumpp: 11.1.0
-    eslint: 9.39.4
+    eslint: 10.14.0
     eslint-plugin-pnpm: 1.6.1
     jiti: 2.7.0
     lint-staged: 17.0.8
-    oxc-parser: 0.142.0
-    oxfmt: 0.61.0
+    oxc-parser: 0.158.0
+    oxfmt: 0.78.0
+    oxlint-tsgolint: 7.0.2006
     simple-git-hooks: 2.13.1
     ts-api-utils: 2.5.0
     tsdown: 0.22.9
@@ -53,12 +54,12 @@ catalogs:
   testing:
     "@eslint/markdown": 8.0.3
     "@vitest/eslint-plugin": 1.6.20
-    eslint-plugin-eslint-plugin: 7.4.1
+    eslint-plugin-eslint-plugin: 7.6.2
     eslint-plugin-n: 18.2.1
     eslint-plugin-toml: 1.4.0
     eslint-plugin-yml: 3.5.0
     eslint-vitest-rule-tester: 3.1.0
-    oxlint: 1.78.0
+    oxlint: 1.93.0
     publint: 0.3.21
     unplugin-unused: 0.5.7
     vitest: 4.1.9
@@ -70,3 +71,19 @@ catalogs:
   utils:
     eslint-doc-generator: 3.6.0
     eslint-rule-benchmark: 0.8.0
+
+allowBuilds:
+  esbuild: true
+  simple-git-hooks: false
+
+configDependencies:
+  "@isentinel/pnpm-plugin-eslint-config": 6.3.0
+
+permissions:
+  eslint-vitest-rule-tester:
+    skills: true
+
+skills:
+  dirs:
+    - .agents/skills
+    - .claude/skills

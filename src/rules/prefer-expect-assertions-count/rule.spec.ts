@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { preferExpectAssertionsCount, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { preferExpectAssertionsCount, RULE_NAME } from "./rule.ts";
 
 const messageId = "preferCount";
 

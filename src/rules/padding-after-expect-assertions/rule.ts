@@ -1,8 +1,9 @@
-import { AST_NODE_TYPES, ASTUtils, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "padding-after-expect-assertions";
 
@@ -29,7 +30,8 @@ const messages = {
  * @param node - The expression statement to inspect.
  * @param sources - The modules whose named exports count as test globals.
  * @returns The matched member name (`expect.assertions` / `expect.hasAssertions`)
- *   for the message, or `undefined` when the statement is not an assertion count.
+ *   for the message, or `undefined` when the statement is not an assertion
+ *   count.
  */
 function getAssertionName(
 	sourceCode: Readonly<TSESLint.SourceCode>,
@@ -127,8 +129,8 @@ function findPaddingAnchor(
 }
 
 /**
- * Requires a blank line after the assertion count that opens a test, keeping the
- * bookkeeping visually separate from the expectations that follow.
+ * Requires a blank line after the assertion count that opens a test, keeping
+ * the bookkeeping visually separate from the expectations that follow.
  *
  * @param context - The rule context.
  * @returns The rule listener.
@@ -140,7 +142,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		before(): void {
 			sources = getTestGlobalSources(context.settings);
 		},
-		ExpressionStatement(node: TSESTree.ExpressionStatement): void {
+		ExpressionStatement(node): void {
 			const { sourceCode } = context;
 			const name = getAssertionName(sourceCode, node, sources);
 			if (name === undefined) {
@@ -188,7 +190,6 @@ export const paddingAfterExpectAssertions: FlawlessRuleModule<Options, MessageId
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
 		meta: {
 			docs: {
 				description:

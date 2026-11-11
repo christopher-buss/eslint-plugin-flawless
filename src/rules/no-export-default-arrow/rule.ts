@@ -1,10 +1,11 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 import path from "node:path";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { unwrapAssertedExpression } from "../shared/dictionary-types";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { unwrapAssertedExpression } from "../shared/dictionary-types.ts";
 
 export const RULE_NAME = "no-export-default-arrow";
 
@@ -19,6 +20,9 @@ const messages = {
 		"Assign the arrow function to a named constant instead of exporting it anonymously.",
 };
 
+const LEADING_UPPERCASE = /^[A-Z]/;
+const LEADING_LOWERCASE = /^[a-z]/;
+
 /**
  * Converts a filename stem to camelCase, treating `-`, `_`, and whitespace as
  * word separators (`use-mouse` -> `useMouse`).
@@ -29,7 +33,7 @@ const messages = {
 function toCamelCase(value: string): string {
 	return value
 		.replace(/[-_\s]+(.)?/g, (_, char: string | undefined) => char?.toUpperCase() ?? "")
-		.replace(/^[A-Z]/, (char) => char.toLowerCase());
+		.replace(LEADING_UPPERCASE, (char) => char.toLowerCase());
 }
 
 /**
@@ -42,7 +46,7 @@ function toCamelCase(value: string): string {
 function toPascalCase(value: string): string {
 	return value
 		.replace(/[-_\s]+(.)?/g, (_, char: string | undefined) => char?.toUpperCase() ?? "")
-		.replace(/^[a-z]/, (char) => char.toUpperCase());
+		.replace(LEADING_LOWERCASE, (char) => char.toUpperCase());
 }
 
 /**
@@ -70,10 +74,9 @@ function getArrowReturnValues(
 	}
 
 	return body.body
-		.filter(
-			(node): node is TSESTree.ReturnStatement =>
-				node.type === AST_NODE_TYPES.ReturnStatement,
-		)
+		.filter((node): node is TSESTree.ReturnStatement => {
+			return node.type === AST_NODE_TYPES.ReturnStatement;
+		})
 		.map((node) => node.argument)
 		.filter((argument): argument is TSESTree.Expression => argument !== null);
 }
@@ -185,7 +188,7 @@ function createFixFunction({
  */
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		ExportDefaultDeclaration(node: TSESTree.ExportDefaultDeclaration): void {
+		ExportDefaultDeclaration(node): void {
 			const arrowFunction = unwrapTypeExpressions(node.declaration);
 			if (arrowFunction.type !== AST_NODE_TYPES.ArrowFunctionExpression) {
 				return;
@@ -212,8 +215,8 @@ export const noExportDefaultArrow: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow anonymous arrow functions as export default declarations",
 			recommended: false,

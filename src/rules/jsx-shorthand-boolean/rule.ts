@@ -1,7 +1,5 @@
-import type { TSESTree } from "@typescript-eslint/utils";
-
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "jsx-shorthand-boolean";
 
@@ -17,7 +15,7 @@ const messages = {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		JSXAttribute(node: TSESTree.JSXAttribute): void {
+		JSXAttribute(node): void {
 			// A shorthand boolean attribute has no value, e.g. `<C disabled />`.
 			if (node.value !== null) {
 				return;
@@ -39,8 +37,8 @@ export const jsxShorthandBoolean: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow shorthand boolean JSX attributes",
 			recommended: false,

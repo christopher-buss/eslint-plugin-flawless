@@ -11,8 +11,8 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 import type { Program, Type, TypeChecker } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "no-materialized-filter-map";
 
@@ -72,7 +72,10 @@ const CHAIN_METHODS = new Set(["filter", "map"]);
 /** Built-in iterators whose iteration runs no user code. */
 const BUILTIN_ITERATOR_NAMES = new Set(["ArrayIterator", "MapIterator", "SetIterator"]);
 
-/** Built-in collections, and the method that yields what a spread of them yields. */
+/**
+ * Built-in collections, and the method that yields what a spread of them
+ * yields.
+ */
 const COLLECTION_METHODS = new Map([
 	["Map", "entries"],
 	["ReadonlyMap", "entries"],
@@ -116,7 +119,9 @@ const MEMBER_SAFE_TYPES = new Set<string>([
 	AST_NODE_TYPES.ThisExpression,
 ]);
 
-/** Token types that end an expression, so a `(` or `[` after them continues it. */
+/**
+ * Token types that end an expression, so a `(` or `[` after them continues it.
+ */
 const EXPRESSION_END_TOKENS = new Set<string>([
 	AST_TOKEN_TYPES.Boolean,
 	AST_TOKEN_TYPES.Identifier,
@@ -147,8 +152,8 @@ type SourceCode = Readonly<TSESLint.SourceCode>;
 /**
  * How the fix reaches an iterator from the materialized iterable.
  *
- * - `iterator`: the iterable is already an iterator with helpers; drop the copy.
- * - `method`: a built-in `Map` or `Set`; call the method a spread uses.
+ * - `iterator`: the iterable is already an iterator with helpers; drop the
+ * copy. - `method`: a built-in `Map` or `Set`; call the method a spread uses.
  * - `from`: anything else; wrap it in `Iterator.from`, which reads the same
  *   `[Symbol.iterator]` a spread reads.
  *
@@ -246,9 +251,9 @@ function getMaterializedIterable(
 
 	const [argument] = node.arguments;
 	if (
+		argument === undefined ||
 		node.optional ||
 		node.arguments.length !== 1 ||
-		argument === undefined ||
 		argument.type === AST_NODE_TYPES.SpreadElement
 	) {
 		return undefined;
@@ -335,8 +340,8 @@ const NON_ITERABLE_FLAGS =
  *
  * Every union member must be iterable, and at least one must not be an array:
  * copying an array only drops a copy, which is not what this rule is about.
- * Arrays may still appear in a union, so `[...(map ?? [])]` reports. Strings are
- * rejected: spreading one into characters is its own idiom.
+ * Arrays may still appear in a union, so `[...(map ?? [])]` reports. Strings
+ * are rejected: spreading one into characters is its own idiom.
  *
  * @param type - The type of the copied iterable.
  * @param checker - The checker that resolves the contextual type.
@@ -401,8 +406,12 @@ function readsArguments(sourceCode: SourceCode, callback: TSESTree.FunctionExpre
 	return variable !== undefined && variable.references.length > 0;
 }
 
+function isNode(value: unknown): value is TSESTree.Node {
+	return typeof value === "object" && value !== null && "type" in value;
+}
+
 function hasVisibleEffects(sourceCode: SourceCode, root: TSESTree.Node): boolean {
-	const pending: Array<TSESTree.Node> = [root];
+	const pending = [root];
 	for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
 		if (EFFECT_NODE_TYPES.has(node.type)) {
 			return true;
@@ -412,12 +421,13 @@ function hasVisibleEffects(sourceCode: SourceCode, root: TSESTree.Node): boolean
 			return true;
 		}
 
-		for (const key of sourceCode.visitorKeys[node.type] ?? []) {
-			const child: unknown = node[key as keyof typeof node];
+		const keys = sourceCode.visitorKeys[node.type] ?? [];
+		for (const key of keys) {
+			const child: unknown = Reflect.get(node, key);
 			const children: Array<unknown> = Array.isArray(child) ? child : [child];
 			for (const entry of children) {
-				if (typeof entry === "object" && entry !== null && "type" in entry) {
-					pending.push(entry as TSESTree.Node);
+				if (isNode(entry)) {
+					pending.push(entry);
 				}
 			}
 		}
@@ -442,8 +452,8 @@ function hasVisibleEffects(sourceCode: SourceCode, root: TSESTree.Node): boolean
 function judgeStep(sourceCode: SourceCode, call: TSESTree.CallExpression): Verdict {
 	const [callback] = call.arguments;
 	if (
-		call.arguments.length !== 1 ||
 		callback === undefined ||
+		call.arguments.length !== 1 ||
 		callback.type === AST_NODE_TYPES.SpreadElement
 	) {
 		return "blocked";
@@ -553,12 +563,9 @@ function getReplacement(
 	iterable: TSESTree.Expression,
 	source: Source,
 ): string | undefined {
-	const hasDroppedComment = sourceCode
-		.getCommentsInside(copy)
-		.some(
-			(comment) =>
-				comment.range[0] < iterable.range[0] || comment.range[1] > iterable.range[1],
-		);
+	const hasDroppedComment = sourceCode.getCommentsInside(copy).some((comment) => {
+		return comment.range[0] < iterable.range[0] || comment.range[1] > iterable.range[1];
+	});
 	if (hasDroppedComment) {
 		return undefined;
 	}
@@ -729,7 +736,6 @@ export const noMaterializedFilterMap: FlawlessRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

@@ -1,14 +1,9 @@
 import * as core from "@eslint-react/core";
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "purity";
 
@@ -227,7 +222,7 @@ function isRenderContext(reactContext: ReactContext, func: FunctionNode): boolea
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
-	const reactContext = context as unknown as ReactContext;
+	const reactContext: ReactContext = context;
 
 	// Built per file in `before`, since it depends on `context.options` which
 	// must not be read in the `createOnce` body.
@@ -265,21 +260,23 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		before(): void {
 			const options = context.options[0] ?? {};
 			signatures = new Set<string>(DEFAULT_SIGNATURES);
-			for (const signature of options.additionalFunctions ?? []) {
+			const additional = options.additionalFunctions ?? [];
+			for (const signature of additional) {
 				signatures.add(signature);
 			}
 
-			for (const signature of options.ignore ?? []) {
+			const ignored = options.ignore ?? [];
+			for (const signature of ignored) {
 				signatures.delete(signature);
 			}
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			const match = dottedCalleePath(node.callee);
 			if (match !== null) {
 				handle(node, match, match.path);
 			}
 		},
-		NewExpression(node: TSESTree.NewExpression): void {
+		NewExpression(node): void {
 			const match = dottedCalleePath(node.callee);
 			if (match !== null) {
 				handle(node, match, `${match.path}.new`);
@@ -294,7 +291,6 @@ export const purity: FlawlessRuleModule<Options, MessageIds> = createFlawlessRul
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

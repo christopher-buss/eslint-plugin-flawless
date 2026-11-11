@@ -1,9 +1,10 @@
-import { AST_NODE_TYPES, TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { scanAssertImports } from "../../utils/assert-imports";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { scanAssertImports } from "../../utils/assert-imports.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-floating-point-equality";
 
@@ -89,7 +90,7 @@ function isExactlyRepresentableDecimal(raw: string): boolean {
 }
 
 function isExactIntegerDivision(left: number, right: number): boolean {
-	if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right) || right === 0) {
+	if (right === 0 || !Number.isSafeInteger(left) || !Number.isSafeInteger(right)) {
 		return false;
 	}
 
@@ -176,6 +177,20 @@ function orientations(node: TSESTree.BinaryExpression): Array<Orientation> {
 	}
 
 	return [];
+}
+
+function isFractionProducingDivision(node: TSESTree.BinaryExpression): boolean {
+	const left = numericLiteralValue(node.left);
+	const right = numericLiteralValue(node.right);
+	if (left === null || right === null || right === 0) {
+		return false;
+	}
+
+	return (
+		Number.isInteger(left) &&
+		!Number.isInteger(left / right) &&
+		!isExactIntegerDivision(left, right)
+	);
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
@@ -266,20 +281,6 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			!isExactlyRepresentableDecimal(raw);
 		literalSensitivity.set(raw, sensitive);
 		return sensitive;
-	}
-
-	function isFractionProducingDivision(node: TSESTree.BinaryExpression): boolean {
-		const left = numericLiteralValue(node.left);
-		const right = numericLiteralValue(node.right);
-		if (left === null || right === null || right === 0) {
-			return false;
-		}
-
-		return (
-			Number.isInteger(left) &&
-			!Number.isInteger(left / right) &&
-			!isExactIntegerDivision(left, right)
-		);
 	}
 
 	function isFloatingPointConst(identifier: TSESTree.Identifier): boolean {
@@ -443,7 +444,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			const name = propertyName(received) ?? "";
 			if (name === "not" && !hasNot) {
 				hasNot = true;
-			} else if (EXPECT_MODIFIERS.has(name) && !hasModifier) {
+			} else if (!hasModifier && EXPECT_MODIFIERS.has(name)) {
 				hasModifier = true;
 			} else {
 				return null;
@@ -538,7 +539,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				indexReferences(variable);
 			}
 		},
-		BinaryExpression(node: TSESTree.BinaryExpression): void {
+		BinaryExpression(node): void {
 			if (
 				EQUALITY_OPERATORS.has(node.operator) &&
 				(isFloatingPointSensitive(node.left) || isFloatingPointSensitive(node.right))
@@ -546,18 +547,18 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				report(node);
 			}
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			const argumentsToCheck = expectArguments(node) ?? assertArguments(node);
 			if (argumentsToCheck?.some(isFloatingPointSensitive) === true) {
 				report(node);
 			}
 		},
-		LogicalExpression(node: TSESTree.LogicalExpression): void {
+		LogicalExpression(node): void {
 			if (isIndirectExactComparison(node)) {
 				report(node);
 			}
 		},
-		SwitchCase(node: TSESTree.SwitchCase): void {
+		SwitchCase(node): void {
 			if (node.test !== null && isFloatingPointSensitive(node.test)) {
 				report(node.test);
 			}
@@ -571,8 +572,8 @@ export const noFloatingPointEquality: FlawlessRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow exact equality checks involving floating-point-sensitive values",
 			recommended: false,

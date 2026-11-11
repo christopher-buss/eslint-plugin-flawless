@@ -19,22 +19,29 @@ const READONLY_WRAPPER_NAMES = new Set([
  */
 const REACT_BUILTIN_PROPS = new Set(["children", "key", "ref"]);
 
-/** The mutable members of a props type, as needed to insert `readonly` modifiers. */
+/**
+ * The mutable members of a props type, as needed to insert `readonly`
+ * modifiers.
+ */
 export interface MutableMembers {
-	/** Index signatures (`[key: string]: T`) that are not already `readonly`. */
+	/**
+	 * Index signatures (`[key: string]: T`) that are not already `readonly`.
+	 */
 	readonly indexInfos: ReadonlyArray<IndexInfo>;
-	/** Property symbols that are not already read-only (nor React built-ins). */
+	/**
+	 * Property symbols that are not already read-only (nor React built-ins).
+	 */
 	readonly properties: ReadonlyArray<TSSymbol>;
 }
 
 /**
  * Determines whether every property of a props type is read-only.
  *
- * Ported from `eslint-cease-nonsense-rules`. Union and intersection members are
- * checked recursively, index signatures must be read-only, and base (extended)
- * types are traversed so an inherited `readonly` modifier still counts. A type
- * aliased to a known read-only wrapper (such as `Readonly<T>`) short-circuits to
- * read-only.
+ * Ported from `eslint-cease-nonsense-rules`. Union and intersection members
+ * are checked recursively, index signatures must be read-only, and base
+ * (extended) types are traversed so an inherited `readonly` modifier still
+ * counts. A type aliased to a known read-only wrapper (such as `Readonly<T>`)
+ * short-circuits to read-only.
  *
  * @param checker - The TypeScript type checker.
  * @param type - The props type to inspect.
@@ -51,7 +58,7 @@ export function isTypeFullyReadonly(
 	const aliasSymbol = type.aliasSymbol ?? type.getSymbol();
 	if (aliasSymbol) {
 		const name = aliasSymbol.getName();
-		if (READONLY_WRAPPER_NAMES.has(name) || name === extraWrapperName) {
+		if (name === extraWrapperName || READONLY_WRAPPER_NAMES.has(name)) {
 			return true;
 		}
 	}
@@ -132,7 +139,16 @@ function isPropertyReadonlyInBaseType(
 	const propertyName = property.getName();
 	const baseTypes = [...getBaseTypes(type)];
 
-	for (const baseType of baseTypes) {
+	// Base types found below are appended and visited in turn, so the walk
+	// reads by index rather than iterating the growing array.
+	let index = 0;
+	while (index < baseTypes.length) {
+		const baseType = baseTypes[index];
+		index += 1;
+		if (baseType === undefined) {
+			continue;
+		}
+
 		const baseProperty = baseType.getProperty(propertyName);
 		if (baseProperty === undefined) {
 			continue;

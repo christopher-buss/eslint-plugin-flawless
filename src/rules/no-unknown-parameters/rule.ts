@@ -1,13 +1,14 @@
-import { AST_NODE_TYPES, ASTUtils, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	containsUnknownType,
 	parameterAnnotation,
 	parameterBinding,
 	parameterName,
-} from "../shared/function-parameters";
+} from "../shared/function-parameters.ts";
 
 export const RULE_NAME = "no-unknown-parameters";
 
@@ -261,7 +262,8 @@ function functionImplementation(
 	}
 
 	const name = signature.id?.name;
-	for (const statement of siblingStatements(signature) ?? []) {
+	const siblings = siblingStatements(signature) ?? [];
+	for (const statement of siblings) {
 		const candidate = unwrapExport(statement);
 		if (candidate.type === AST_NODE_TYPES.FunctionDeclaration && candidate.id?.name === name) {
 			return candidate;
@@ -415,8 +417,8 @@ export const noUnknownParameters: FlawlessRuleModule<Options, MessageIds> = crea
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Disallow `unknown` function parameters outside type-predicate subjects and recorded error causes",

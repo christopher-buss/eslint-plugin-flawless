@@ -1,12 +1,8 @@
-import {
-	type InvalidTestCase,
-	run as runDefaultParser,
-	unindent as tsx,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { run as runDefaultParser, unindent as tsx } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noUnnecessaryPropertyAlias, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noUnnecessaryPropertyAlias, RULE_NAME } from "./rule.ts";
 
 const messageId = "unnecessaryAlias";
 const filename = "file.tsx";
@@ -14,98 +10,99 @@ const filename = "file.tsx";
 const valid: Array<ValidTestCase> = [
 	// Shorthand, defaults and rest.
 	{
+		filename,
 		code: tsx`
 			function Panel({ options, gap = 4, ...rest }: PanelProps) {
 				return <div style={{ gap }} {...rest}>{options}</div>;
 			}
 		`,
-		filename,
 	},
 	// Fallback without an alias.
 	{
+		filename,
 		code: tsx`
 			function Panel({ options }: PanelProps) {
 				const { spacing, padding } = options ?? defaultOptions;
 				return <div style={{ gap: spacing, padding }} />;
 			}
 		`,
-		filename,
 	},
 	// A component-valued prop rendered as JSX.
 	{
+		filename,
 		code: tsx`
 			function Field({ label: Label }: FieldProps) {
 				return <Label />;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function Field({ icon: Icon = DefaultIcon }: FieldProps) {
 				return <div><Icon.Small /></div>;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function Field(props: FieldProps) {
 				const { label: Label } = props;
 				return <Label>text</Label>;
 			}
 		`,
-		filename,
 	},
 	// The prop name is an outer binding that the component reads.
 	{
+		filename,
 		code: tsx`
 			import { value } from "./store";
 			function Input({ value: inputValue }: InputProps) {
 				return <input value={inputValue} defaultValue={value} />;
 			}
 		`,
-		filename,
 	},
 	// The prop name is an unrelated local binding.
 	{
+		filename,
 		code: tsx`
 			function Row({ id: rowId }: RowProps) {
 				const { id } = useContext(RowContext);
 				return <div data-row={rowId} data-id={id} />;
 			}
 		`,
-		filename,
 	},
 	// Swapped names.
 	{
+		filename,
 		code: tsx`
 			function Pair({ left: right, right: left }: PairProps) {
 				return <div>{left}{right}</div>;
 			}
 		`,
-		filename,
 	},
 	// The prop name is bound in a nested scope that uses the alias.
 	{
+		filename,
 		code: tsx`
 			function List({ items: entries }: ListProps) {
 				return <ul>{entries.map((items) => <li>{items}{entries.length}</li>)}</ul>;
 			}
 		`,
-		filename,
 	},
 	// The prop name is not a valid binding name.
 	{
+		filename,
 		code: tsx`
 			function Label({ for: htmlFor, "aria-label": ariaLabel, [key]: dynamic }: LabelProps) {
 				return <label htmlFor={htmlFor} aria-label={ariaLabel}>{dynamic}</label>;
 			}
 		`,
-		filename,
 	},
 	// Destructuring that is not component props.
 	{
+		filename,
 		code: tsx`
 			import { useState as useLocalState } from "react";
 			export { helper as renderHelper };
@@ -123,39 +120,39 @@ const valid: Array<ValidTestCase> = [
 				findText("x");
 			});
 		`,
-		filename,
 	},
 	// The local with the prop name is not a fallback for the alias.
 	{
+		filename,
 		code: tsx`
 			function Input({ value: initialValue }: InputProps) {
 				const [value, setValue] = useState(initialValue);
 				return <input value={value} onChange={(event) => setValue(event.target.value)} />;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function Price({ amount: rawAmount }: PriceProps) {
 				const amount = parseFloat(rawAmount);
 				return <span>{amount}</span>;
 			}
 		`,
-		filename,
 	},
 	// The code reads the alias after the fallback, so both names are needed.
 	{
+		filename,
 		code: tsx`
 			function Input({ value: rawValue }: InputProps) {
 				const value = rawValue ?? "";
 				return <input value={value} data-empty={rawValue === undefined} />;
 			}
 		`,
-		filename,
 	},
 	// A fallback in a nested scope: the rename would read the local too early.
 	{
+		filename,
 		code: tsx`
 			function List({ items: all }: ListProps) {
 				const count = () => {
@@ -165,62 +162,62 @@ const valid: Array<ValidTestCase> = [
 				return <ul>{count()}</ul>;
 			}
 		`,
-		filename,
 	},
 	// A JSX tag reads an outer binding with the prop name.
 	{
+		filename,
 		code: tsx`
 			import { Icon } from "./icons";
 			function Field({ Icon: CustomIcon }: FieldProps) {
 				return <><Icon /><CustomIcon /></>;
 			}
 		`,
-		filename,
 	},
 	// With reportConflicts, aliases that renaming another binding cannot remove.
 	{
+		filename,
 		code: tsx`
 			function Field({ label: Label, for: htmlFor }: FieldProps) {
 				return <Label htmlFor={htmlFor} />;
 			}
 		`,
-		filename,
 		options: [{ reportConflicts: true }],
 	},
 	// Render callbacks are not components.
 	{
+		filename,
 		code: tsx`
 			function List({ items }: ListProps) {
 				return <ul>{items.map(({ id: itemId }) => <li key={itemId} />)}</ul>;
 			}
 			const renderRow = ({ row: entry }: RowArguments) => <tr>{entry}</tr>;
 		`,
-		filename,
 	},
 	// A nested pattern is not an alias.
 	{
+		filename,
 		code: tsx`
 			function Box({ style: { color } }: BoxProps) {
 				return <div>{color}</div>;
 			}
 		`,
-		filename,
 	},
 	// Destructuring another object inside a component.
 	{
+		filename,
 		code: tsx`
 			function Card({ user }: CardProps) {
 				const { name: userName } = user;
 				return <div>{userName}</div>;
 			}
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	// The case from the rule's request.
 	{
+		filename,
 		code: tsx`
 			function Panel({ options: configuredOptions }: PanelProps) {
 				const options = configuredOptions ?? defaultOptions;
@@ -236,30 +233,30 @@ const invalid: Array<InvalidTestCase> = [
 				messageId,
 			},
 		],
-		filename,
 	},
 	// Alias with a default.
 	{
+		filename,
 		code: tsx`
 			const Panel = ({ title: providedTitle = "Untitled" }: PanelProps) => {
 				return <h1>{providedTitle}</h1>;
 			};
 		`,
 		errors: [{ data: { key: "title", alias: "providedTitle" }, messageId }],
-		filename,
 	},
 	// Parameter with a default.
 	{
+		filename,
 		code: tsx`
 			function Panel({ title: heading }: PanelProps = {}) {
 				return <h1>{heading}</h1>;
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// From a props variable.
 	{
+		filename,
 		code: tsx`
 			function Panel(props: PanelProps) {
 				const { options: configuredOptions, title } = props;
@@ -267,10 +264,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ data: { key: "options", alias: "configuredOptions" }, line: 2, messageId }],
-		filename,
 	},
 	// From a rest element of the props.
 	{
+		filename,
 		code: tsx`
 			function Panel({ title, ...rest }: PanelProps) {
 				const { options: panelOptions } = rest;
@@ -278,9 +275,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ data: { key: "options", alias: "panelOptions" }, messageId }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function Panel(props: PanelProps) {
 				const { title, ...rest } = props;
@@ -292,20 +289,20 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ line: 4, messageId }],
-		filename,
 	},
 	// A PascalCase prop name can already be a JSX tag.
 	{
+		filename,
 		code: tsx`
 			function Field({ Icon: IconComponent }: FieldProps) {
 				return <IconComponent />;
 			}
 		`,
 		errors: [{ data: { key: "Icon", alias: "IconComponent" }, messageId }],
-		filename,
 	},
 	// A prop name bound in a nested scope that does not use the alias.
 	{
+		filename,
 		code: tsx`
 			function List({ items: entries }: ListProps) {
 				const render = () => {
@@ -316,10 +313,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// Through type assertions.
 	{
+		filename,
 		code: tsx`
 			function Panel(props: PanelProps) {
 				const { title: heading } = props as TitledProps;
@@ -331,41 +328,41 @@ const invalid: Array<InvalidTestCase> = [
 			{ line: 2, messageId },
 			{ line: 3, messageId },
 		],
-		filename,
 	},
 	// A string key that is a valid binding name.
 	{
+		filename,
 		code: tsx`
 			function Panel({ "title": heading }: PanelProps) {
 				return <h1>{heading}</h1>;
 			}
 		`,
 		errors: [{ data: { key: "title", alias: "heading" }, messageId }],
-		filename,
 	},
 	// A TypeScript \`this\` parameter comes before the props.
 	{
+		filename,
 		code: tsx`
 			function Panel(this: void, { title: heading }: PanelProps) {
 				return <h1>{heading}</h1>;
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// With reportConflicts, an alias that avoids a name conflict.
 	{
+		filename,
 		code: tsx`
 			import { value } from "./store";
 			function Input({ value: inputValue }: InputProps) {
 				return <input value={inputValue} defaultValue={value} />;
 			}
 		`,
-		errors: [{ data: { key: "value", alias: "inputValue" }, messageId: "conflictingAlias" }],
-		filename,
 		options: [{ reportConflicts: true }],
+		errors: [{ data: { key: "value", alias: "inputValue" }, messageId: "conflictingAlias" }],
 	},
 	{
+		filename,
 		code: tsx`
 			function Row(props: RowProps) {
 				const { id: rowId, title: heading } = props;
@@ -373,26 +370,26 @@ const invalid: Array<InvalidTestCase> = [
 				return <div data-row={rowId} data-id={id}>{heading}</div>;
 			}
 		`,
+		options: [{ reportConflicts: true }],
 		errors: [
 			{ data: { key: "id", alias: "rowId" }, messageId: "conflictingAlias" },
 			{ data: { key: "title", alias: "heading" }, messageId },
 		],
-		filename,
-		options: [{ reportConflicts: true }],
 	},
 	{
+		filename,
 		code: tsx`
 			function Input({ value: initialValue }: InputProps) {
 				const [value, setValue] = useState(initialValue);
 				return <input value={value} onChange={(event) => setValue(event.target.value)} />;
 			}
 		`,
-		errors: [{ messageId: "conflictingAlias" }],
-		filename,
 		options: [{ reportConflicts: true }],
+		errors: [{ messageId: "conflictingAlias" }],
 	},
 	// memo and forwardRef components.
 	{
+		filename,
 		code: tsx`
 			const Panel = memo(({ title: heading }: PanelProps) => <h1>{heading}</h1>);
 			const Input = forwardRef((props: InputProps, ref) => {
@@ -404,7 +401,6 @@ const invalid: Array<InvalidTestCase> = [
 			{ line: 1, messageId },
 			{ line: 3, messageId },
 		],
-		filename,
 	},
 ];
 
@@ -425,15 +421,15 @@ void runDefaultParser({
 	name: `${RULE_NAME} (default parser)`,
 	invalid: [
 		{
+			filename: "file.jsx",
 			code: "function Panel({ title: heading }) { return <h1>{heading}</h1>; }",
 			errors: [{ messageId }],
-			filename: "file.jsx",
 		},
 		{
-			code: 'import { Icon } from "./icons"; function Field({ Icon: I }) { return <><Icon /><I /></>; }',
-			errors: [{ messageId: "conflictingAlias" }],
 			filename: "file.jsx",
+			code: 'import { Icon } from "./icons"; function Field({ Icon: I }) { return <><Icon /><I /></>; }',
 			options: [{ reportConflicts: true }],
+			errors: [{ messageId: "conflictingAlias" }],
 		},
 	],
 	languageOptions: {
@@ -442,12 +438,12 @@ void runDefaultParser({
 	rule: noUnnecessaryPropertyAlias,
 	valid: [
 		{
-			code: "function Field({ label: Label }) { return <Label />; }",
 			filename: "file.jsx",
+			code: "function Field({ label: Label }) { return <Label />; }",
 		},
 		{
-			code: 'import { Icon } from "./icons"; function Field({ Icon: I }) { return <><Icon /><I /></>; }',
 			filename: "file.jsx",
+			code: 'import { Icon } from "./icons"; function Field({ Icon: I }) { return <><Icon /><I /></>; }',
 		},
 	],
 });

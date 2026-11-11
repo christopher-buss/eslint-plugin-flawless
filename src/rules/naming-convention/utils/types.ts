@@ -1,6 +1,6 @@
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { MessageIds, Options } from "../rule";
+import type { MessageIds, Options } from "../rule.ts";
 import type {
 	IndividualAndMetaSelectorsString,
 	MetaSelectorType,
@@ -14,8 +14,8 @@ import type {
 	TypeModifierType,
 	UnderscoreOptionString,
 	UnderscoreOptionType,
-} from "./enums";
-import type { AllowedWordIndex } from "./format";
+} from "./enums.ts";
+import type { AllowedWordIndex } from "./format.ts";
 
 export type Context = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 
@@ -71,8 +71,8 @@ export interface NamingSelector {
 	/**
 	 * Words that may keep their own casing inside a name when checking the
 	 * strict formats. Replaces the shared
-	 * `settings.flawless.namingConvention.allowedWords` list when present, so an
-	 * empty array opts this selector out of it.
+	 * `settings.flawless.namingConvention.allowedWords` list when present, so
+	 * an empty array opts this selector out of it.
 	 */
 	allowedWords?: Array<string>;
 	/**

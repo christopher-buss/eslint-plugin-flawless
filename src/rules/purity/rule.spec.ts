@@ -1,11 +1,8 @@
-import {
-	type InvalidTestCase,
-	unindent as tsx,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { unindent as tsx } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { purity, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { purity, RULE_NAME } from "./rule.ts";
 
 const messageId = "impureCall";
 const filename = "file.tsx";
@@ -13,16 +10,17 @@ const filename = "file.tsx";
 const valid: Array<ValidTestCase> = [
 	// Impure call inside an event-handler closure, not during render.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const onClick = () => math.random();
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// Impure call inside a useEffect callback.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				useEffect(() => {
@@ -31,78 +29,78 @@ const valid: Array<ValidTestCase> = [
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// Impure call inside a useState lazy initializer.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const [value] = useState(() => math.random());
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// Impure call inside a useCallback body (not a useMemo).
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const cb = useCallback(() => os.time(), []);
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// `new Random(seed)` with an explicit seed is deterministic.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const rng = new Random(12345);
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// Negative literal seed (a UnaryExpression, not a Literal).
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const rng = new Random(-1);
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// A variable seed is also deterministic given that seed.
 	{
+		filename,
 		code: tsx`
 			function Component(props) {
 				const rng = new Random(props.seed);
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// A render prop is called later, not during this component's render.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				return <Child render={() => math.random()} />;
 			}
 		`,
-		filename,
 	},
 	// Plain, non-component/non-hook function is not render.
 	{
+		filename,
 		code: tsx`
 			function helper() {
 				return math.random();
 			}
 		`,
-		filename,
 	},
 	// Shadowed global: local \`math\` is not the ambient Luau global.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const math = { random: () => 1 };
@@ -110,27 +108,26 @@ const valid: Array<ValidTestCase> = [
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// Computed access is intentionally not matched.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const value = os["clock"]();
 				return <frame />;
 			}
 		`,
-		filename,
 	},
 	// A default signature removed via \`ignore\`.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const value = os.date();
 				return <frame />;
 			}
 		`,
-		filename,
 		options: [{ ignore: ["os.date"] }],
 	},
 ];
@@ -138,6 +135,7 @@ const valid: Array<ValidTestCase> = [
 const invalid: Array<InvalidTestCase> = [
 	// math.random directly in a component body.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const value = math.random();
@@ -151,20 +149,20 @@ const invalid: Array<InvalidTestCase> = [
 				messageId,
 			},
 		],
-		filename,
 	},
 	// os.time in a custom hook body.
 	{
+		filename,
 		code: tsx`
 			function useThing() {
 				return os.time();
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// Optional chaining on the callee still matches.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const value = os?.clock();
@@ -172,10 +170,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// new Random() in a useMemo callback.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const rng = useMemo(() => new Random(), []);
@@ -183,10 +181,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// DateTime.now in a component body.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const now = DateTime.now();
@@ -194,10 +192,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// Direct-global service method: HttpService.GenerateGUID.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const id = HttpService.GenerateGUID();
@@ -205,10 +203,10 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// Direct-global service method: Workspace.GetServerTimeNow.
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const now = Workspace.GetServerTimeNow();
@@ -216,19 +214,18 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId }],
-		filename,
 	},
 	// User-supplied signature via \`additionalFunctions\` (Luau Math polyfill).
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const value = Math.random();
 				return <frame />;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		options: [{ additionalFunctions: ["Math.random"] }],
+		errors: [{ messageId }],
 	},
 ];
 

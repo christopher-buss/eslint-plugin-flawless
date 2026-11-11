@@ -1,8 +1,9 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 
-import { run } from "../test";
-import { noIgnoredReturn, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noIgnoredReturn, RULE_NAME } from "./rule.ts";
 
 const DECLARATIONS = unindent`
 	declare const list: number[];
@@ -143,7 +144,8 @@ const invalid: Array<InvalidTestCase> = [
 	{ code: '"abc".toUpperCase();', errors: [{ messageId: "ignoredReturn" }] },
 	{ code: "lit.toUpperCase();", errors: [{ messageId: "ignoredReturn" }] },
 	{ code: "(1.5).toFixed(0);", errors: [{ messageId: "ignoredReturn" }] },
-	// eslint-disable-next-line no-template-curly-in-string -- code under test
+
+	// oxlint-disable-next-line no-template-curly-in-string -- code under test
 	{ code: "`a${text}`.trim();", errors: [{ messageId: "ignoredReturn" }] },
 	{ code: "list.find((x) => x > 1);", errors: [{ messageId: "ignoredReturn" }] },
 	{ code: "list.some((x) => x > 1);", errors: [{ messageId: "ignoredReturn" }] },
@@ -231,15 +233,17 @@ const invalid: Array<InvalidTestCase> = [
 	},
 ].map((testCase) => {
 	// Report lines are written against the case body; shift them past the
-	// shared declarations.
+	// shared declarations. Each case literal is used once, so it is updated
+	// in place.
 	const offset = DECLARATIONS.split("\n").length;
-	return {
-		...testCase,
-		code: withDeclarations(testCase.code),
-		errors: testCase.errors.map((error) => {
-			return "line" in error ? { ...error, line: error.line + offset } : error;
-		}),
-	};
+	testCase.code = withDeclarations(testCase.code);
+	for (const error of testCase.errors) {
+		if ("line" in error) {
+			error.line += offset;
+		}
+	}
+
+	return testCase;
 });
 
 run({

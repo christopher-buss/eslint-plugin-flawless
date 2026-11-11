@@ -1,7 +1,8 @@
 /**
- * Identifiers that cannot be used as a binding name in strict-mode module code.
- * A property may be accessed with such a name (`props.default`), but a shorthand
- * destructuring pattern built from it (`{ default }`) would be a syntax error.
+ * Identifiers that cannot be used as a binding name in strict-mode module
+ * code. A property may be accessed with such a name (`props.default`), but a
+ * shorthand destructuring pattern built from it (`{ default }`) would be a
+ * syntax error.
  */
 export const RESERVED_WORDS: ReadonlySet<string> = new Set([
 	"arguments",

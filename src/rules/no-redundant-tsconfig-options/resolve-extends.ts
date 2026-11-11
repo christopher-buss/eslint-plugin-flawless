@@ -13,8 +13,8 @@ export interface InheritedEntry {
 }
 
 /**
- * The options a tsconfig inherits from everything it `extends`, flattened so the
- * nearest ancestor that defines a key wins. `topLevel` holds `include` /
+ * The options a tsconfig inherits from everything it `extends`, flattened so
+ * the nearest ancestor that defines a key wins. `topLevel` holds `include` /
  * `exclude` / `files`, which replace rather than merge in TypeScript.
  */
 export interface InheritedConfig {
@@ -35,10 +35,10 @@ interface RawTsconfig {
  * State threaded through one `buildInheritedConfig` resolution.
  *
  * `stack` is the current recursion path — a file is added while it is being
- * flattened and removed on return, so it guards cycles without deduping a shared
- * ancestor reached through two different `extends` branches (which must each
- * resolve it independently, per TypeScript's precedence). `cache` stores the
- * parse of each file so that independent resolution still reads disk once.
+ * flattened and removed on return, so it guards cycles without deduping a
+ * shared ancestor reached through two different `extends` branches (which must
+ * each resolve it independently, per TypeScript's precedence). `cache` stores
+ * the parse of each file so that independent resolution still reads disk once.
  */
 interface ResolveContext {
 	readonly cache: Map<string, RawTsconfig | undefined>;
@@ -88,9 +88,9 @@ export function resolveExtendsTarget(spec: string, fromFile: string): string | u
 }
 
 /**
- * Builds the config a child inherits from its `extends` targets alone (the child
- * itself excluded). Later targets in an `extends` array override earlier ones,
- * matching TypeScript's precedence.
+ * Builds the config a child inherits from its `extends` targets alone (the
+ * child itself excluded). Later targets in an `extends` array override earlier
+ * ones, matching TypeScript's precedence.
  *
  * @param childFile - The absolute path of the config being linted.
  * @param extendsField - The child's raw `extends` value (string or array).
@@ -121,8 +121,9 @@ export function buildInheritedConfig(
 
 /**
  * Whether an `extends` specifier is a filesystem path (relative or absolute)
- * rather than a package specifier. Matches TypeScript: a leading `.` or a rooted
- * path is a path; anything else resolves through node module resolution.
+ * rather than a package specifier. Matches TypeScript: a leading `.` or a
+ * rooted path is a path; anything else resolves through node module
+ * resolution.
  *
  * @param spec - The raw `extends` specifier.
  * @returns True when the specifier should resolve against the filesystem.

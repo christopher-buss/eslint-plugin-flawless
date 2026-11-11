@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noShapeInSymbolNames, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noShapeInSymbolNames, RULE_NAME } from "./rule.ts";
 
 const messageId = "shapeInName";
 const filename = "file.tsx";
@@ -66,16 +67,16 @@ const valid: Array<ValidTestCase> = [
 	`,
 	// JSX references a component and props declared elsewhere.
 	{
+		filename,
 		code: unindent`
 			const element = <Shape kind="round" />;
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: unindent`
 			const element = <Canvas shape="round" />;
 		`,
-		filename,
 	},
 	// Reading a private member is a reference, not a declaration.
 	unindent`
@@ -95,103 +96,103 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const shape = {};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			function getShape() {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			class ShapeFactory {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// The match is case insensitive and matches anywhere in the name.
 	{
 		code: unindent`
 			const SHAPE_COUNT = 1;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			function reshapePayload() {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Parameters, in every binding form.
 	{
 		code: unindent`
 			function draw(shape) {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			function draw(shape = {}) {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			function draw(...shapes) {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const draw = (shape: string): void => {};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A parameter of a declared function type is named by this file.
 	{
 		code: unindent`
 			type Draw = (shape: string) => void;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A shorthand pattern reports the local binding once, not the foreign key.
 	{
 		code: unindent`
 			function draw({ shape }) {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const { shape } = props;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const { outline: shape } = props;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const [shape] = list;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A caught error is an owned binding.
 	{
@@ -200,23 +201,23 @@ const invalid: Array<InvalidTestCase> = [
 				draw();
 			} catch (shapeError) {}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Object literal keys are written by the author of the literal.
 	{
 		code: unindent`
 			const config = { shape: 1 };
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const config = { shape };
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Class members, including private ones and parameter properties.
 	{
@@ -229,8 +230,8 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 	{
 		code: unindent`
@@ -238,8 +239,8 @@ const invalid: Array<InvalidTestCase> = [
 				constructor(private readonly shape: string) {}
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// TypeScript declarations.
 	{
@@ -248,8 +249,8 @@ const invalid: Array<InvalidTestCase> = [
 				id: string;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -258,8 +259,8 @@ const invalid: Array<InvalidTestCase> = [
 				shapeOf(): string;
 			};
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 	{
 		code: unindent`
@@ -267,8 +268,8 @@ const invalid: Array<InvalidTestCase> = [
 				return value;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -276,8 +277,8 @@ const invalid: Array<InvalidTestCase> = [
 				Shape = "shape",
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -285,8 +286,8 @@ const invalid: Array<InvalidTestCase> = [
 				export const version = 1;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Import locals the author chose.
 	{
@@ -295,8 +296,8 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const path = new Shape();
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -304,8 +305,8 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const path = new Shape();
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -313,8 +314,8 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const path = shapes.Circle;
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// An export alias is a name the author publishes.
 	{
@@ -323,15 +324,15 @@ const invalid: Array<InvalidTestCase> = [
 
 			export { outline as shape };
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export * as shapes from "three";
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// An export without an alias repeats a declaration that already reported.
 	{
@@ -340,11 +341,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export { shape };
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A JSX component is reported where it is declared, not where it is used.
 	{
+		filename,
 		code: unindent`
 			function ShapeCard() {
 				return <div />;
@@ -352,9 +354,8 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const element = <ShapeCard />;
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Every offending declaration in a file reports.
 	{
@@ -362,8 +363,8 @@ const invalid: Array<InvalidTestCase> = [
 			const shape = {};
 			const shapeCount = 1;
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 ];
 

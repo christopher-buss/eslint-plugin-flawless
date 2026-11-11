@@ -1,16 +1,15 @@
-import isentinel, { GLOB_YAML } from "@isentinel/eslint-config";
+import { GLOB_YAML, isentinel } from "@isentinel/eslint-config/eslint";
 
 export default isentinel(
 	{
 		eslintPlugin: true,
 		flawless: true,
+		oxlint: "native",
 		pnpm: true,
 		roblox: false,
 		rules: {
+			"flawless/max-lines-per-function": "off",
 			"flawless/naming-convention": "off",
-			"flawless/prefer-parameter-destructuring": "warn",
-			"max-lines": "off",
-			"max-lines-per-function": "off",
 			"package-json/require-bin": "off",
 			"package-json/restrict-top-level-properties": "off",
 			"sonar/cognitive-complexity": "off",
@@ -93,6 +92,15 @@ export default isentinel(
 		files: ["src/rules/no-redundant-type-annotation/documentation.md/**"],
 		rules: {
 			"func-style": "off",
+		},
+	},
+	{
+		// The documentation intentionally shows the exact float comparisons
+		// this rule reports.
+		files: ["src/rules/no-floating-point-equality/documentation.md/**"],
+		rules: {
+			"flawless/no-floating-point-equality": "off",
+			"sonar/no-floating-point-equality": "off",
 		},
 	},
 	{

@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noTrivialFunctions, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noTrivialFunctions, RULE_NAME } from "./rule.ts";
 
 const messageId = "trivial";
 
@@ -137,8 +138,8 @@ const invalid: Array<InvalidTestCase> = [
 			getName(first)
 			getName(second)
 		`,
-		errors: [{ data: { name: "getName", count: 2, minimum: 3 }, messageId }],
 		options: [{ minimumReferences: 3 }],
+		errors: [{ data: { name: "getName", count: 2, minimum: 3 }, messageId }],
 	},
 	// Recursive and `typeof` references do not count.
 	{
@@ -229,5 +230,5 @@ run({
 	invalid: [],
 	parserOptions: { ecmaVersion: "latest", sourceType: "script" },
 	rule: noTrivialFunctions,
-	valid: [{ code: "function getName(user) { return user.name }", filename: "script.js" }],
+	valid: [{ filename: "script.js", code: "function getName(user) { return user.name }" }],
 });

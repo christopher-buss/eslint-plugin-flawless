@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noConditionalInTest, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noConditionalInTest, RULE_NAME } from "./rule.ts";
 
 const messageId = "conditionalInTest";
 
@@ -335,8 +336,8 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			});
 		`,
-		errors: [{ messageId }],
 		options: [{ additionalTestBlockFunctions: ["myTest"] }],
+		errors: [{ messageId }],
 	},
 	// Optional chaining reported and fixed when disallowed (member).
 	{
@@ -345,13 +346,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(user?.name).toBe("ada");
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(user!.name).toBe("ada");
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Computed optional member.
 	{
@@ -360,13 +361,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(items?.[0]).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(items![0]).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Optional call.
 	{
@@ -375,13 +376,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(getValue?.()).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(getValue!()).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Multi-link chain converts every optional link.
 	{
@@ -390,13 +391,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(a?.b?.c).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(a!.b!.c).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// A wrapped chain keeps `!` on the object's line — TypeScript forbids a line
 	// break before `!`, so `a\n?.b` may not become `a\n!.b`.
@@ -409,8 +410,6 @@ const invalid: Array<InvalidTestCase> = [
 				).toBeUndefined();
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(
@@ -419,6 +418,8 @@ const invalid: Array<InvalidTestCase> = [
 				).toBeUndefined();
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Wrapped computed member. Replacing in place would yield `items\n![0]`,
 	// which ASI silently reinterprets as `items; ![0];`.
@@ -429,14 +430,14 @@ const invalid: Array<InvalidTestCase> = [
 					?.[0]).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(items!
 					[0]).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Wrapped optional call.
 	{
@@ -446,14 +447,14 @@ const invalid: Array<InvalidTestCase> = [
 					?.()).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(getValue!
 					()).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// The `!` anchors to the token before `?.`, so a parenthesized object keeps
 	// the assertion outside its closing paren.
@@ -463,13 +464,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect((user)?.name).toBe("ada");
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect((user)!.name).toBe("ada");
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 	// Multi-link chain where only the outer link wraps.
 	{
@@ -479,14 +480,14 @@ const invalid: Array<InvalidTestCase> = [
 					?.c).toBe(1);
 			});
 		`,
-		errors: [{ messageId }],
-		options: [{ allowOptionalChaining: false }],
 		output: unindent`
 			it("works", () => {
 				expect(a!.b!
 					.c).toBe(1);
 			});
 		`,
+		options: [{ allowOptionalChaining: false }],
+		errors: [{ messageId }],
 	},
 ];
 

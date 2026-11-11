@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { ensureOxlintPluginBuilt, runOxlint, runOxlintFix } from "./oxlint-test";
+import { ensureOxlintPluginBuilt, runOxlint, runOxlintFix } from "./oxlint-test.ts";
 
 // Integration tests: the dual-runtime rules are run through the real oxlint
 // binary loading the built `dist/oxlint.mjs` plugin, proving the
@@ -417,7 +417,8 @@ describe("oxlint integration", { timeout: 30_000 }, () => {
 				"// One — two — three. Four — five.",
 				"/** Block — comment. */",
 				'export const s = "a — b";',
-				// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
+
+				// oxlint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
 				"export const t = `c — ${s} d — e`;",
 				'export const el = <p title="f — g">h — i</p>;',
 				"export const pattern = /j—k/u;",

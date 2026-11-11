@@ -1,6 +1,6 @@
 import tsParser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
 import path from "node:path";
 import ts from "typescript";
 
@@ -122,7 +122,10 @@ export function checkFixes(snippets: ReadonlyArray<FixedSnippet>): Array<string>
  * @param snippets - Sources to lint, with no expectation on what is reported.
  * @returns One failure per unsafe or unsettled fix, empty when all are safe.
  */
-export function checkRuleFixes(rule: unknown, snippets: ReadonlyArray<Snippet>): Array<string> {
+export function checkRuleFixes(
+	rule: TSESLint.AnyRuleModule,
+	snippets: ReadonlyArray<Snippet>,
+): Array<string> {
 	const failures: Array<string> = [];
 	for (const [tsconfig, group] of groupByTsconfig(snippets)) {
 		let pending: Array<FixRun> = group.map((snippet) => ({ snippet, text: snippet.code }));
@@ -299,7 +302,7 @@ function hasBody(node: ts.Node): boolean {
  * @returns True when a call or `new` receives the node as an argument.
  */
 function isCallArgument(node: ts.Expression): boolean {
-	let argument: ts.Expression = node;
+	let argument = node;
 	while (ts.isParenthesizedExpression(argument.parent)) {
 		argument = argument.parent;
 	}
@@ -363,9 +366,9 @@ function takeSnapshot(program: ts.Program, fileName: string): Snapshot {
 		);
 		const [first] = type !== undefined && ts.isFunctionTypeNode(type) ? type.parameters : [];
 		if (
+			first === undefined ||
 			type === undefined ||
 			!ts.isFunctionTypeNode(type) ||
-			first === undefined ||
 			!ts.isIdentifier(first.name) ||
 			first.name.text !== "this"
 		) {
@@ -483,14 +486,14 @@ function describeFailure(
  * @param messages - The lint messages, fixable or not.
  * @returns The fixed source.
  */
-function applyFixes(text: string, messages: ReadonlyArray<Linter.LintMessage>): string {
+function applyFixes(text: string, messages: ReadonlyArray<TSESLint.Linter.LintMessage>): string {
 	const fixes = messages
 		.map(({ fix }) => fix)
 		.filter((fix) => fix !== undefined)
 		.sort((left, right) => left.range[0] - right.range[0] || left.range[1] - right.range[1]);
 
 	let output = "";
-	let last = Number.NEGATIVE_INFINITY;
+	let last = -Infinity;
 	for (const fix of fixes) {
 		if (last >= fix.range[0]) {
 			continue;
@@ -526,7 +529,7 @@ function runFixPass({
 }: {
 	failures: Array<string>;
 	pass: number;
-	rule: unknown;
+	rule: TSESLint.AnyRuleModule;
 	runs: ReadonlyArray<FixRun>;
 	tsconfig: string;
 }): Array<FixRun> {
@@ -540,14 +543,12 @@ function runFixPass({
 		},
 		...entries.map(({ fileName, run }) => ({ fileName, text: run.text })),
 	]);
-	const linter = new Linter({ configType: "flat", cwd: path.dirname(tsconfig) });
-	const config: Linter.Config = {
+	const linter = new TSESLint.Linter({ configType: "flat", cwd: path.dirname(tsconfig) });
+	const config: TSESLint.FlatConfig.Config = {
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: { parser: tsParser, parserOptions: { programs: [program] } },
 		plugins: {
-			subject: { rules: { rule } } as unknown as NonNullable<
-				Linter.Config["plugins"]
-			>[string],
+			subject: { rules: { rule } },
 		},
 		rules: { "subject/rule": "error" },
 	};

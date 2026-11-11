@@ -1,7 +1,8 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "no-conditional-empty-object-spread";
 
@@ -22,7 +23,7 @@ function isEmptyObjectExpression(node: TSESTree.Expression): boolean {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		SpreadElement(node: TSESTree.SpreadElement): void {
+		SpreadElement(node): void {
 			if (node.parent.type !== AST_NODE_TYPES.ObjectExpression) {
 				return;
 			}
@@ -47,7 +48,6 @@ export const noConditionalEmptyObjectSpread: FlawlessRuleModule<Options, Message
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
 		meta: {
 			docs: {
 				description: "Disallow conditional empty-object spreads",

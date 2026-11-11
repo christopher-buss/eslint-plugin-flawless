@@ -1,5 +1,6 @@
 import { DefinitionType } from "@typescript-eslint/scope-manager";
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { findVariable } from "@typescript-eslint/utils/ast-utils";
 
 /**
@@ -159,22 +160,27 @@ export function getCalleeRootIdentifier(node: TSESTree.Node): null | TSESTree.Id
  * @returns The dotted name, or `null` when it cannot be built statically.
  */
 export function getNodeName(node: TSESTree.Node): null | string {
-	if (node.type === AST_NODE_TYPES.Identifier) {
-		return node.name;
-	}
+	let current = node;
+	let suffix = "";
+	for (;;) {
+		if (current.type === AST_NODE_TYPES.Identifier) {
+			return `${current.name}${suffix}`;
+		}
 
-	if (node.type === AST_NODE_TYPES.CallExpression) {
-		return getNodeName(node.callee);
-	}
+		if (current.type === AST_NODE_TYPES.CallExpression) {
+			current = current.callee;
+			continue;
+		}
 
-	if (
-		node.type === AST_NODE_TYPES.MemberExpression &&
-		!node.computed &&
-		node.property.type === AST_NODE_TYPES.Identifier
-	) {
-		const objectName = getNodeName(node.object);
-		return objectName === null ? null : `${objectName}.${node.property.name}`;
-	}
+		if (
+			current.type !== AST_NODE_TYPES.MemberExpression ||
+			current.computed ||
+			current.property.type !== AST_NODE_TYPES.Identifier
+		) {
+			return null;
+		}
 
-	return null;
+		suffix = `.${current.property.name}${suffix}`;
+		current = current.object;
+	}
 }

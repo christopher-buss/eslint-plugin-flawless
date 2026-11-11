@@ -1,9 +1,10 @@
 import * as core from "@eslint-react/core";
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { RESERVED_WORDS } from "../../utils/reserved-words";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { RESERVED_WORDS } from "../../utils/reserved-words.ts";
 
 export const RULE_NAME = "no-unnecessary-prop-alias";
 
@@ -32,6 +33,8 @@ type Scope = TSESLint.Scope.Scope;
 type Variable = TSESLint.Scope.Variable;
 
 const IDENTIFIER_NAME = /^[$A-Z_a-z][\w$]*$/;
+
+type NodeHandler = (node: TSESTree.Node) => void;
 
 /**
  * Strips a parameter default (`{ a } = {}`) to reach the binding pattern.
@@ -119,11 +122,12 @@ function getJsxTagBinding(name: TSESTree.JSXTagNameExpression): string | undefin
  * @returns True if the variable is a fallback for the alias.
  */
 function isFallbackOf(variable: Variable, alias: Variable): boolean {
-	if (variable.scope !== alias.scope || variable.defs.length !== 1) {
+	const [definition] = variable.defs;
+	if (definition === undefined || variable.scope !== alias.scope || variable.defs.length !== 1) {
 		return false;
 	}
 
-	const [{ node }] = variable.defs as [TSESLint.Scope.Definition];
+	const { node } = definition;
 	if (
 		node.type !== AST_NODE_TYPES.VariableDeclarator ||
 		(node.init?.type !== AST_NODE_TYPES.LogicalExpression &&
@@ -177,15 +181,16 @@ function getParameterPropsVariables(parameter: TSESTree.Node, scope: Scope): Arr
 }
 
 /**
- * Gets the declarator whose object pattern reads an expression, looking through type
- * assertions: `const { a } = props`, `props as P`, `props!`, `props satisfies P`.
+ * Gets the object pattern of the declarator that reads an expression, looking
+ * through type assertions: `const { a } = props`, `props as P`, `props!`,
+ * `props satisfies P`.
  *
  * @param identifier - A reference to a props variable.
- * @returns The declarator, if the reference is its initializer.
+ * @returns The pattern, if the reference is its declarator's initializer.
  */
-function getDestructuringDeclarator(
+function getDestructuringPattern(
 	identifier: TSESTree.Identifier | TSESTree.JSXIdentifier,
-): TSESTree.VariableDeclarator | undefined {
+): TSESTree.ObjectPattern | undefined {
 	let node: TSESTree.Node = identifier;
 	while (
 		node.parent.type === AST_NODE_TYPES.TSAsExpression ||
@@ -201,10 +206,21 @@ function getDestructuringDeclarator(
 		parent.init === node &&
 		parent.id.type === AST_NODE_TYPES.ObjectPattern
 	) {
-		return parent;
+		return parent.id;
 	}
 
 	return undefined;
+}
+
+/**
+ * Narrows a selector handler read from a listener. Listener handlers are typed
+ * to take `never`, but each one accepts the node its selector matched.
+ *
+ * @param value - The handler, if any.
+ * @returns True when the value is a function.
+ */
+function isNodeHandler(value: unknown): value is NodeHandler {
+	return typeof value === "function";
 }
 
 /**
@@ -255,8 +271,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
-	 * Checks whether the alias must stay because the prop name is not free where
-	 * the alias lives. The name is not free when:
+	 * Checks whether the alias must stay because the prop name is not free
+	 * where the alias lives. The name is not free when:
 	 *
 	 * - another binding has the prop name in the alias's scope, or in a scope
 	 *   between a use of the alias and that scope (a local fallback for the
@@ -326,6 +342,33 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 	}
 
+	/**
+	 * Checks a `const { ... } = props` pattern that a reference initializes,
+	 * and queues the variable its rest element binds.
+	 *
+	 * @param reference - A reference to a props variable.
+	 * @param pending - The props variables still to check.
+	 */
+	function checkReference(reference: TSESLint.Scope.Reference, pending: Array<Variable>): void {
+		const pattern = getDestructuringPattern(reference.identifier);
+		if (pattern === undefined) {
+			return;
+		}
+
+		const scope = reference.from;
+		checkPattern(pattern, scope);
+		const rest = pattern.properties.at(-1);
+		if (
+			rest?.type === AST_NODE_TYPES.RestElement &&
+			rest.argument.type === AST_NODE_TYPES.Identifier
+		) {
+			const restVariable = scope.set.get(rest.argument.name);
+			if (restVariable !== undefined) {
+				pending.push(restVariable);
+			}
+		}
+	}
+
 	function checkPropsVariable(variable: Variable): void {
 		const pending = [variable];
 		const seen = new Set<Variable>();
@@ -337,24 +380,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 			seen.add(current);
 			for (const reference of current.references) {
-				const declarator = getDestructuringDeclarator(reference.identifier);
-				if (declarator === undefined) {
-					continue;
-				}
-
-				const pattern = declarator.id as TSESTree.ObjectPattern;
-				const scope = reference.from;
-				checkPattern(pattern, scope);
-				const rest = pattern.properties.at(-1);
-				if (
-					rest?.type === AST_NODE_TYPES.RestElement &&
-					rest.argument.type === AST_NODE_TYPES.Identifier
-				) {
-					const restVariable = scope.set.get(rest.argument.name);
-					if (restVariable !== undefined) {
-						pending.push(restVariable);
-					}
-				}
+				checkReference(reference, pending);
 			}
 		}
 	}
@@ -366,7 +392,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			jsxTagStarts = new Map();
 			reportConflicts = context.options[0]?.reportConflicts ?? false;
 		},
-		"JSXOpeningElement": function (node: TSESTree.JSXOpeningElement): void {
+		"JSXOpeningElement": function (node): void {
 			const name = getJsxTagBinding(node.name);
 			if (name === undefined) {
 				return;
@@ -379,12 +405,12 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				starts.push(node.range[0]);
 			}
 		},
-		"ObjectPattern": function (node: TSESTree.ObjectPattern): void {
+		"ObjectPattern": function (node): void {
 			if (!hasAlias) {
 				hasAlias = node.properties.some((property) => getAlias(property) !== undefined);
 			}
 		},
-		"Program:exit": function (program: TSESTree.Program): void {
+		"Program:exit": function (program): void {
 			if (!hasAlias) {
 				return;
 			}
@@ -408,17 +434,29 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 	};
 
-	// Delegate the collector's selector handlers to the current per-file
-	// instance.
-	const handlers = listener as Record<string, (node: TSESTree.Node) => void>;
-	for (const key of selectorKeys) {
-		const own = handlers[key];
-		handlers[key] = (node): void => {
-			own?.(node);
-			(collector.visitor as Record<string, ((node: TSESTree.Node) => void) | undefined>)[
-				key
-			]?.(node);
+	/**
+	 * Delegates a selector to the current per-file collector, after the rule's
+	 * own handler for that selector.
+	 *
+	 * @param key - The selector.
+	 * @param own - The rule's own handler for the selector, if any.
+	 * @returns The combined handler.
+	 */
+	function delegate(key: string, own: unknown): NodeHandler {
+		return (node): void => {
+			if (isNodeHandler(own)) {
+				own(node);
+			}
+
+			const handler: unknown = collector.visitor[key];
+			if (isNodeHandler(handler)) {
+				handler(node);
+			}
 		};
+	}
+
+	for (const key of selectorKeys) {
+		listener[key] = delegate(key, listener[key]);
 	}
 
 	return listener;
@@ -428,7 +466,6 @@ export const noUnnecessaryPropertyAlias: FlawlessRuleModule<Options, MessageIds>
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [{ reportConflicts: false }],
 		meta: {
 			defaultOptions: [{ reportConflicts: false }],
 			docs: {

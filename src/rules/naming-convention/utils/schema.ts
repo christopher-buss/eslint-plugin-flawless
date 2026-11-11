@@ -1,6 +1,6 @@
 import type { JSONSchema } from "@typescript-eslint/utils";
 
-import type { IndividualAndMetaSelectorsString, ModifierString } from "./enums";
+import type { IndividualAndMetaSelectorsString, ModifierString } from "./enums.ts";
 import {
 	MetaSelector,
 	Modifier,
@@ -8,7 +8,7 @@ import {
 	Selector,
 	TypeModifier,
 	UnderscoreOption,
-} from "./enums";
+} from "./enums.ts";
 
 const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	allowedWordsConfig: {
@@ -305,6 +305,8 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 	items: {
 		oneOf: [
 			selectorsSchema(),
+
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
 			...selectorSchema("default", false, Object.keys(Modifier) as Array<ModifierString>),
 
 			...selectorSchema("variableLike", false, ["unused", "async"]),

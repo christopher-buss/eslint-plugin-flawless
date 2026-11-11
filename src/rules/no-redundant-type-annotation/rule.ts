@@ -2,21 +2,14 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, AST_TOKEN_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type {
-	Expression,
-	ObjectType,
-	Signature,
-	TupleTypeReference,
-	Type,
-	TypeReference,
-	UnionOrIntersectionType,
-} from "typescript";
+import type { ObjectType, Signature, TupleTypeReference, Type, TypeReference } from "typescript";
 import ts from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import { pushChildNodes } from "../../utils/nested-expressions";
-import { type Candidate, verifyAnnotations } from "./verify";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import { pushChildNodes } from "../../utils/nested-expressions.ts";
+import { verifyAnnotations } from "./verify.ts";
+import type { Candidate } from "./verify.ts";
 
 const {
 	ElementFlags,
@@ -35,6 +28,9 @@ const {
 } = ts;
 
 export const RULE_NAME = "no-redundant-type-annotation";
+
+const LOWERCASE_START = /^[a-z]/u;
+const LEADING_LINE_BREAK = /^\r?\n|^\r/;
 
 const CATCH_MESSAGE_ID = "redundantCatch";
 const MESSAGE_ID = "redundant";
@@ -127,7 +123,9 @@ interface ContextualSignature {
 	readonly signature: Signature;
 }
 
-/** A call that passes a callback as a direct argument, read once per callback. */
+/**
+ * A call that passes a callback as a direct argument, read once per callback.
+ */
 interface CallbackCall {
 	/** The call. */
 	readonly call: TSESTree.CallExpression | TSESTree.NewExpression;
@@ -240,6 +238,26 @@ function isRestParameter(signature: Signature, index: number): boolean {
 }
 
 /**
+ * Reports whether a type is an object type.
+ *
+ * @param type - The type to inspect.
+ * @returns True when the type has the object flag.
+ */
+function isObjectType(type: Type): type is ObjectType {
+	return (type.flags & TypeFlags.Object) !== 0;
+}
+
+/**
+ * Reports whether a type is a reference to a generic type.
+ *
+ * @param type - The type to inspect.
+ * @returns True when the type is an object type with the reference flag.
+ */
+function isReferenceType(type: Type): type is TypeReference {
+	return isObjectType(type) && (type.objectFlags & ObjectFlags.Reference) !== 0;
+}
+
+/**
  * Reports whether a type is a reference to a tuple type.
  *
  * `checker.isTupleType` is not public before TypeScript 5.0, so this reads the
@@ -249,11 +267,7 @@ function isRestParameter(signature: Signature, index: number): boolean {
  * @returns True when the type is a tuple reference.
  */
 function isTupleReference(type: Type): type is TupleTypeReference {
-	return (
-		(type.flags & TypeFlags.Object) !== 0 &&
-		((type as ObjectType).objectFlags & ObjectFlags.Reference) !== 0 &&
-		((type as TypeReference).target.objectFlags & ObjectFlags.Tuple) !== 0
-	);
+	return isReferenceType(type) && (type.target.objectFlags & ObjectFlags.Tuple) !== 0;
 }
 
 /**
@@ -287,13 +301,11 @@ function getFixedElement(tuple: RestTuple, position: number): Type | undefined {
 function getMaxArguments(signature: Signature, tuple: RestTuple | undefined): number {
 	if (tuple !== undefined) {
 		const open = tuple.flags.some((flag) => (flag & ElementFlags.Variable) !== 0);
-		return open ? Number.POSITIVE_INFINITY : tuple.start + tuple.flags.length;
+		return open ? Infinity : tuple.start + tuple.flags.length;
 	}
 
 	const last = signature.parameters.length - 1;
-	return isRestParameter(signature, last)
-		? Number.POSITIVE_INFINITY
-		: signature.parameters.length;
+	return isRestParameter(signature, last) ? Infinity : signature.parameters.length;
 }
 
 /**
@@ -441,8 +453,7 @@ function isWideningUnit(type: Type): boolean {
  * @returns True when the type or a union member matches.
  */
 function someMember(type: Type, flags: ts.TypeFlags): boolean {
-	const members =
-		(type.flags & TypeFlags.Union) !== 0 ? (type as UnionOrIntersectionType).types : [type];
+	const members = type.isUnion() ? type.types : [type];
 	return members.some((member) => (member.flags & flags) !== 0);
 }
 
@@ -570,7 +581,7 @@ function isEmitterRead(identifier: TSESTree.Identifier | TSESTree.JSXIdentifier)
 	// One walk to the root finds both a hiding body and an enum member
 	// initializer, which is copied whole at any depth.
 	let inEnumInitializer = false;
-	for (let node: TSESTree.Node = identifier; node.type !== AST_NODE_TYPES.Program; ) {
+	for (let node: TSESTree.Node = identifier; node.type !== AST_NODE_TYPES.Program;) {
 		const parent: TSESTree.Node = node.parent;
 		if (isEmitterBoundary(node)) {
 			return false;
@@ -824,7 +835,7 @@ function getReceivingCall(parent: TSESTree.Node, child: TSESTree.Node): CallLike
 		parent.type === AST_NODE_TYPES.CallExpression ||
 		parent.type === AST_NODE_TYPES.NewExpression
 	) {
-		return parent.arguments.includes(child as TSESTree.CallExpressionArgument)
+		return (parent.arguments as ReadonlyArray<TSESTree.Node>).includes(child)
 			? parent
 			: undefined;
 	}
@@ -869,7 +880,7 @@ function isIntrinsicElement(name: TSESTree.JSXTagNameExpression): boolean {
 
 	return (
 		name.type === AST_NODE_TYPES.JSXIdentifier &&
-		(/^[a-z]/u.test(name.name) || name.name.includes("-"))
+		(LOWERCASE_START.test(name.name) || name.name.includes("-"))
 	);
 }
 
@@ -1046,10 +1057,49 @@ function usesContextualThis(node: FunctionExpressionNode): boolean {
 				child.type === AST_NODE_TYPES.FunctionDeclaration
 			);
 		},
-		(child) => {
-			return child.type === AST_NODE_TYPES.ThisExpression;
-		},
+		(child) => child.type === AST_NODE_TYPES.ThisExpression,
 	);
+}
+
+/**
+ * Lists the values a function returns, without entering nested functions.
+ *
+ * @param node - The function to inspect.
+ * @returns The returned expressions, whether a bare `return` appears, and
+ *   whether the end of the body may be reached.
+ */
+function getReturnedValues(node: ReturnTypedFunction): {
+	readonly bareReturn: boolean;
+	readonly fallsThrough: boolean;
+	readonly values: ReadonlyArray<TSESTree.Expression>;
+} {
+	if (node.body.type !== AST_NODE_TYPES.BlockStatement) {
+		return { bareReturn: false, fallsThrough: false, values: [node.body] };
+	}
+
+	const values: Array<TSESTree.Expression> = [];
+	let bareReturn = false;
+	someDescendant(node.body, isFunctionNode, (child) => {
+		if (child.type === AST_NODE_TYPES.ReturnStatement) {
+			if (child.argument === null) {
+				bareReturn = true;
+			} else {
+				values.push(child.argument);
+			}
+		}
+
+		return false;
+	});
+
+	// Whether the end is reachable is control flow the rule does not
+	// model, so only a body that ends in `return` or `throw` counts as
+	// closed.
+	const last = node.body.body.at(-1);
+	const fallsThrough =
+		last === undefined ||
+		(last.type !== AST_NODE_TYPES.ReturnStatement &&
+			last.type !== AST_NODE_TYPES.ThrowStatement);
+	return { bareReturn, fallsThrough, values };
 }
 
 function create(
@@ -1144,7 +1194,7 @@ function create(
 					return text;
 				}
 
-				const lineBreak = /^\r?\n|^\r/.exec(sourceCode.text.slice(comment.range[1]));
+				const lineBreak = LEADING_LINE_BREAK.exec(sourceCode.text.slice(comment.range[1]));
 				return `${text}${lineBreak?.[0] ?? "\n"}`;
 			})
 			.join(" ");
@@ -1204,17 +1254,12 @@ function create(
 
 		seen.add(type);
 
-		if ((type.flags & TypeFlags.UnionOrIntersection) !== 0) {
-			return (type as UnionOrIntersectionType).types.some((member) =>
-				containsAny(member, seen),
-			);
+		if (type.isUnionOrIntersection()) {
+			return type.types.some((member) => containsAny(member, seen));
 		}
 
-		const objectFlags = (type as { objectFlags?: number }).objectFlags ?? 0;
-		if ((type.flags & TypeFlags.Object) !== 0 && (objectFlags & ObjectFlags.Reference) !== 0) {
-			return checker
-				.getTypeArguments(type as TypeReference)
-				.some((argument) => containsAny(argument, seen));
+		if (isReferenceType(type)) {
+			return checker.getTypeArguments(type).some((argument) => containsAny(argument, seen));
 		}
 
 		return false;
@@ -1231,9 +1276,9 @@ function create(
 	 */
 	function getCalleeSignatures(call: CallLike): ReadonlyArray<Signature> {
 		const calleeType = checker.getNonNullableType(services.getTypeAtLocation(getCallee(call)));
-		return getSignatureKinds(call).flatMap((kind) =>
-			checker.getSignaturesOfType(calleeType, kind),
-		);
+		return getSignatureKinds(call).flatMap((kind) => {
+			return checker.getSignaturesOfType(calleeType, kind);
+		});
 	}
 
 	/**
@@ -1241,15 +1286,15 @@ function create(
 	 * its result shaped by the annotation itself.
 	 *
 	 * When a generic signature's return type involves its own type parameters,
-	 * and the call site supplies no explicit type arguments, the contextual type
-	 * flows into inference. `declare function foo<T = number>(): T; const x:
-	 * string = foo();` types the call as `string` only because the annotation
-	 * is there; removing it leaves `number`.
+	 * and the call site supplies no explicit type arguments, the contextual
+	 * type flows into inference. `declare function foo<T = number>(): T; const
+	 * x: string = foo();` types the call as `string` only because the
+	 * annotation is there; removing it leaves `number`.
 	 *
 	 * Whether the return type involves a type parameter is asked of the types,
-	 * not the written names, which `typeof` or an inferred return type can hide:
-	 * instantiating a type that mentions none of the parameters hands back the
-	 * very same type, so any other result counts as sensitive.
+	 * not the written names, which `typeof` or an inferred return type can
+	 * hide: instantiating a type that mentions none of the parameters hands
+	 * back the very same type, so any other result counts as sensitive.
 	 *
 	 * @param node - The call, `new` expression, or tagged template to inspect.
 	 * @returns True when the annotation may be feeding inference.
@@ -1302,7 +1347,7 @@ function create(
 			})
 			.filter((type) => type !== undefined);
 		return (declared.getTypeParameters() ?? []).some((typeParameter) => {
-			return !parameterTypes.some((type) => mentionsType(type, typeParameter));
+			return parameterTypes.every((type) => !mentionsType(type, typeParameter));
 		});
 	}
 
@@ -1335,24 +1380,23 @@ function create(
 			return type.types.some(next);
 		}
 
-		const objectFlags = (type as { objectFlags?: number }).objectFlags ?? 0;
-		if ((type.flags & TypeFlags.Object) === 0 || type.aliasSymbol !== undefined) {
+		if (!isObjectType(type) || type.aliasSymbol !== undefined) {
 			return false;
 		}
 
-		if ((objectFlags & ObjectFlags.Reference) !== 0) {
-			return checker.getTypeArguments(type as TypeReference).some(next);
+		if (isReferenceType(type)) {
+			return checker.getTypeArguments(type).some(next);
 		}
 
-		if ((objectFlags & ObjectFlags.Anonymous) === 0) {
+		if ((type.objectFlags & ObjectFlags.Anonymous) === 0) {
 			return false;
 		}
 
 		return checker.getSignaturesOfType(type, SignatureKind.Call).some((callSignature) => {
 			return (
-				callSignature.parameters.some((parameter) =>
-					next(checker.getTypeOfSymbol(parameter)),
-				) || next(checker.getReturnTypeOfSignature(callSignature))
+				callSignature.parameters.some((parameter) => {
+					return next(checker.getTypeOfSymbol(parameter));
+				}) || next(checker.getReturnTypeOfSignature(callSignature))
 			);
 		});
 	}
@@ -1706,8 +1750,8 @@ function create(
 	 * function's parameters there must be annotated: `satisfies` does not
 	 * change that. A written type on the declaration, a type assertion, a
 	 * function's return type, or a block ends the search, since the emitter
-	 * reads the written type or nothing. A class property without an annotation is treated as emitted
-	 * whether or not its class is exported.
+	 * reads the written type or nothing. A class property without an
+	 * annotation is treated as emitted whether or not its class is exported.
 	 *
 	 * @param node - The function expression to locate.
 	 * @returns True when the emitter would need the parameter annotations.
@@ -1908,6 +1952,20 @@ function create(
 		return contextDependence(node);
 	}
 
+	function elementDependence(element: null | TSESTree.Node): ContextDependence {
+		if (element === null) {
+			return "independent";
+		}
+
+		// A spread hands the array's own context to its operand.
+		let operand = element;
+		while (operand.type === AST_NODE_TYPES.SpreadElement) {
+			operand = operand.argument;
+		}
+
+		return typedValueDependence(operand, () => "dependent");
+	}
+
 	/**
 	 * Finds the dependence of an array literal that the annotation types.
 	 *
@@ -1925,19 +1983,6 @@ function create(
 	function arrayLiteralDependence(node: TSESTree.ArrayExpression): ContextDependence {
 		if (node.elements.length === 0) {
 			return "dependent";
-		}
-
-		function elementDependence(element: null | TSESTree.Node): ContextDependence {
-			if (element === null) {
-				return "independent";
-			}
-
-			// A spread hands the array's own context to its operand.
-			if (element.type === AST_NODE_TYPES.SpreadElement) {
-				return elementDependence(element.argument);
-			}
-
-			return typedValueDependence(element, () => "dependent");
 		}
 
 		return strongestDependence(node.elements, elementDependence) === "dependent"
@@ -2037,7 +2082,7 @@ function create(
 		const parameters = getPositionalParameters(callback);
 		// A rest parameter is last, and it types every position from its own.
 		const last = before.parameters.length - 1;
-		const restStart = isRestParameter(before, last) ? last : Number.POSITIVE_INFINITY;
+		const restStart = isRestParameter(before, last) ? last : Infinity;
 		const parametersFixed = parameters.every((node, position) => {
 			if (!isUntypedParameter(node)) {
 				return true;
@@ -2154,12 +2199,12 @@ function create(
 	/**
 	 * Reports whether the annotation names a type alias that TypeScript erases.
 	 *
-	 * An alias to an object, function, union, or array keeps its name in the type
-	 * system, so comparing printed forms already tells the truth about it. An
-	 * alias to a primitive does not: `type UserId = string` leaves no trace, and
-	 * `const id: UserId = getString()` looks identical to `const id: string`.
-	 * Deleting the annotation there would erase the only mention of the name, so
-	 * the rule leaves it alone.
+	 * An alias to an object, function, union, or array keeps its name in the
+	 * type system, so comparing printed forms already tells the truth about it.
+	 * An alias to a primitive does not: `type UserId = string` leaves no
+	 * trace, and `const id: UserId = getString()` looks identical to `const
+	 * id: string`. Deleting the annotation there would erase the only mention
+	 * of the name, so the rule leaves it alone.
 	 *
 	 * @param typeNode - The written annotation.
 	 * @param type - The type that annotation resolves to.
@@ -2191,10 +2236,11 @@ function create(
 	 * Reports whether two types are the same type, not merely interchangeable
 	 * ones.
 	 *
-	 * Mutual assignability alone is too loose: it equates `any` with everything,
-	 * and it equates a named alias with the shape behind it. Requiring the
-	 * printed forms to match as well keeps `type UserId = string` distinct from
-	 * `string`, so the rule never deletes a name that carries intent.
+	 * Mutual assignability alone is too loose: it equates `any` with
+	 * everything, and it equates a named alias with the shape behind it.
+	 * Requiring the printed forms to match as well keeps `type UserId = string`
+	 * distinct from `string`, so the rule never deletes a name that carries
+	 * intent.
 	 *
 	 * @param left - The first type.
 	 * @param right - The second type.
@@ -2397,7 +2443,7 @@ function create(
 
 				// The emitter prints every type that names a class, outside a
 				// function body or static block.
-				if (node.type === AST_NODE_TYPES.ClassDeclaration && isTypeReference) {
+				if (isTypeReference && node.type === AST_NODE_TYPES.ClassDeclaration) {
 					return !isHiddenFromEmitter(identifier);
 				}
 
@@ -2419,9 +2465,12 @@ function create(
 	function getFunctionContextualType(node: FunctionExpressionNode): Type | undefined {
 		const { parent } = node;
 		if (parent.type !== AST_NODE_TYPES.Property || !parent.method) {
-			const contextualType = checker.getContextualType(
-				services.esTreeNodeToTSNodeMap.get(node) as Expression,
-			);
+			const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+			if (!ts.isFunctionExpression(tsNode) && !ts.isArrowFunction(tsNode)) {
+				return undefined;
+			}
+
+			const contextualType = checker.getContextualType(tsNode);
 			return contextualType && checker.getNonNullableType(contextualType);
 		}
 
@@ -2610,9 +2659,7 @@ function create(
 			const { name } = parent.key;
 			return someDescendant(
 				body,
-				() => {
-					return false;
-				},
+				() => false,
 				(child) => {
 					return (
 						child.type === AST_NODE_TYPES.MemberExpression &&
@@ -2625,47 +2672,6 @@ function create(
 		}
 
 		return false;
-	}
-
-	/**
-	 * Lists the values a function returns, without entering nested functions.
-	 *
-	 * @param node - The function to inspect.
-	 * @returns The returned expressions, whether a bare `return` appears, and
-	 *   whether the end of the body may be reached.
-	 */
-	function getReturnedValues(node: ReturnTypedFunction): {
-		readonly bareReturn: boolean;
-		readonly fallsThrough: boolean;
-		readonly values: ReadonlyArray<TSESTree.Expression>;
-	} {
-		if (node.body.type !== AST_NODE_TYPES.BlockStatement) {
-			return { bareReturn: false, fallsThrough: false, values: [node.body] };
-		}
-
-		const values: Array<TSESTree.Expression> = [];
-		let bareReturn = false;
-		someDescendant(node.body, isFunctionNode, (child) => {
-			if (child.type === AST_NODE_TYPES.ReturnStatement) {
-				if (child.argument === null) {
-					bareReturn = true;
-				} else {
-					values.push(child.argument);
-				}
-			}
-
-			return false;
-		});
-
-		// Whether the end is reachable is control flow the rule does not
-		// model, so only a body that ends in `return` or `throw` counts as
-		// closed.
-		const last = node.body.body.at(-1);
-		const fallsThrough =
-			last === undefined ||
-			(last.type !== AST_NODE_TYPES.ReturnStatement &&
-				last.type !== AST_NODE_TYPES.ThrowStatement);
-		return { bareReturn, fallsThrough, values };
 	}
 
 	/**
@@ -2705,15 +2711,11 @@ function create(
 	 * @returns The promised type, or undefined for any other type.
 	 */
 	function getPromisedType(type: Type): Type | undefined {
-		const objectFlags = (type as { objectFlags?: number }).objectFlags ?? 0;
-		if (
-			type.getSymbol()?.getName() !== "Promise" ||
-			(objectFlags & ObjectFlags.Reference) === 0
-		) {
+		if (type.getSymbol()?.getName() !== "Promise" || !isReferenceType(type)) {
 			return undefined;
 		}
 
-		const [promised, ...rest] = checker.getTypeArguments(type as TypeReference);
+		const [promised, ...rest] = checker.getTypeArguments(type);
 		return rest.length === 0 ? promised : undefined;
 	}
 
@@ -2790,13 +2792,13 @@ function create(
 		// unless a returned value already has the aliased type.
 		if (
 			expectedType.aliasSymbol !== undefined &&
-			!returned.some((type) => typesAreIdentical(type, expectedType))
+			returned.every((type) => !typesAreIdentical(type, expectedType))
 		) {
 			return false;
 		}
 
 		const [only] = returned;
-		if (returned.length > 1 || only === undefined || !isWideningUnit(only)) {
+		if (only === undefined || returned.length > 1 || !isWideningUnit(only)) {
 			return coversSameMembers(returned, expectedType);
 		}
 
@@ -3010,11 +3012,11 @@ function create(
 	}
 
 	return {
-		"ArrowFunctionExpression": function (node: TSESTree.ArrowFunctionExpression): void {
+		"ArrowFunctionExpression": function (node): void {
 			checkFunctionParameters(node);
 			checkReturnType(node);
 		},
-		"CatchClause": function ({ param }: TSESTree.CatchClause): void {
+		"CatchClause": function ({ param }): void {
 			if (!catchVariablesAreUnknown) {
 				return;
 			}
@@ -3047,11 +3049,11 @@ function create(
 			});
 		},
 		"FunctionDeclaration": checkReturnType,
-		"FunctionExpression": function (node: TSESTree.FunctionExpression): void {
+		"FunctionExpression": function (node): void {
 			checkFunctionParameters(node);
 			checkReturnType(node);
 		},
-		"Program:exit": function (node: TSESTree.Program): void {
+		"Program:exit": function (node): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
 			const { accepted, acceptedAlone, unverified } = verifyAnnotations(
 				services.program,
@@ -3079,7 +3081,7 @@ function create(
 				report(candidate, false);
 			}
 		},
-		"VariableDeclarator": function (node: TSESTree.VariableDeclarator): void {
+		"VariableDeclarator": function (node): void {
 			const { kind } = node.parent;
 			if (kind !== "const" && kind !== "let") {
 				return;
@@ -3194,7 +3196,6 @@ export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = 
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [DEFAULT_OPTIONS],
 	meta: {
 		defaultOptions: [DEFAULT_OPTIONS],
 		docs: {
@@ -3204,6 +3205,7 @@ export const noRedundantTypeAnnotation: EslintRuleModule<Options, MessageIds> = 
 		},
 		fixable: "code",
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: [
 			{

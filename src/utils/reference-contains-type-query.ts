@@ -7,19 +7,14 @@ import { AST_NODE_TYPES } from "@typescript-eslint/utils";
  * @returns True if a TSTypeQuery is found in the parent chain, false otherwise.
  */
 export function referenceContainsTypeQuery(node: TSESTree.Node): boolean {
-	// eslint-disable-next-line ts/switch-exhaustiveness-check -- We have a default case
-	switch (node.type) {
-		case AST_NODE_TYPES.Identifier:
-		case AST_NODE_TYPES.TSQualifiedName: {
-			return referenceContainsTypeQuery(node.parent);
-		}
-		case AST_NODE_TYPES.TSTypeQuery: {
-			return true;
-		}
-		default: {
-			// if we find a different node, there's no chance that we're in a
-			// TSTypeQuery
-			return false;
-		}
+	let current = node;
+	while (
+		current.type === AST_NODE_TYPES.Identifier ||
+		current.type === AST_NODE_TYPES.TSQualifiedName
+	) {
+		current = current.parent;
 	}
+
+	// Any other node means there is no chance that we are in a TSTypeQuery.
+	return current.type === AST_NODE_TYPES.TSTypeQuery;
 }

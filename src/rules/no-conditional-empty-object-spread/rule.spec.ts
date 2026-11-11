@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noConditionalEmptyObjectSpread, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noConditionalEmptyObjectSpread, RULE_NAME } from "./rule.ts";
 
 const messageId = "avoid";
 
@@ -36,8 +37,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(timeout !== undefined ? { timeout } : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -45,8 +46,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(timeout === undefined ? {} : { timeout }),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -54,8 +55,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(enabled ? defaults : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -63,8 +64,8 @@ const invalid: Array<InvalidTestCase> = [
 				...((enabled ? { enabled } : {})),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -72,8 +73,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(enabled ? {} : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -82,8 +83,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(second ? {} : { second }),
 			};
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 ];
 

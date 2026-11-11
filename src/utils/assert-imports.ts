@@ -1,4 +1,5 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
 /** The Node `assert` modules, mapped to whether each is a `strict` variant. */
 const ASSERT_SOURCES: ReadonlyMap<string, boolean> = new Map([
@@ -68,28 +69,21 @@ export function scanAssertImports(
 		for (const specifier of statement.specifiers) {
 			const variable = sourceCode.getDeclaredVariables(specifier)[0];
 			if (variable === undefined) {
-				continue;
-			}
-
-			if (specifier.type !== AST_NODE_TYPES.ImportSpecifier) {
+				// No binding to track.
+			} else if (specifier.type !== AST_NODE_TYPES.ImportSpecifier) {
 				objects.set(variable, strict);
 				objectNames.add(variable.name);
-				continue;
-			}
-
-			const method = importName(specifier);
-			if (specifier.importKind === "type") {
-				continue;
-			}
-
-			// `import { strict as assert } from "node:assert"` is the strict
-			// `assert` object.
-			if (method === "strict") {
-				objects.set(variable, true);
-				objectNames.add(variable.name);
-			} else if (method !== null && methods.has(method)) {
-				functions.set(variable, { method, strict });
-				functionNames.add(variable.name);
+			} else if (specifier.importKind !== "type") {
+				const method = importName(specifier);
+				// `import { strict as assert } from "node:assert"` is the strict
+				// `assert` object.
+				if (method === "strict") {
+					objects.set(variable, true);
+					objectNames.add(variable.name);
+				} else if (method !== null && methods.has(method)) {
+					functions.set(variable, { method, strict });
+					functionNames.add(variable.name);
+				}
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import { resolveReactPackage } from "../../utils/react-package";
+import { resolveReactPackage } from "../../utils/react-package.ts";
 
 /** The kind of binding an identifier resolves to within a React import. */
 export type ReactImportKind = "named" | "namespace";
@@ -15,10 +15,10 @@ export interface EnsureNamedValueImportParameters {
 }
 
 /**
- * Whether a module specifier refers to the configured React package. Matches the
- * exact package or any subpath (`@rbxts/react` and `@rbxts/react/jsx-runtime`),
- * but never a sibling package (`@rbxts/react-roblox`), because the `/` boundary
- * excludes it.
+ * Whether a module specifier refers to the configured React package. Matches
+ * the exact package or any subpath (`@rbxts/react` and
+ * `@rbxts/react/jsx-runtime`), but never a sibling package
+ * (`@rbxts/react-roblox`), because the `/` boundary excludes it.
  *
  * @param value - The `source.value` of an import declaration.
  * @param importSource - The configured React import source.
@@ -30,7 +30,8 @@ export function matchesSource(value: string, importSource: string): boolean {
 }
 
 /**
- * Collects the import declarations in a program that come from the React source.
+ * Collects the import declarations in a program that come from the React
+ * source.
  *
  * @param program - The program node whose top-level statements are scanned.
  * @param importSource - The configured React import source.
@@ -61,9 +62,9 @@ export function classifySpecifier(specifier: TSESTree.ImportClause): ReactImport
 }
 
 /**
- * Finds the local name of a default or namespace React import, used to qualify a
- * bare type reference (`React.ReactNode`). Returns `null` when no such import
- * exists, in which case the caller ensures one under the name `React`.
+ * Finds the local name of a default or namespace React import, used to qualify
+ * a bare type reference (`React.ReactNode`). Returns `null` when no such
+ * import exists, in which case the caller ensures one under the name `React`.
  *
  * @param declarations - The React import declarations of the file.
  * @returns The local namespace name, or `null`.
@@ -86,8 +87,8 @@ export function findReactNamespaceLocal(
 }
 
 /**
- * Whether the file already imports React as a default or namespace binding (so a
- * namespace type qualification resolves without adding an import).
+ * Whether the file already imports React as a default or namespace binding (so
+ * a namespace type qualification resolves without adding an import).
  *
  * @param declarations - The React import declarations of the file.
  * @returns True when a default or namespace React import is present.

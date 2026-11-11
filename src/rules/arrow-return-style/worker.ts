@@ -49,7 +49,7 @@ function isNodeLike(value: unknown): value is NodeLike {
  */
 function collectArrows(root: unknown): Array<NodeLike> {
 	const arrows: Array<NodeLike> = [];
-	const stack: Array<unknown> = [root];
+	const stack = [root];
 
 	while (stack.length > 0) {
 		const current = stack.pop();
@@ -112,7 +112,7 @@ function lineIndexOf(starts: Array<number>, offset: number): number {
 	return low;
 }
 
-async function formatOne(request: FormatRequest): Promise<FormatResponse> {
+async function formatOneAsync(request: FormatRequest): Promise<FormatResponse> {
 	const { format } = await import("oxfmt");
 	const { parseSync } = await import("oxc-parser");
 
@@ -150,7 +150,7 @@ async function formatOne(request: FormatRequest): Promise<FormatResponse> {
 runAsWorker(async (requests: Array<FormatRequest>): Promise<Array<FormatResponse>> => {
 	const responses: Array<FormatResponse> = [];
 	for (const request of requests) {
-		responses.push(await formatOne(request));
+		responses.push(await formatOneAsync(request));
 	}
 
 	return responses;

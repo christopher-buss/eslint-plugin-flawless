@@ -1,9 +1,9 @@
-export { type ContextualTypeCache, isDictatedByContextualType } from "./contextual-type";
-export { Modifier as Modifiers } from "./enums";
-export type { PredefinedFormatString } from "./enums";
-export { parseOptions } from "./parse-options";
-export { SCHEMA } from "./schema";
-export { selectorTypeToMessageString } from "./shared";
+export { type ContextualTypeCache, isDictatedByContextualType } from "./contextual-type.ts";
+export { Modifier as Modifiers } from "./enums.ts";
+export type { PredefinedFormatString } from "./enums.ts";
+export { parseOptions } from "./parse-options.ts";
+export { SCHEMA } from "./schema.ts";
+export { selectorTypeToMessageString } from "./shared.ts";
 export type {
 	Context,
 	NamingSelector,
@@ -11,4 +11,4 @@ export type {
 	TypeMatcher,
 	TypeReference,
 	ValidatorFunction,
-} from "./types";
+} from "./types.ts";

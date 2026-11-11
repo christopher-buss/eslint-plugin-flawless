@@ -66,9 +66,6 @@ export const timeout = 500;
 
 ```json
 {
-	"flawless/max-comment-length": [
-		"error",
-		{ "ignoreJSDoc": true, "maximumWords": 50 }
-	]
+	"flawless/max-comment-length": ["error", { "ignoreJSDoc": true, "maximumWords": 50 }]
 }
 ```

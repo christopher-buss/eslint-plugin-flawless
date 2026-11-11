@@ -121,10 +121,7 @@ Some functions are not reported at all, because no signature form exists:
 
 ```json
 {
-	"flawless/prefer-parameter-destructuring": [
-		"error",
-		{ "allowSideEffectReordering": false }
-	]
+	"flawless/prefer-parameter-destructuring": ["error", { "allowSideEffectReordering": false }]
 }
 ```
 

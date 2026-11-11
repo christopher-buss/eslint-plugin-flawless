@@ -4,10 +4,11 @@ import { getStaticJSONValue } from "jsonc-eslint-parser";
 import type { AST } from "jsonc-eslint-parser";
 import path from "node:path";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import type { JsonContext, JsonSourceCode } from "../../utils/types";
-import { buildInheritedConfig, type InheritedEntry, isRecord } from "./resolve-extends";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import type { JsonContext, JsonSourceCode } from "../../utils/types.ts";
+import { buildInheritedConfig, isRecord } from "./resolve-extends.ts";
+import type { InheritedEntry } from "./resolve-extends.ts";
 
 export const RULE_NAME = "no-redundant-tsconfig-options";
 
@@ -135,7 +136,7 @@ function equalUnordered(
  */
 function isLocationIndependent(value: unknown): boolean {
 	if (typeof value === "string") {
-		// eslint-disable-next-line no-template-curly-in-string -- literal tsconfig token
+		// oxlint-disable-next-line no-template-curly-in-string -- literal tsconfig token
 		return value.includes("${configDir}") || path.isAbsolute(value);
 	}
 
@@ -191,9 +192,10 @@ function findProperty(
 }
 
 /**
- * Reads a node's static value, returning `undefined` when it cannot be evaluated
- * (such as an exotic non-JSON node), so an odd value never crashes the rule. The
- * result is boxed so a genuine `undefined` value stays distinguishable.
+ * Reads a node's static value, returning `undefined` when it cannot be
+ * evaluated (such as an exotic non-JSON node), so an odd value never crashes
+ * the rule. The result is boxed so a genuine `undefined` value stays
+ * distinguishable.
  *
  * @param node - The value node to evaluate.
  * @returns A box holding the value, or `undefined` on failure.
@@ -220,9 +222,9 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 	}
 
 	/**
-	 * Reports a redundant property, removing it (with its delimiter comma) unless
-	 * a comment is attached, in which case it reports without a fix to avoid
-	 * stranding the comment.
+	 * Reports a redundant property, removing it (with its delimiter comma)
+	 * unless a comment is attached, in which case it reports without a fix to
+	 * avoid stranding the comment.
 	 *
 	 * @param property - The redundant property node.
 	 * @param name - The property's key name (already computed by the caller).
@@ -243,6 +245,7 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 	}
 
 	function buildFix(property: AST.JSONProperty): TSESLint.ReportFixFunction | undefined {
+		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- A JSONC AST node has the `range` and tokens the token-store API reads.
 		const node = property as unknown as TSESTree.Node;
 		const before = sourceCode.getTokenBefore(node);
 		const after = sourceCode.getTokenAfter(node);
@@ -330,12 +333,8 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 			if (compilerOptions?.value.type === "JSONObjectExpression") {
 				checkObject(
 					compilerOptions.value,
-					(name) => {
-						return inherited.compilerOptions.get(name);
-					},
-					(name) => {
-						return PATH_KEYS.has(name);
-					},
+					(name) => inherited.compilerOptions.get(name),
+					(name) => PATH_KEYS.has(name),
 				);
 			}
 
@@ -343,12 +342,8 @@ function create(context: JsonContext<MessageIds, Options>): TSESLint.RuleListene
 			// always path/glob-valued.
 			checkObject(
 				root,
-				(name) => {
-					return inherited.topLevel.get(name);
-				},
-				() => {
-					return true;
-				},
+				(name) => inherited.topLevel.get(name),
+				() => true,
 			);
 		},
 	};
@@ -361,7 +356,6 @@ export const noRedundantTsconfigOptions: EslintRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		docs: {
 			description:
@@ -371,6 +365,7 @@ export const noRedundantTsconfigOptions: EslintRuleModule<Options, MessageIds> =
 		},
 		fixable: "code",
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: [],
 		type: "suggestion",

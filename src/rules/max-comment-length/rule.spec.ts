@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { maxCommentLength, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { maxCommentLength, RULE_NAME } from "./rule.ts";
 
 const messageId = "tooLong";
 
@@ -126,6 +127,7 @@ const invalid: Array<InvalidTestCase> = [
 			// one two three
 			// four five six
 		`,
+		options: [{ maximumWords: 5 }],
 		errors: [
 			{
 				column: 1,
@@ -136,13 +138,12 @@ const invalid: Array<InvalidTestCase> = [
 				messageId,
 			},
 		],
-		options: [{ maximumWords: 5 }],
 	},
 	// A banner is not JSDoc.
 	{
 		code: "export const a = 1;\n/***** one two three four *****/\n",
-		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
 		options: [{ maximumWords: 3 }],
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
 	},
 	// A directive splits groups and does not count.
 	{
@@ -152,11 +153,12 @@ const invalid: Array<InvalidTestCase> = [
 			// oxlint-disable-next-line no-console -- a long reason here
 			console.log(a);
 		`,
-		errors: [{ data: { count: 4, maximum: 3 }, endLine: 2, line: 2, messageId }],
 		options: [{ maximumWords: 3 }],
+		errors: [{ data: { count: 4, maximum: 3 }, endLine: 2, line: 2, messageId }],
 	},
 	{
 		code: "export const a = 1;\n/* one two three four */\n",
+		options: [{ maximumWords: 3 }],
 		errors: [
 			{
 				column: 1,
@@ -167,7 +169,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId,
 			},
 		],
-		options: [{ maximumWords: 3 }],
 	},
 	// JSDoc counts when `ignoreJSDoc` is off.
 	{
@@ -176,8 +177,8 @@ const invalid: Array<InvalidTestCase> = [
 			/** one two three four */
 			export function run() {}
 		`,
-		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
 		options: [{ ignoreJSDoc: false, maximumWords: 3 }],
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
 	},
 	// Only the first group is the header.
 	{
@@ -187,26 +188,26 @@ const invalid: Array<InvalidTestCase> = [
 			// one two three four
 			export const a = 1;
 		`,
-		errors: [{ data: { count: 4, maximum: 3 }, line: 3, messageId }],
 		options: [{ maximumWords: 3 }],
+		errors: [{ data: { count: 4, maximum: 3 }, line: 3, messageId }],
 	},
 	// A comment-only file keeps only its first group as the header.
 	{
 		code: "// one two three four\n\n// five six seven eight\n",
-		errors: [{ data: { count: 4, maximum: 3 }, line: 3, messageId }],
 		options: [{ maximumWords: 3 }],
+		errors: [{ data: { count: 4, maximum: 3 }, line: 3, messageId }],
 	},
 	// CRLF line endings still join adjacent line comments.
 	{
 		code: "export const a = 1;\r\n// one two\r\n// three\r\n",
-		errors: [{ data: { count: 3, maximum: 2 }, endLine: 3, line: 2, messageId }],
 		options: [{ maximumWords: 2 }],
+		errors: [{ data: { count: 3, maximum: 2 }, endLine: 3, line: 2, messageId }],
 	},
 	// Words do not merge across adjacent comments.
 	{
 		code: "export const a = 1;\n//one\n//two\n//three\n",
-		errors: [{ data: { count: 3, maximum: 2 }, line: 2, messageId }],
 		options: [{ maximumWords: 2 }],
+		errors: [{ data: { count: 3, maximum: 2 }, line: 2, messageId }],
 	},
 	// Over the default limit of 50.
 	{

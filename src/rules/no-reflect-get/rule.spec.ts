@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noReflectGet, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noReflectGet, RULE_NAME } from "./rule.ts";
 
 const messageId = "reflectGet";
 
@@ -45,8 +46,8 @@ const invalid: Array<InvalidTestCase> = [
 				return Reflect.get(value, "tag") === "block";
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -55,8 +56,8 @@ const invalid: Array<InvalidTestCase> = [
 				return typeof value === "string" ? value : undefined;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -64,22 +65,22 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const name = Reflect.get(raw, "name");
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export const value = Reflect["get"](o, k);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export const values = [Reflect.get(o, "a"), Reflect.get(o, "b")];
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 ];
 

@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noIncompatibleAssertionTypes, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noIncompatibleAssertionTypes, RULE_NAME } from "./rule.ts";
 
 const messageId = "incompatibleTypes";
 
@@ -186,7 +187,7 @@ const invalid: Array<InvalidTestCase> = [
 	{ code: withExpect('expect(Color.Red).toBe("red");'), errors: [error("Color", "string")] },
 	{ code: withExpect("expect(Name.A).toBe(1);"), errors: [error("Name", "number")] },
 	{
-		// eslint-disable-next-line no-template-curly-in-string -- fixture source
+		// oxlint-disable-next-line no-template-curly-in-string -- fixture source
 		code: withExpect("expect(`id-${count}`).toBe(1);"),
 		errors: [error("string", "number")],
 	},

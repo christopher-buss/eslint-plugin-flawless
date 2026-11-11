@@ -5,9 +5,15 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 import type ts from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { MessageIds } from "../rule";
-import { isComponentPropertyMember } from "./component-property";
-import type { ModifierType, PredefinedFormatType, SelectorString, SelectorType } from "./enums";
+import type { MessageIds } from "../rule.ts";
+import { isComponentPropertyMember } from "./component-property.ts";
+import type {
+	ModifierType,
+	PredefinedFormatType,
+	SelectorString,
+	SelectorType,
+	TypeModifierType,
+} from "./enums.ts";
 import {
 	MetaSelector,
 	Modifier,
@@ -15,12 +21,16 @@ import {
 	Selector,
 	TypeModifier,
 	UnderscoreOption,
-} from "./enums";
-import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format";
-import { isMetaSelector, isMethodOrPropertySelector, selectorTypeToMessageString } from "./shared";
-import { symbolDeclaredIn } from "./symbol";
-import { isInMatchingTypeArgument } from "./type-argument";
-import type { Context, NormalizedSelector, TypeReference } from "./types";
+} from "./enums.ts";
+import { AllowedWordsFormats, applyAllowedWords, FormatCheckersMap } from "./format.ts";
+import {
+	isMetaSelector,
+	isMethodOrPropertySelector,
+	selectorTypeToMessageString,
+} from "./shared.ts";
+import { symbolDeclaredIn } from "./symbol.ts";
+import { isInMatchingTypeArgument } from "./type-argument.ts";
+import type { Context, NormalizedSelector, TypeReference } from "./types.ts";
 
 // Flag tests avoid `checker.typeToString`, which prints the full structure of
 // object types only to compare the text against a primitive name.
@@ -45,6 +55,7 @@ export function createValidator(
 	// `objectStyleEnumMember` config carries the higher selector value and so
 	// sorts ahead of the `enumMember` fallback below.
 	const matchedSelectors =
+		// oxlint-disable-next-line oxc/bad-bitwise-operator -- selectors are bit flags; this matches either one
 		type === "objectStyleEnumMember" ? selectorType | Selector.enumMember : selectorType;
 	const configs = allConfigs
 		// gather all of the applicable selectors
@@ -439,11 +450,11 @@ export function createValidator(
 		}
 
 		const result = custom.regex.test(name);
-		if (custom.match && result) {
+		if (result && custom.match) {
 			return true;
 		}
 
-		if (!custom.match && !result) {
+		if (!result && !custom.match) {
 			return true;
 		}
 
@@ -660,6 +671,35 @@ function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean 
 	return true;
 }
 
+function pushTypeModifierPredicate(
+	predicates: Array<(inner: ts.Type) => boolean>,
+	allowedType: TypeModifierType,
+	checker: ts.TypeChecker,
+): void {
+	switch (allowedType) {
+		case TypeModifier.array: {
+			predicates.push((inner) => checker.isArrayType(inner) || checker.isTupleType(inner));
+			break;
+		}
+		case TypeModifier.boolean:
+		case TypeModifier.number:
+		case TypeModifier.string: {
+			const flag = PRIMITIVE_FLAG[allowedType];
+			predicates.push((inner) => {
+				// this will resolve things like true => boolean, 'a' =>
+				// string and 1 => number
+				const base = checker.getBaseTypeOfLiteralType(inner);
+				return (base.flags & flag) !== 0;
+			});
+			break;
+		}
+		case TypeModifier.function: {
+			predicates.push((inner) => inner.getCallSignatures().length > 0);
+			break;
+		}
+	}
+}
+
 function isCorrectType(
 	node: TSESTree.Node,
 	config: NormalizedSelector,
@@ -688,30 +728,7 @@ function isCorrectType(
 			continue;
 		}
 
-		switch (allowedType) {
-			case TypeModifier.array: {
-				predicates.push(
-					(inner) => checker.isArrayType(inner) || checker.isTupleType(inner),
-				);
-				break;
-			}
-			case TypeModifier.boolean:
-			case TypeModifier.number:
-			case TypeModifier.string: {
-				const flag = PRIMITIVE_FLAG[allowedType];
-				predicates.push((inner) => {
-					// this will resolve things like true => boolean, 'a' =>
-					// string and 1 => number
-					const base = checker.getBaseTypeOfLiteralType(inner);
-					return (base.flags & flag) !== 0;
-				});
-				break;
-			}
-			case TypeModifier.function: {
-				predicates.push((inner) => inner.getCallSignatures().length > 0);
-				break;
-			}
-		}
+		pushTypeModifierPredicate(predicates, allowedType, checker);
 	}
 
 	// a union matches when each arm satisfies at least one configured type,

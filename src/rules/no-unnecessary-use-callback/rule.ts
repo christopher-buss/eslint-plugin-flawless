@@ -1,6 +1,6 @@
-import type { FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { createUnnecessaryHookRule } from "../../utils/unnecessary-hook";
+import type { FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { createUnnecessaryHookRule } from "../../utils/unnecessary-hook.ts";
 
 export const RULE_NAME = "no-unnecessary-use-callback";
 
@@ -32,8 +32,8 @@ export const noUnnecessaryUseCallback: FlawlessRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow unnecessary usage of 'useCallback'",
 			recommended: false,

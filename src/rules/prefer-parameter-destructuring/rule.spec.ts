@@ -1,11 +1,8 @@
-import {
-	type InvalidTestCase,
-	unindent as ts,
-	type ValidTestCase,
-} from "eslint-vitest-rule-tester";
+import { unindent as ts } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { preferParameterDestructuring, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { preferParameterDestructuring, RULE_NAME } from "./rule.ts";
 
 const messageId = "default";
 
@@ -151,12 +148,12 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(a);
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function bar({ a }) {
 				console.log(a);
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// The parameter's type annotation is preserved.
 	{
@@ -169,7 +166,6 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(a);
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			interface Item {
 				a: number;
@@ -178,6 +174,7 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(a);
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// An un-parenthesized arrow parameter gains parentheses.
 	{
@@ -187,12 +184,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			};
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			const f = ({ a }) => {
 				return a;
 			};
 		`,
+		errors: [{ messageId }],
 	},
 	// A parameter default is preserved.
 	{
@@ -202,12 +199,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a } = {}) {
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Renames, defaults, and nesting move verbatim.
 	{
@@ -217,12 +214,12 @@ const invalid: Array<InvalidTestCase> = [
 				return x + b + d;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a: x, b = 1, c: { d } }) {
 				return x + b + d;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A rest element is fine when it is the only statement.
 	{
@@ -232,12 +229,12 @@ const invalid: Array<InvalidTestCase> = [
 				return [a, rest];
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a, ...rest }) {
 				return [a, rest];
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Multiple statements merge into one pattern.
 	{
@@ -248,12 +245,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a + b;
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: ts`
 			function f({ a, b }) {
 				return a + b;
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// Two declarators of the same declaration merge as well.
 	{
@@ -263,12 +260,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a + b;
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: ts`
 			function f({ a, b }) {
 				return a + b;
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// A default referencing an earlier sibling binding stays legal in a
 	// parameter pattern.
@@ -279,12 +276,12 @@ const invalid: Array<InvalidTestCase> = [
 				return b;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a, b = a }) {
 				return b;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A plain pattern only performs property reads, so it may move past
 	// earlier statements (the documented getter caveat).
@@ -296,13 +293,13 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a }) {
 				log();
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A default value executes code; hoisting it past an earlier statement
 	// reorders side effects, which the default options accept.
@@ -314,13 +311,13 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a = compute() }) {
 				sideEffect();
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// With allowSideEffectReordering: false the fix is withheld instead.
 	{
@@ -331,9 +328,9 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
-		options: [{ allowSideEffectReordering: false }],
 		output: null,
+		options: [{ allowSideEffectReordering: false }],
+		errors: [{ messageId }],
 	},
 	// ... but at the very top of the body nothing is reordered.
 	{
@@ -344,13 +341,13 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f({ a = compute() }) {
 				sideEffect();
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A bound name referenced before the statement is in its temporal dead
 	// zone; moving the binding into the parameter list would stop it throwing.
@@ -362,8 +359,8 @@ const invalid: Array<InvalidTestCase> = [
 				return [early, a];
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A setter legally takes a destructuring parameter.
 	{
@@ -375,7 +372,6 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			const target = {
 				set value({ a }) {
@@ -383,6 +379,7 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
+		errors: [{ messageId }],
 	},
 	// A body-scoped type in the pattern annotation cannot move to the
 	// signature.
@@ -394,8 +391,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A later, not-yet-initialized parameter in a default blocks the fix; an
 	// earlier one does not.
@@ -406,8 +403,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: ts`
@@ -416,12 +413,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f(limit, { a = limit }) {
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// The second parameter can be rewritten, not just the first.
 	{
@@ -431,12 +428,12 @@ const invalid: Array<InvalidTestCase> = [
 				return first + a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			function f(first, { a }) {
 				return first + a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Methods and class functions are checked like any other function.
 	{
@@ -448,7 +445,6 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			const api = {
 				handle({ url }) {
@@ -456,6 +452,7 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: ts`
@@ -466,7 +463,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			class Handler {
 				run({ a }) {
@@ -474,6 +470,7 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A pattern annotation moves to the signature when the parameter has none.
 	{
@@ -486,7 +483,6 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: ts`
 			interface Options {
 				a: number;
@@ -495,6 +491,7 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Conflicting annotations on both sides block the fix.
 	{
@@ -510,8 +507,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// An unrelated sibling declarator blocks the fix.
 	{
@@ -521,8 +518,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a + extra;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A computed key referencing a body binding blocks the fix.
 	{
@@ -533,8 +530,8 @@ const invalid: Array<InvalidTestCase> = [
 				return value;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A default referencing a body binding blocks the fix.
 	{
@@ -545,8 +542,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// `arguments` is unavailable in parameter initializers of this function.
 	{
@@ -556,8 +553,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Merging around a rest element would reorder it away from last place.
 	{
@@ -568,8 +565,8 @@ const invalid: Array<InvalidTestCase> = [
 				return [a, b, rest];
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 	// `var` can rebind a parameter name; the merged pattern would collide.
 	{
@@ -579,8 +576,8 @@ const invalid: Array<InvalidTestCase> = [
 				return a;
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	// Two parameters can both be rewritten in one pass.
 	{
@@ -591,12 +588,12 @@ const invalid: Array<InvalidTestCase> = [
 				return a + b;
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: ts`
 			function f({ a }, { b }) {
 				return a + b;
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 ];
 

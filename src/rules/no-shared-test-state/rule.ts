@@ -1,19 +1,14 @@
 // cspell:ignore xtest
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils, TSESLint } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getTestGlobalSources,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "no-shared-test-state";
 
@@ -22,7 +17,10 @@ const MESSAGE_ID = "sharedState";
 export type MessageIds = typeof MESSAGE_ID;
 
 export interface NoSharedTestStateOptions {
-	/** Method names, besides the built-in ones, whose call mutates the receiver. */
+	/**
+	 * Method names, besides the built-in ones, whose call mutates the
+	 * receiver.
+	 */
 	readonly additionalMutatingMethods?: ReadonlyArray<string>;
 }
 
@@ -63,7 +61,9 @@ const schema: Array<JSONSchema.JSONSchema4> = [
 	},
 ];
 
-/** Callee roots whose function arguments run once per test (or once per suite). */
+/**
+ * Callee roots whose function arguments run once per test (or once per suite).
+ */
 const TEST_CALLBACK_NAMES = new Set([
 	"afterAll",
 	"afterEach",
@@ -258,6 +258,28 @@ function getLocalFunction(variable: Variable): FunctionNode | null {
 }
 
 /**
+ * Queues each helper not yet visited, and marks it visited.
+ *
+ * @param helpers - The helpers a function references.
+ * @param visited - The helpers already queued, updated in place.
+ * @param pending - The helpers still to walk, updated in place.
+ */
+function queueUnvisited(
+	helpers: ReadonlySet<FunctionNode>,
+	visited: Set<FunctionNode>,
+	pending: Array<FunctionNode>,
+): void {
+	for (const helper of helpers) {
+		if (visited.has(helper)) {
+			continue;
+		}
+
+		visited.add(helper);
+		pending.push(helper);
+	}
+}
+
+/**
  * Flags bindings declared outside a test and written from inside one, whose
  * state therefore carries from one test to the next. A binding counts as
  * written when a test or hook callback reassigns it, mutates it through a
@@ -416,7 +438,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 */
 	function collectWrites(callback: FunctionNode, found: Set<Variable>): void {
 		const visited = new Set<FunctionNode>([callback]);
-		const pending: Array<FunctionNode> = [callback];
+		const pending = [callback];
 		for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
 			const { helpers, variables } = getDirectWrites(next);
 			for (const variable of variables) {
@@ -425,12 +447,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 			}
 
-			for (const helper of helpers) {
-				if (!visited.has(helper)) {
-					visited.add(helper);
-					pending.push(helper);
-				}
-			}
+			queueUnvisited(helpers, visited, pending);
 		}
 	}
 
@@ -465,7 +482,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			callbacks.clear();
 			directWritesCache.clear();
 		},
-		"CallExpression": function (node: TSESTree.CallExpression): void {
+		"CallExpression": function (node): void {
 			// The inner call of `it.each(rows)(...)` takes data, not the test.
 			if (node.parent.type === AST_NODE_TYPES.CallExpression && node.parent.callee === node) {
 				return;
@@ -492,8 +509,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				collectWrites(callback, found);
 			}
 
-			const reports = [...found]
-				.map((variable) => ({ identifier: variable.identifiers[0], variable }))
+			const reports = Array.from(found, (variable) => {
+				return { identifier: variable.identifiers[0], variable };
+			})
 				.filter(
 					(entry): entry is { identifier: TSESTree.Identifier; variable: Variable } => {
 						return entry.identifier !== undefined;
@@ -518,7 +536,6 @@ export const noSharedTestState: FlawlessRuleModule<Options, MessageIds> = create
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [{}],
 	meta: {
 		defaultOptions: [{}],
 		docs: {

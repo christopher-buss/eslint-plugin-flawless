@@ -2,11 +2,11 @@ import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
-import type { Type, TypeNode } from "typescript";
+import type { Type } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
 
 export const RULE_NAME = "no-unknown-returns";
 
@@ -55,7 +55,7 @@ type FunctionWithReturnType =
  * @returns True when the function type is a structural matcher.
  */
 function isShapeMatcher(node: TSESTree.TSConstructorType | TSESTree.TSFunctionType): boolean {
-	for (let child: TSESTree.Node = node; child.type !== AST_NODE_TYPES.Program; ) {
+	for (let child: TSESTree.Node = node; child.type !== AST_NODE_TYPES.Program;) {
 		const parent: TSESTree.Node = child.parent;
 		if (parent.type === AST_NODE_TYPES.TSConditionalType) {
 			return parent.extendsType === child;
@@ -105,10 +105,12 @@ function messageIdFor(node: FunctionWithReturnType): MessageIds {
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
-	const services = getParserServices(context, true);
-	if (!services.program) {
+	const parserServices = getParserServices(context, true);
+	if (!parserServices.program) {
 		return {};
 	}
+
+	const services = parserServices;
 
 	const checker = services.program.getTypeChecker();
 
@@ -118,20 +120,16 @@ function create(
 	 * the checker, then the promise wrapper stripped.
 	 *
 	 * `getAwaitedType` resolves nested promises in one call, but it unwraps
-	 * every thenable, not only promises — so a named domain type that happens to
-	 * carry a `then` method would resolve to whatever `then` hands its callback.
-	 * The promise check keeps it off those: a caller receives that named type,
-	 * not the value inside it.
+	 * every thenable, not only promises — so a named domain type that happens
+	 * to carry a `then` method would resolve to whatever `then` hands its
+	 * callback. The promise check keeps it off those: a caller receives that
+	 * named type, not the value inside it.
 	 *
 	 * @param annotation - The explicit return type annotation.
 	 * @returns The type behind the annotation, awaited when it is a promise.
 	 */
 	function resolveReturnType(annotation: TSESTree.TSTypeAnnotation): Type {
-		// The map's declared result for a `TypeNode` widens to plain `Identifier`
-		// for the reference case, so the cast restates what it returns at
-		// runtime: the TypeScript node behind this type annotation.
-		const typeNode = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation) as TypeNode;
-		const declared = checker.getTypeFromTypeNode(typeNode);
+		const declared = services.getTypeFromTypeNode(annotation.typeAnnotation);
 		if (!PROMISE_TYPE_NAMES.has(declared.getSymbol()?.getName() ?? "")) {
 			return declared;
 		}
@@ -180,7 +178,6 @@ export const noUnknownReturns: EslintRuleModule<Options, MessageIds> = createEsl
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: [],
 	meta: {
 		docs: {
 			description: "Disallow explicit return type annotations that resolve to `unknown`",
@@ -188,6 +185,7 @@ export const noUnknownReturns: EslintRuleModule<Options, MessageIds> = createEsl
 			requiresTypeChecking: true,
 		},
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: [],
 		type: "problem",

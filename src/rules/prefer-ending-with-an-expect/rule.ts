@@ -1,18 +1,13 @@
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 import {
 	getCalleeRootIdentifier,
 	getNodeName,
 	resolveTestGlobalName,
-} from "../../utils/test-globals";
+} from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "prefer-ending-with-an-expect";
 
@@ -23,15 +18,17 @@ export type MessageIds = typeof MESSAGE_ID;
 export interface PreferEndingWithAnExpectOptions {
 	/**
 	 * Callee names, in addition to a resolved vitest `it`/`test`, whose second
-	 * argument is treated as a test body. Matched by exact dotted name (no scope
-	 * resolution), for libraries with custom test blocks such as `each.test`.
+	 * argument is treated as a test body. Matched by exact dotted name (no
+	 * scope resolution), for libraries with custom test blocks such as
+	 * `each.test`.
 	 */
 	readonly additionalTestBlockFunctions?: ReadonlyArray<string>;
 	/**
-	 * Function names, in addition to a resolved vitest `expect`, that count as an
-	 * assertion when they end a test. Matched by name against the callee chain,
-	 * so no scope resolution applies. A `*` matches a single dotted segment and
-	 * `**` matches any number, allowing patterns such as `request.*.expect`.
+	 * Function names, in addition to a resolved vitest `expect`, that count as
+	 * an assertion when they end a test. Matched by name against the callee
+	 * chain, so no scope resolution applies. A `*` matches a single dotted
+	 * segment and `**` matches any number, allowing patterns such as
+	 * `request.*.expect`.
 	 */
 	readonly assertFunctionNames?: ReadonlyArray<string>;
 }
@@ -45,7 +42,9 @@ const DEFAULTS: Config = {
 	assertFunctionNames: ["expect"],
 };
 
-/** Callee identifiers that name a vitest test block (`describe` is excluded). */
+/**
+ * Callee identifiers that name a vitest test block (`describe` is excluded).
+ */
 const TEST_BLOCK_NAMES = new Set(["it", "test"]);
 
 /** The only module whose named exports count as test globals for this rule. */
@@ -88,7 +87,7 @@ const schema: Array<JSONSchema.JSONSchema4> = [
  */
 function matchesAssertFunctionName(nodeName: string, patterns: ReadonlyArray<string>): boolean {
 	return patterns.some((pattern) => {
-		return new RegExp(
+		const matcher = new RegExp(
 			`^${pattern
 				.split(".")
 				.map((segment) => {
@@ -100,7 +99,8 @@ function matchesAssertFunctionName(nodeName: string, patterns: ReadonlyArray<str
 				})
 				.join("\\.")}(\\.|$)`,
 			"ui",
-		).test(nodeName);
+		);
+		return matcher.test(nodeName);
 	});
 }
 
@@ -145,7 +145,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sourceCode: Readonly<TSESLint.SourceCode>;
 
 	/**
-	 * Determines whether a call is a test block whose second argument is a body.
+	 * Determines whether a call is a test block whose second argument is a
+	 * body.
 	 *
 	 * @param node - The call to inspect.
 	 * @returns `true` when the call opens a vitest (or configured) test.
@@ -164,8 +165,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
-	 * Determines whether a call is an assertion: a resolved vitest `expect`, or a
-	 * call whose dotted name matches an `assertFunctionNames` pattern.
+	 * Determines whether a call is an assertion: a resolved vitest `expect`,
+	 * or a call whose dotted name matches an `assertFunctionNames` pattern.
 	 *
 	 * @param node - The call ending the test body.
 	 * @returns `true` when the call counts as an assertion.
@@ -192,7 +193,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			};
 			({ sourceCode } = context);
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			if (!isTestBlock(node)) {
 				return;
 			}
@@ -228,7 +229,6 @@ export const preferEndingWithAnExpect: FlawlessRuleModule<Options, MessageIds> =
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

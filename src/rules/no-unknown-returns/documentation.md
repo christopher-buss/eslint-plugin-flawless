@@ -111,7 +111,7 @@ export function loadConfig(): unknown {
 	return JSON.parse(readFileSync("config.json", "utf8"));
 }
 
-export async function fetchUser(id: string): Promise<unknown> {
+export async function fetchUserAsync(id: string): Promise<unknown> {
 	const response = await fetch(`/users/${id}`);
 	return response.json();
 }
@@ -157,9 +157,7 @@ function type in a result branch is a real type and keeps the callback wording.
 
 ```ts
 // Reports: write `=> void`, which matches every function the same way.
-type DeepWritable<T> = T extends (
-	...parameters: ReadonlyArray<never>
-) => unknown
+type DeepWritable<T> = T extends (...parameters: ReadonlyArray<never>) => unknown
 	? T
 	: { -readonly [K in keyof T]: DeepWritable<T[K]> };
 ```

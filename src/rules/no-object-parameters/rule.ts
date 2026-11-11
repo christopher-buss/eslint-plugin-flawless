@@ -1,9 +1,10 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { parameterAnnotation, parameterName } from "../shared/function-parameters";
-import { lookupAlias } from "../shared/type-bindings";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { parameterAnnotation, parameterName } from "../shared/function-parameters.ts";
+import { lookupAlias } from "../shared/type-bindings.ts";
 
 export const RULE_NAME = "no-object-parameters";
 
@@ -100,49 +101,55 @@ function openObjectType(
 	type: TSESTree.TypeNode,
 	visited: ReadonlySet<TSESTree.TSTypeAliasDeclaration>,
 ): TSESTree.TypeNode | undefined {
-	if (type.type === AST_NODE_TYPES.TSObjectKeyword || isEmptyTypeLiteral(type)) {
-		return type;
-	}
-
-	if (type.type === AST_NODE_TYPES.TSUnionType) {
-		for (const member of type.types) {
-			const open = openObjectType(member, visited);
-			if (open !== undefined) {
-				return open;
-			}
+	let current = type;
+	let currentVisited = visited;
+	while (true) {
+		if (current.type === AST_NODE_TYPES.TSObjectKeyword || isEmptyTypeLiteral(current)) {
+			return current;
 		}
 
-		return undefined;
-	}
+		if (current.type === AST_NODE_TYPES.TSUnionType) {
+			for (const member of current.types) {
+				const open = openObjectType(member, currentVisited);
+				if (open !== undefined) {
+					return open;
+				}
+			}
 
-	if (type.type === AST_NODE_TYPES.TSTypeLiteral) {
-		return isOpenDictionaryLiteral(type) ? type : undefined;
-	}
+			return undefined;
+		}
 
-	if (
-		type.type !== AST_NODE_TYPES.TSTypeReference ||
-		type.typeName.type !== AST_NODE_TYPES.Identifier
-	) {
-		return undefined;
-	}
+		if (current.type === AST_NODE_TYPES.TSTypeLiteral) {
+			return isOpenDictionaryLiteral(current) ? current : undefined;
+		}
 
-	const alias = lookupAlias(type.typeName.name, type);
-	if (alias === undefined) {
-		return isOpenRecord(type) ? type : undefined;
-	}
+		if (
+			current.type !== AST_NODE_TYPES.TSTypeReference ||
+			current.typeName.type !== AST_NODE_TYPES.Identifier
+		) {
+			return undefined;
+		}
 
-	// A generic alias is skipped: its arguments decide the final shape.
-	if (
-		visited.has(alias) ||
-		(alias.typeParameters?.params.length ?? 0) > 0 ||
-		(type.typeArguments?.params.length ?? 0) > 0
-	) {
-		return undefined;
-	}
+		const alias = lookupAlias(current.typeName.name, current);
+		if (alias === undefined) {
+			return isOpenRecord(current) ? current : undefined;
+		}
 
-	const nextVisited = new Set(visited);
-	nextVisited.add(alias);
-	return openObjectType(alias.typeAnnotation, nextVisited);
+		// A generic alias is skipped: its arguments decide the final shape.
+		if (
+			currentVisited.has(alias) ||
+			(alias.typeParameters?.params.length ?? 0) > 0 ||
+			(current.typeArguments?.params.length ?? 0) > 0
+		) {
+			return undefined;
+		}
+
+		const nextVisited = new Set(currentVisited);
+		// oxlint-disable-next-line unicorn/no-immediate-mutation -- copies the set, then adds; no extra array
+		nextVisited.add(alias);
+		current = alias.typeAnnotation;
+		currentVisited = nextVisited;
+	}
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
@@ -190,8 +197,8 @@ export const noObjectParameters: FlawlessRuleModule<Options, MessageIds> = creat
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow function parameters that accept any object shape",
 			recommended: false,

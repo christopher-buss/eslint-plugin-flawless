@@ -1,14 +1,9 @@
-import {
-	AST_NODE_TYPES,
-	ASTUtils,
-	type JSONSchema,
-	type TSESLint,
-	type TSESTree,
-} from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ASTUtils } from "@typescript-eslint/utils";
+import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { ReactImportKind } from "./imports";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { ReactImportKind } from "./imports.ts";
 import {
 	classifySpecifier,
 	ensureNamedValueImport,
@@ -18,7 +13,7 @@ import {
 	hasReactNamespaceImport,
 	insertImportStatement,
 	removeNamedSpecifier,
-} from "./imports";
+} from "./imports.ts";
 
 export const RULE_NAME = "react-namespace";
 
@@ -72,16 +67,18 @@ interface ReactImportResolution {
 
 /** Per-binding facts that decide whether its named import can be removed. */
 interface RemovableInfo {
-	/** Whether every reference is a bare type reference this rule can qualify. */
+	/**
+	 * Whether every reference is a bare type reference this rule can qualify.
+	 */
 	allConvertible: boolean;
 	/** The start offset of the first reference in source order. */
 	firstStart: number;
 }
 
 /**
- * Whether a member access is the target of an assignment (`React.x = …`), which
- * must be left alone — rewriting it to a bare name would create an assignment to
- * an import binding.
+ * Whether a member access is the target of an assignment (`React.x = …`),
+ * which must be left alone — rewriting it to a bare name would create an
+ * assignment to an import binding.
  *
  * @param node - The member expression under consideration.
  * @returns True when the member is an assignment target.
@@ -116,8 +113,8 @@ function isModuleStatement(statement: TSESTree.ProgramStatement): boolean {
  * convertible, and only the *first* reference carries the import edits.
  *
  * The import edits (adding the namespace import, removing the redundant
- * specifier) sit at the top of the file. ESLint merges a report's fix array into
- * one edit spanning `[min, max]`, so anchoring those edits to the first
+ * specifier) sit at the top of the file. ESLint merges a report's fix array
+ * into one edit spanning `[min, max]`, so anchoring those edits to the first
  * reference keeps that span from the file head to the first usage — later
  * references stay disjoint and their own qualify edits survive a single pass.
  *
@@ -126,7 +123,7 @@ function isModuleStatement(statement: TSESTree.ProgramStatement): boolean {
  */
 function computeRemovableInfo(references: ReadonlyArray<TSESLint.Scope.Reference>): RemovableInfo {
 	let allConvertible = true;
-	let firstStart = Number.POSITIVE_INFINITY;
+	let firstStart = Infinity;
 
 	for (const { identifier } of references) {
 		firstStart = Math.min(firstStart, identifier.range[0]);
@@ -179,17 +176,15 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				for (const specifier of declaration.specifiers) {
 					const kind = classifySpecifier(specifier);
 					const [variable] = sourceCode.getDeclaredVariables(specifier);
-					if (variable === undefined) {
-						continue;
-					}
-
-					for (const reference of variable.references) {
-						resolutions.set(reference.identifier, { kind, variable });
+					if (variable !== undefined) {
+						for (const reference of variable.references) {
+							resolutions.set(reference.identifier, { kind, variable });
+						}
 					}
 				}
 			}
 		},
-		MemberExpression(node: TSESTree.MemberExpression): void {
+		MemberExpression(node): void {
 			if (
 				node.computed ||
 				node.object.type !== AST_NODE_TYPES.Identifier ||
@@ -224,7 +219,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				node,
 			});
 		},
-		TSTypeReference(node: TSESTree.TSTypeReference): void {
+		TSTypeReference(node): void {
 			if (node.typeName.type !== AST_NODE_TYPES.Identifier) {
 				return;
 			}
@@ -276,10 +271,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 							found !== null &&
 							umdGlobal &&
 							found.declaration.specifiers.length === 1 &&
-							!program.body.some(
-								(statement) =>
-									statement !== found.declaration && isModuleStatement(statement),
-							)
+							program.body.every((statement) => {
+								return (
+									statement === found.declaration || !isModuleStatement(statement)
+								);
+							})
 						) {
 							fixes.push(fixer.replaceText(found.declaration, "export {};"));
 						} else if (found !== null) {
@@ -309,7 +305,6 @@ export const reactNamespace: FlawlessRuleModule<Options, MessageIds> = createFla
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

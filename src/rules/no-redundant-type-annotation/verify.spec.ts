@@ -1,15 +1,26 @@
 import parser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { regressions } from "./regressions";
-import { noRedundantTypeAnnotation } from "./rule";
-import { type Candidate, COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify";
+import { regressions } from "./regressions.ts";
+import { noRedundantTypeAnnotation } from "./rule.ts";
+import { COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify.ts";
+import type { Candidate } from "./verify.ts";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
+
+// With `CI=true`, typescript-eslint infers a single run, and a single run
+// reports tsconfig errors as a parse error. The fixtures tsconfig uses compiler
+// options that the older TypeScript versions in CI do not know, so keep the
+// same mode as a local run.
+const projectServiceOptions = {
+	disallowAutomaticSingleRunInference: true,
+	projectService: true,
+	tsconfigRootDir: directory,
+};
 
 // cspell:ignore tsserverlibrary
 
@@ -104,7 +115,8 @@ function project(
  */
 function compilerProblems(code: string, removals: ReadonlyArray<Candidate>): ReadonlyArray<string> {
 	let modified = code;
-	for (const { range } of [...removals].sort((a, b) => b.range[0] - a.range[0])) {
+	const descending = removals.toSorted((a, b) => b.range[0] - a.range[0]);
+	for (const { range } of descending) {
 		modified = modified.slice(0, range[0]) + modified.slice(range[1]);
 	}
 
@@ -175,14 +187,12 @@ describe("annotation verification", () => {
 			'import { createSyncFn } from "synckit"; const make: typeof createSyncFn = createSyncFn;',
 		);
 		// The resolution cache of a program is internal to the compiler.
-		const bare = Object.assign(Object.create(program) as ts.Program, {
-			getModuleResolutionCache: undefined,
-		});
+		const bare = { ...program, getModuleResolutionCache: undefined };
 		expect(verifyAnnotations(bare, source, candidates).accepted).toHaveLength(1);
 	});
 
 	it("verifies an unsaved file from the parser's project service", () => {
-		const linter = new Linter({ configType: "flat" });
+		const linter = new TSESLint.Linter({ configType: "flat" });
 		// Keep the variable local: isolatedDeclarations requires annotations
 		// on exported variables.
 		const code = "declare function read(): string; const value: string = read(); export {};";
@@ -192,9 +202,10 @@ describe("annotation verification", () => {
 				files: ["**/*.ts"],
 				languageOptions: {
 					parser,
-					parserOptions: { projectService: true, tsconfigRootDir: directory },
+					parserOptions: projectServiceOptions,
 				},
-				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
+
+				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
 				rules: { "flawless/redundant": "error" },
 			},
 			path.join(directory, "file.ts"),
@@ -205,7 +216,7 @@ describe("annotation verification", () => {
 	});
 
 	it("reports candidates past the work limit without a fix", () => {
-		const linter = new Linter({ configType: "flat" });
+		const linter = new TSESLint.Linter({ configType: "flat" });
 		// Keep the variables local: isolatedDeclarations requires annotations
 		// on exported variables.
 		const code = `declare function read(): string;\n${Array.from(
@@ -218,9 +229,10 @@ describe("annotation verification", () => {
 				files: ["**/*.ts"],
 				languageOptions: {
 					parser,
-					parserOptions: { projectService: true, tsconfigRootDir: directory },
+					parserOptions: projectServiceOptions,
 				},
-				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
+
+				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
 				rules: { "flawless/redundant": "error" },
 			},
 			path.join(directory, "file.ts"),
@@ -378,11 +390,9 @@ const d: string = c;`;
 	it("stops sharing checks alone after a shared check in which all removals fail", () => {
 		// Each pair is coupled, and each removal fails alone. The variables
 		// share one check alone, and so do the parameters.
-		const code = Array.from(
-			{ length: 5 },
-			(_, index) =>
-				`const f${index}: (x: string) => string | number = (x: string | number) => x;`,
-		).join("\n");
+		const code = Array.from({ length: 5 }, (_, index) => {
+			return `const f${index}: (x: string) => string | number = (x: string | number) => x;`;
+		}).join("\n");
 		/**
 		 * Counts the programs that verification creates. Each program built
 		 * from an old program reads the old root names once to reuse it.
@@ -395,12 +405,13 @@ const d: string = c;`;
 		} {
 			const { candidates, program, source } = project(text);
 			let reads = 0;
-			const counted = Object.assign(Object.create(program) as ts.Program, {
+			const counted: ts.Program = {
+				...program,
 				getRootFileNames: () => {
 					reads += 1;
 					return program.getRootFileNames();
 				},
-			});
+			};
 			const verification = verifyAnnotations(counted, source, candidates);
 			return { programs: reads, verification };
 		}

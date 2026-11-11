@@ -181,15 +181,7 @@ are all pure:
 	"flawless/no-ignored-return": [
 		"error",
 		{
-			"pureFunctions": [
-				"math",
-				"string",
-				"bit32",
-				"buffer",
-				"utf8",
-				"vector",
-				"os"
-			]
+			"pureFunctions": ["math", "string", "bit32", "buffer", "utf8", "vector", "os"]
 		}
 	]
 }

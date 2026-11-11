@@ -1,11 +1,13 @@
 import tsParser from "@typescript-eslint/parser";
+import { TSESLint } from "@typescript-eslint/utils";
 
-import { Linter } from "eslint";
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
-import { beforeAll, describe, expect, it } from "vitest";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
+import { describe, expect, it } from "vitest";
 
-import { run } from "../test";
-import { arrowReturnStyle, type Options, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { arrowReturnStyle, RULE_NAME } from "./rule.ts";
+import type { Options } from "./rule.ts";
 
 // TDD target for the port of `arrow-return-style` from
 // eslint-plugin-arrow-return-style-x. Decided semantics (differences from the
@@ -54,8 +56,8 @@ const valid: Array<ValidTestCase> = [
 	"Array.from({ length: 10 }).map((_, i) => i + 1)",
 
 	{
-		code: "const Div = () => <><div /></>",
 		filename: jsxFilename,
+		code: "const Div = () => <><div /></>",
 		options: [{ jsxAlwaysUseExplicitReturn: false }],
 	},
 
@@ -315,19 +317,19 @@ const valid: Array<ValidTestCase> = [
 
 	// Parenthesized JSX body with trailing semicolon.
 	{
-		code: "const r = () => (<div />);",
 		filename: jsxFilename,
+		code: "const r = () => (<div />);",
 	},
 	// Arrow in a JSX attribute.
 	{
-		code: "const el = <Button onClick={() => handleClick()} />;",
 		filename: jsxFilename,
+		code: "const el = <Button onClick={() => handleClick()} />;",
 	},
 	// Arrow returning an arrow.
 	"const add = (a: number) => (b: number) => a + b;",
 ];
 
-const invalid: Array<InvalidTestCase> = [
+const invalid: Array<InvalidTestCase<Options>> = [
 	// --- Carried over from the old suite (verified correct) ---
 
 	// 101 chars > 80: force explicit.
@@ -335,12 +337,12 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const UDimTemporary = (value: UDim, rem: number): UDim => new UDim(value.Scale, value.Offset * rem);
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const UDimTemporary = (value: UDim, rem: number): UDim => {
 				return new UDim(value.Scale, value.Offset * rem);
 			};
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Indented object property: indentation counts toward the emitted line.
@@ -351,7 +353,6 @@ const invalid: Array<InvalidTestCase> = [
 			    new UDim(value.Scale, value.Offset * rem),
 			};
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const obj = {
 			  UDimTemporary11111111111: (value: UDim, rem: number): UDim => {
@@ -359,6 +360,7 @@ const invalid: Array<InvalidTestCase> = [
 			  },
 			};
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
@@ -366,12 +368,12 @@ const invalid: Array<InvalidTestCase> = [
 			const isVariableDeclaration = (node: TSESTree.Node | null | undefined): node is TSESTree.VariableDeclaration =>
 			  node?.type === AST_NODE_TYPES.VariableDeclaration;
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const isVariableDeclaration = (node: TSESTree.Node | null | undefined): node is TSESTree.VariableDeclaration => {
 			  return node?.type === AST_NODE_TYPES.VariableDeclaration;
 			};
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
@@ -381,7 +383,6 @@ const invalid: Array<InvalidTestCase> = [
 			  .map((node) => node.argument)
 			  .filter(Boolean);
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const returnValues = blockBody
 			  .filter((node): node is TSESTree.ReturnStatement => {
@@ -390,6 +391,7 @@ const invalid: Array<InvalidTestCase> = [
 			  .map((node) => node.argument)
 			  .filter(Boolean);
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// The rule intentionally prefers an explicit block over the formatter's
@@ -401,7 +403,6 @@ const invalid: Array<InvalidTestCase> = [
 			    setTimeout(resolve, 1000)
 			  })
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const delay = () => {
 			  return new Promise((resolve) => {
@@ -409,6 +410,7 @@ const invalid: Array<InvalidTestCase> = [
 			  });
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
@@ -417,8 +419,8 @@ const invalid: Array<InvalidTestCase> = [
 			  return 'foo'
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const foo = () => 'foo'",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	{
@@ -427,8 +429,8 @@ const invalid: Array<InvalidTestCase> = [
 			  return i + 1
 			})
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "Array.from({ length: 10 }).map((_, i) => i + 1)",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Object body gets wrapping parens on collapse.
@@ -438,47 +440,48 @@ const invalid: Array<InvalidTestCase> = [
 			  return { name: '' }
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const obj = () => ({ name: '' })",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Named export: explicit by default.
 	{
 		code: "export const defineConfig = <T extends Linter.Config>(config: T) => config",
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			export const defineConfig = <T extends Linter.Config>(config: T) => {
 				return config;
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
-		code: "const Div = () => <><div /></>",
-		errors: [{ messageId: explicitMessageId }],
 		filename: jsxFilename,
-		options: [{ jsxAlwaysUseExplicitReturn: true }],
+		code: "const Div = () => <><div /></>",
 		output: unindent`
 			const Div = () => {
 				return <><div /></>;
 			}
 		`,
+		options: [{ jsxAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
-		code: "export const Div = () => <><div /></>",
-		errors: [{ messageId: explicitMessageId }],
 		filename: jsxFilename,
-		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		code: "export const Div = () => <><div /></>",
 		output: unindent`
 			export const Div = () => {
 				return <><div /></>;
 			}
 		`,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Multiline JSX with comments among attributes.
 	{
+		filename: jsxFilename,
 		code: unindent`
 			const FC = () =>
 			  <Foo
@@ -489,8 +492,6 @@ const invalid: Array<InvalidTestCase> = [
 			  bar={[]}
 			/>
 		`,
-		errors: [{ messageId: explicitMessageId }],
-		filename: jsxFilename,
 		output: unindent`
 			const FC = () => {
 			  return <Foo
@@ -502,6 +503,7 @@ const invalid: Array<InvalidTestCase> = [
 			  />;
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
@@ -510,7 +512,6 @@ const invalid: Array<InvalidTestCase> = [
 			  (rule) => \`https://github.com/u3u/eslint-plugin-arrow-return-style/tree/v\${version}/docs/rules/\${rule}.md\`
 			)
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			export const createRule = ESLintUtils.RuleCreator(
 			  (rule) => {
@@ -518,18 +519,19 @@ const invalid: Array<InvalidTestCase> = [
 			  }
 			)
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
-		code: "const render = () => (<div />)",
-		errors: [{ messageId: explicitMessageId }],
 		filename: jsxFilename,
-		options: [{ jsxAlwaysUseExplicitReturn: true }],
+		code: "const render = () => (<div />)",
 		output: unindent`
 			const render = () => {
 				return <div />;
 			}
 		`,
+		options: [{ jsxAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Comments between arrow and body move inside an explicit block.
@@ -539,13 +541,13 @@ const invalid: Array<InvalidTestCase> = [
 			  /* block comment */
 			  1
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const fn = () => {
 			  /* block comment */
 			  return 1;
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -553,24 +555,24 @@ const invalid: Array<InvalidTestCase> = [
 			  // line comment
 			  ({ name: 'test' })
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const test = () => {
 			  // line comment
 			  return { name: 'test' };
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Unicode.
 	{
 		code: "const longUnicode测试 = () => '这是一个很长的中文字符串测试，应该触发显式返回，因为它超过了最大长度限制了吧应该是这样的，还要更长一些才能确保触发规则'",
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const longUnicode测试 = () => {
 				return '这是一个很长的中文字符串测试，应该触发显式返回，因为它超过了最大长度限制了吧应该是这样的，还要更长一些才能确保触发规则';
 			}
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -578,8 +580,8 @@ const invalid: Array<InvalidTestCase> = [
 				return '🚀'.repeat(50);
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const emojiLongFunction = () => '🚀'.repeat(50)",
+		errors: [{ messageId: implicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -587,8 +589,8 @@ const invalid: Array<InvalidTestCase> = [
 				return "测试".repeat(10);
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: 'const unicodeBoundary = () => "测试".repeat(10)',
+		errors: [{ messageId: implicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -596,124 +598,124 @@ const invalid: Array<InvalidTestCase> = [
 				return '안녕하세요 세계';
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const 한국어함수 = () => '안녕하세요 세계'",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Collapsed line is 55 chars <= maxLen 65.
 	{
 		code: "const inconsistencyTest = () => { return obj.prop + other.value; }",
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ maxLen: 65 }],
 		output: "const inconsistencyTest = () => obj.prop + other.value",
+		options: [{ maxLen: 65 }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Boundary partner of `exactly80chars`: 81 chars > 80.
 	{
 		code: "const exactly81chars = () => 'this string makes the line exactly eighty-one char'",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 80 }],
 		output: unindent`
 			const exactly81chars = () => {
 				return 'this string makes the line exactly eighty-one char';
 			}
 		`,
+		options: [{ maxLen: 80 }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// objectReturnStyle matrix.
 	{
 		code: "const simpleObj = () => ({ player })",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: "always-explicit" }],
 		output: unindent`
 			const simpleObj = () => {
 				return { player };
 			}
 		`,
+		options: [{ objectReturnStyle: "always-explicit" }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	{
 		code: "const singleProp = () => ({ id: 1 })",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: "always-explicit" }],
 		output: unindent`
 			const singleProp = () => {
 				return { id: 1 };
 			}
 		`,
+		options: [{ objectReturnStyle: "always-explicit" }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	// 86 chars > maxLen 80, so the length messageId wins over the complexity
 	// one (same precedence as `longArrayExceedsMaxLen`).
 	{
 		code: "const closePlayerData = (state, player: string) => ({ ...state, [player]: undefined })",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const closePlayerData = (state, player: string) => {
 				return { ...state, [player]: undefined };
 			}
 		`,
+		options: [{ objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 	{
 		code: "const threeProps = () => ({ player, test, another })",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ maxObjectProperties: 2, objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const threeProps = () => {
 				return { player, test, another };
 			}
 		`,
+		options: [{ maxObjectProperties: 2, objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	{
 		code: "const multipleCallsInObject = () => ({ name: getValue(), id: getId() })",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const multipleCallsInObject = () => {
 				return { name: getValue(), id: getId() };
 			}
 		`,
+		options: [{ objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	{
 		code: "const spreadPlusComputed = () => ({ ...state, [key]: value })",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const spreadPlusComputed = () => {
 				return { ...state, [key]: value };
 			}
 		`,
+		options: [{ objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	// Array bodies participate in the complexity checks too.
 	{
 		code: "const complexArray = () => ([...items, newItem])",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const complexArray = () => {
 				return [...items, newItem];
 			}
 		`,
+		options: [{ objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	{
 		code: "const arrayWithCalls = () => ([getValue(), getId()])",
-		errors: [{ messageId: complexExplicitMessageId }],
-		options: [{ objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const arrayWithCalls = () => {
 				return [getValue(), getId()];
 			}
 		`,
+		options: [{ objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: complexExplicitMessageId }],
 	},
 	// Length violation wins over the complexity messageId.
 	{
 		code: "const longArrayExceedsMaxLen = () => (['this', 'array', 'is', 'long'])",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 60, objectReturnStyle: complexExplicitOption }],
 		output: unindent`
 			const longArrayExceedsMaxLen = () => {
 				return ['this', 'array', 'is', 'long'];
 			}
 		`,
+		options: [{ maxLen: 60, objectReturnStyle: complexExplicitOption }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Two reports in one run, both fixed.
@@ -724,14 +726,14 @@ const invalid: Array<InvalidTestCase> = [
 				fetch('url2').then((res) => { return res.text(); }),
 			]);
 		`,
-		errors: [{ messageId: implicitMessageId }, { messageId: implicitMessageId }],
-		options: [{ maxLen: 60, useOxfmt: { printWidth: 60 } }],
 		output: unindent`
 			Promise.all([
 				fetch('url1').then((res) => res.json()),
 				fetch('url2').then((res) => res.text()),
 			]);
 		`,
+		options: [{ maxLen: 60, useOxfmt: { printWidth: 60 } }],
+		errors: [{ messageId: implicitMessageId }, { messageId: implicitMessageId }],
 	},
 
 	// useCallback "case A": the arrow's own line in oxfmt output at
@@ -739,24 +741,24 @@ const invalid: Array<InvalidTestCase> = [
 	// suite had this case but asserted no `errors` at all.
 	{
 		code: "const veryLongFunctionNameHereWithExtraLength = useCallback((value: number) => tostring(value + arbitraryNumberOrSomethingWithAVeryLongName), [short]);",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 80, useOxfmt: { printWidth: 80 } }],
 		output: unindent`
 			const veryLongFunctionNameHereWithExtraLength = useCallback((value: number) => {
 				return tostring(value + arbitraryNumberOrSomethingWithAVeryLongName);
 			}, [short]);
 		`,
+		options: [{ maxLen: 80, useOxfmt: { printWidth: 80 } }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	{
 		code: "items.sort((a, b) => a.veryLongPropertyNameThatMakesThisLineExceedTheMaxLength.localeCompare(b.veryLongPropertyNameThatMakesThisLineExceedTheMaxLength))",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 80, useOxfmt: true }],
 		output: unindent`
 			items.sort((a, b) => {
 				return a.veryLongPropertyNameThatMakesThisLineExceedTheMaxLength.localeCompare(b.veryLongPropertyNameThatMakesThisLineExceedTheMaxLength);
 			})
 		`,
+		options: [{ maxLen: 80, useOxfmt: true }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -764,9 +766,9 @@ const invalid: Array<InvalidTestCase> = [
 				return a.name.localeCompare(b.name);
 			})
 		`,
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ maxLen: 100, useOxfmt: true }],
 		output: "items.sort((a, b) => a.name.localeCompare(b.name))",
+		options: [{ maxLen: 100, useOxfmt: true }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	{
@@ -775,8 +777,6 @@ const invalid: Array<InvalidTestCase> = [
 				return (playerId: number) => store.load(playerId).then((data) => data.inventory);
 			}
 		`,
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 80, useOxfmt: { printWidth: 80 } }],
 		output: unindent`
 			function getPlayerInventory(store: PlayerStore) {
 				return (playerId: number) => {
@@ -784,6 +784,8 @@ const invalid: Array<InvalidTestCase> = [
 				};
 			}
 		`,
+		options: [{ maxLen: 80, useOxfmt: { printWidth: 80 } }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// --- Re-specced: old suite got these wrong ---
@@ -792,13 +794,13 @@ const invalid: Array<InvalidTestCase> = [
 	// rule measured the arrow without its `const ... = ` prefix.
 	{
 		code: "const prettierMakesShort = () => ({ prop1: 'value', prop2: 'another' })",
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 60, useOxfmt: true }],
 		output: unindent`
 			const prettierMakesShort = () => {
 				return { prop1: 'value', prop2: 'another' };
 			}
 		`,
+		options: [{ maxLen: 60, useOxfmt: true }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// Companion to the maxLen 60 valid case above: with maxLen 100 the
@@ -809,9 +811,9 @@ const invalid: Array<InvalidTestCase> = [
 				return {  prop1   :   'val',   prop2   :   'val2'  };
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ maxLen: 100, useOxfmt: true }],
 		output: "const prettierMakesShortEnough = () => ({  prop1   :   'val',   prop2   :   'val2'  })",
+		options: [{ maxLen: 100, useOxfmt: true }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Old spec ~L191 held this VALID; under the decided semantics the
@@ -827,14 +829,14 @@ const invalid: Array<InvalidTestCase> = [
 				[short],
 			);
 		`,
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ maxLen: 100, useOxfmt: { printWidth: 120 } }],
 		output: unindent`
 			const veryLongFunctionNameHere = useCallback(
 				(value: number) => tostring(value + arbitraryNumberOrSomethingWithAVeryLongName),
 				[short],
 			);
 		`,
+		options: [{ maxLen: 100, useOxfmt: { printWidth: 120 } }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// --- Loop-regression F1 mirror: short prefix, implicit fits ---
@@ -845,8 +847,8 @@ const invalid: Array<InvalidTestCase> = [
 				return value + other;
 			};
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const ok = () => value + other;",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// --- Loop-regression F2: multiline implicit literal goes explicit ---
@@ -861,7 +863,6 @@ const invalid: Array<InvalidTestCase> = [
 				inventory: someVeryLongInventoryReference,
 			});
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			const buildProfile = () => {
 				return {
@@ -870,6 +871,7 @@ const invalid: Array<InvalidTestCase> = [
 				};
 			};
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// --- Loop-regression F3: parenthesization completeness ---
@@ -882,8 +884,8 @@ const invalid: Array<InvalidTestCase> = [
 				return (sideEffect(), value);
 			};
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const tap = () => (sideEffect(), value);",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// --- Loop-regression F4: verdict must not depend on formatter mode ---
@@ -896,9 +898,9 @@ const invalid: Array<InvalidTestCase> = [
 				return someVeryLongParameterNameHere.x;
 			});
 		`,
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ useOxfmt: false }],
 		output: "data.map((someVeryLongParameterNameHere) => someVeryLongParameterNameHere.x);",
+		options: [{ useOxfmt: false }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 	{
 		code: unindent`
@@ -906,9 +908,9 @@ const invalid: Array<InvalidTestCase> = [
 				return someVeryLongParameterNameHere.x;
 			});
 		`,
-		errors: [{ messageId: implicitMessageId }],
-		options: [{ useOxfmt: true }],
 		output: "data.map((someVeryLongParameterNameHere) => someVeryLongParameterNameHere.x);",
+		options: [{ useOxfmt: true }],
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// --- String safety on the single-line collapse path ---
@@ -921,8 +923,8 @@ const invalid: Array<InvalidTestCase> = [
 				return ["a  b", ", ]", "x { y }"];
 			};
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: 'const strings = () => ["a  b", ", ]", "x { y }"];',
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// --- Coverage gaps in the old suite ---
@@ -936,12 +938,12 @@ const invalid: Array<InvalidTestCase> = [
 				};
 			}
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: unindent`
 			class Cache {
 				load = (id: number) => this.cache.get(id);
 			}
 		`,
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Arrow returning an arrow.
@@ -951,23 +953,23 @@ const invalid: Array<InvalidTestCase> = [
 				return (b: number) => a + b;
 			};
 		`,
-		errors: [{ messageId: implicitMessageId }],
 		output: "const add = (a: number) => (b: number) => a + b;",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Arrow in a JSX attribute (body is not JSX, so JSX options don't apply).
 	{
-		code: "const el = <Button onClick={() => { return handleClick(); }} />;",
-		errors: [{ messageId: implicitMessageId }],
 		filename: jsxFilename,
+		code: "const el = <Button onClick={() => { return handleClick(); }} />;",
 		output: "const el = <Button onClick={() => handleClick()} />;",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// CRLF line endings: length math must not be thrown off by `\r`.
 	{
 		code: "const a = () => {\r\n\treturn getValue();\r\n};",
-		errors: [{ messageId: implicitMessageId }],
 		output: "const a = () => getValue();",
+		errors: [{ messageId: implicitMessageId }],
 	},
 
 	// Wrap-after-arrow inside an already-wrapped call. The collapse candidate
@@ -986,8 +988,6 @@ const invalid: Array<InvalidTestCase> = [
 				});
 			});
 		`,
-		errors: [{ messageId: explicitMessageId }],
-		options: [{ maxLen: 100, useOxfmt: { printWidth: 100 } }],
 		output: unindent`
 			describe('error format', () => {
 				it('should list only apiKey when other two are provided', () => {
@@ -997,6 +997,8 @@ const invalid: Array<InvalidTestCase> = [
 				});
 			});
 		`,
+		options: [{ maxLen: 100, useOxfmt: { printWidth: 100 } }],
+		errors: [{ messageId: explicitMessageId }],
 	},
 
 	// ...but a call already expanded across lines keeps its trailing comma:
@@ -1008,7 +1010,6 @@ const invalid: Array<InvalidTestCase> = [
 					someHelper(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota),
 			);
 		`,
-		errors: [{ messageId: explicitMessageId }],
 		output: unindent`
 			runTask(
 				() => {
@@ -1016,6 +1017,7 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			);
 		`,
+		errors: [{ messageId: explicitMessageId }],
 	},
 ];
 
@@ -1048,7 +1050,7 @@ interface OxfmtModule {
 	) => Promise<{ code: string; errors: Array<unknown> }>;
 }
 
-function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
+function toFlatConfig(options: Options[0] | undefined): Array<TSESLint.FlatConfig.Config> {
 	return [
 		{
 			files: ["**/*.tsx"],
@@ -1063,7 +1065,7 @@ function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
 			plugins: {
 				flawless: {
 					rules: { [RULE_NAME]: arrowReturnStyle },
-				} as unknown as NonNullable<Linter.Config["plugins"]>[string],
+				},
 			},
 			rules: {
 				[`flawless/${RULE_NAME}`]: options === undefined ? "error" : ["error", options],
@@ -1073,27 +1075,25 @@ function toFlatConfig(options: Options[0] | undefined): Array<Linter.Config> {
 }
 
 describe(`${RULE_NAME} fixpoint`, () => {
-	const linter = new Linter();
-	let oxfmt: OxfmtModule;
-
-	beforeAll(async () => {
-		oxfmt = await import("oxfmt");
-	});
+	const linter = new TSESLint.Linter();
 
 	const cases = invalid.filter(
 		(
 			testCase,
-		): testCase is Exclude<InvalidTestCase, string> & { code: string; output: string } => {
+		): testCase is Exclude<InvalidTestCase<Options>, string> & {
+			code: string;
+			output: string;
+		} => {
 			return typeof testCase !== "string" && typeof testCase.output === "string";
 		},
 	);
 
 	for (const [index, testCase] of cases.entries()) {
-		const options = (testCase.options as Options | undefined)?.[0];
+		const options = testCase.options?.[0];
 		const config = toFlatConfig(options);
 		const useOxfmt = options?.useOxfmt;
 		const printWidth = typeof useOxfmt === "object" ? useOxfmt.printWidth : undefined;
-		const label = `case ${index}: ${testCase.code.split("\n")[0]?.slice(0, 60) ?? ""}`;
+		const label = `case ${index}: ${testCase.code.split("\n", 1)[0]?.slice(0, 60) ?? ""}`;
 
 		it(`${label} — fix converges and is stable`, () => {
 			const first = linter.verifyAndFix(testCase.code, config, { filename: jsxFilename });
@@ -1106,6 +1106,7 @@ describe(`${RULE_NAME} fixpoint`, () => {
 		});
 
 		it(`${label} — formatted output re-lints clean`, async () => {
+			const oxfmt: OxfmtModule = await import("oxfmt");
 			const formatted = await oxfmt.format(jsxFilename, testCase.output, {
 				endOfLine: "lf",
 				printWidth: printWidth ?? 80,

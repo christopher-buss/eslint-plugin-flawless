@@ -83,9 +83,6 @@ Example configuration enforcing named fragments:
 
 ```json
 {
-	"flawless/jsx-shorthand-fragment": [
-		"error",
-		{ "mode": "element", "fragmentName": "Fragment" }
-	]
+	"flawless/jsx-shorthand-fragment": ["error", { "mode": "element", "fragmentName": "Fragment" }]
 }
 ```

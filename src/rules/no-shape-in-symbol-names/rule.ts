@@ -1,7 +1,8 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "no-shape-in-symbol-names";
 
@@ -75,44 +76,68 @@ function isFunctionParameter(parent: TSESTree.Node, node: TSESTree.Node): boolea
  * @returns Whether the name declares a variable, parameter, or caught error.
  */
 function isBindingName(node: TSESTree.Node): boolean {
-	// Only the program root has no parent, and it is never a binding.
-	const parent: TSESTree.Node | undefined = node.parent;
-	if (parent === undefined) {
-		return false;
-	}
+	let current = node;
+	while (true) {
+		// Only the program root has no parent, and it is never a binding.
+		const parent: TSESTree.Node | undefined = current.parent;
+		if (parent === undefined) {
+			return false;
+		}
 
-	if (
-		parent.type === AST_NODE_TYPES.ArrayPattern ||
-		parent.type === AST_NODE_TYPES.ObjectPattern
-	) {
-		return isBindingName(parent);
-	}
+		if (
+			parent.type === AST_NODE_TYPES.ArrayPattern ||
+			parent.type === AST_NODE_TYPES.ObjectPattern
+		) {
+			current = parent;
+			continue;
+		}
 
-	if (parent.type === AST_NODE_TYPES.AssignmentPattern) {
-		return parent.left === node && isBindingName(parent);
-	}
+		if (parent.type === AST_NODE_TYPES.AssignmentPattern) {
+			if (parent.left !== current) {
+				return false;
+			}
 
-	if (parent.type === AST_NODE_TYPES.Property) {
-		return parent.value === node && isBindingName(parent);
-	}
+			current = parent;
+			continue;
+		}
 
-	if (parent.type === AST_NODE_TYPES.RestElement) {
-		return parent.argument === node && isBindingName(parent);
-	}
+		if (parent.type === AST_NODE_TYPES.Property) {
+			if (parent.value !== current) {
+				return false;
+			}
 
-	if (parent.type === AST_NODE_TYPES.TSParameterProperty) {
-		return parent.parameter === node && isBindingName(parent);
-	}
+			current = parent;
+			continue;
+		}
 
-	if (parent.type === AST_NODE_TYPES.CatchClause) {
-		return parent.param === node;
-	}
+		if (parent.type === AST_NODE_TYPES.RestElement) {
+			if (parent.argument !== current) {
+				return false;
+			}
 
-	if (parent.type === AST_NODE_TYPES.VariableDeclarator) {
-		return parent.id === node;
-	}
+			current = parent;
+			continue;
+		}
 
-	return isFunctionParameter(parent, node);
+		if (parent.type === AST_NODE_TYPES.TSParameterProperty) {
+			if (parent.parameter !== current) {
+				return false;
+			}
+
+			current = parent;
+			continue;
+		}
+
+		if (parent.type === AST_NODE_TYPES.CatchClause) {
+			return parent.param === current;
+		}
+
+		if (parent.type === AST_NODE_TYPES.VariableDeclarator) {
+			return parent.id === current;
+		}
+
+		return isFunctionParameter(parent, current);
+	}
 }
 
 /**
@@ -250,8 +275,8 @@ export const noShapeInSymbolNames: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description: "Disallow the term 'shape' in declared symbol names",
 			recommended: false,

@@ -143,10 +143,7 @@ const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const;
 
 // After — `satisfies` declares the foreign contract; the object is a plain
 // `variable` and its properties are plain `objectLiteralProperty` members:
-const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<
-	string,
-	1 | 2
->;
+const OPTIONS_ARG_POSITION = { exec: 1, spawn: 2 } as const satisfies Record<string, 1 | 2>;
 ```
 
 Violation messages for object-style enum _keys_ append a pointer to this escape,
@@ -269,9 +266,7 @@ interface ParticleEmitterAttributes {
 }
 
 // Reported too — structurally the same declaration:
-type ParticleEmitterAttributes = Readonly<
-	Partial<Record<"EmitCount", AttributeValue>>
->;
+type ParticleEmitterAttributes = Readonly<Partial<Record<"EmitCount", AttributeValue>>>;
 ```
 
 Covered:

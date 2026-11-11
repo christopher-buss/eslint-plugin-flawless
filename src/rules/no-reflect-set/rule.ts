@@ -8,9 +8,9 @@ import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import type { Type } from "typescript";
 import { TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { isGlobalReflectMethodCall } from "../shared/reflect-method";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { isGlobalReflectMethodCall } from "../shared/reflect-method.ts";
 
 export const RULE_NAME = "no-reflect-set";
 
@@ -101,7 +101,7 @@ function hasFixedKeyType(
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			// The four-argument form takes a receiver, which a plain assignment
 			// cannot rebind.
 			if (node.arguments.length !== 3) {
@@ -133,8 +133,8 @@ export const noReflectSet: FlawlessRuleModule<Options, MessageIds> = createFlawl
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Disallow `Reflect.set` with a compile-time-fixed key in favour of a plain assignment",

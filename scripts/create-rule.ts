@@ -52,15 +52,16 @@ for (const templateFileName of templateFiles) {
 	const resolvedFilePath = join(ruleDirectoryPath, resolvedFileName);
 
 	let content = readFileSync(templateFilePath, "utf-8");
-	content = content.replace(/\{\{RULE_NAME\}\}/g, ruleName);
-	content = content.replace(/\{\{RULE_NAME_CAMEL_CASE\}\}/g, ruleNameCamelCase);
-	content = content.replace(/\{\{RULE_DESCRIPTION\}\}/g, ruleDescription);
+	content = content.replace(/\{\{RULE_NAME\}\}/g, () => ruleName);
+	content = content.replace(/\{\{RULE_NAME_CAMEL_CASE\}\}/g, () => ruleNameCamelCase);
+	content = content.replace(/\{\{RULE_DESCRIPTION\}\}/g, () => ruleDescription);
 
 	writeFileSync(resolvedFilePath, content);
 	console.log(`Created file: ${resolvedFilePath}`);
 }
 
 // --- Register the rule in src/plugin.ts ---
+const collator = new Intl.Collator();
 try {
 	let pluginContent = readFileSync(pluginPath, "utf-8");
 
@@ -73,7 +74,7 @@ try {
 	}
 
 	const importAfter = ruleImports.find((match) => (match[1] ?? "") > ruleName);
-	const lastImport = ruleImports[ruleImports.length - 1];
+	const lastImport = ruleImports.at(-1);
 	if (importAfter?.index !== undefined) {
 		const before = pluginContent.slice(0, importAfter.index);
 		const after = pluginContent.slice(importAfter.index);
@@ -86,9 +87,9 @@ try {
 	}
 
 	// Rebuild the `rules` object with the new entry, kept alphabetical.
-	const rulesObjectRegex = /rules: {\s*([\s\S]*?)\s*},/m;
+	const rulesObjectRegex = /rules: \{([^}]*)\},/;
 	const rulesMatch = pluginContent.match(rulesObjectRegex);
-	const existingRules = rulesMatch?.[1];
+	const existingRules = rulesMatch?.[1]?.trim();
 	if (rulesMatch === null || existingRules === undefined) {
 		throw new Error("Could not find the 'rules' object.");
 	}
@@ -101,11 +102,11 @@ try {
 	}
 
 	entries.set(ruleName, ruleNameCamelCase);
-	const rebuilt = [...entries.entries()]
-		.sort(([a], [b]) => a.localeCompare(b))
+	const rebuilt = [...entries]
+		.sort(([a], [b]) => collator.compare(a, b))
 		.map(([name, identifier]) => `\t\t"${name}": ${identifier},`)
 		.join("\n");
-	pluginContent = pluginContent.replace(rulesMatch[0], `rules: {\n${rebuilt}\n\t},`);
+	pluginContent = pluginContent.replace(rulesMatch[0], () => `rules: {\n${rebuilt}\n\t},`);
 
 	writeFileSync(pluginPath, pluginContent);
 	console.log(`Updated: ${pluginPath}`);

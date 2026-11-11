@@ -18,8 +18,8 @@ import type {
 } from "typescript";
 import { isExternalModule, isFunctionLike, isInterfaceDeclaration, TypeFlags } from "typescript";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
 
 export const RULE_NAME = "no-ignored-return";
 
@@ -196,8 +196,9 @@ class EffectFinder {
 			return true;
 		}
 
-		for (const key of this.sourceCode.visitorKeys[node.type] ?? []) {
-			const value: unknown = node[key as keyof typeof node];
+		const keys = this.sourceCode.visitorKeys[node.type] ?? [];
+		for (const key of keys) {
+			const value: unknown = Reflect.get(node, key);
 			const children = Array.isArray(value) ? value : [value];
 			for (const child of children) {
 				if (isNode(child) && this.hasEffect(child)) {
@@ -359,6 +360,37 @@ function hasMutableArrayParameter(checker: TypeChecker, declaration: Declaration
 }
 
 /**
+ * Adds the {@link DERIVED_SOURCES} interfaces declared at the top level of one
+ * library file, keeping the first symbol found for each kind.
+ *
+ * @param checker - The type checker.
+ * @param file - The library file to read.
+ * @param found - The interfaces found so far, updated in place.
+ */
+function addSourceInterfaces(
+	checker: TypeChecker,
+	file: SourceFile,
+	found: Map<Kind, TsSymbol>,
+): void {
+	// Only a global script declares the global interfaces.
+	for (const statement of file.statements) {
+		if (!isInterfaceDeclaration(statement)) {
+			continue;
+		}
+
+		const kind = DERIVED_SOURCES.get(statement.name.text);
+		if (kind === undefined || found.has(kind)) {
+			continue;
+		}
+
+		const symbol = checker.getSymbolAtLocation(statement.name);
+		if (symbol !== undefined) {
+			found.set(kind, symbol);
+		}
+	}
+}
+
+/**
  * The global library interfaces named in {@link DERIVED_SOURCES}, read from the
  * top level of each library file.
  *
@@ -373,22 +405,7 @@ function findSourceInterfaces(program: Program, checker: TypeChecker): Map<Kind,
 			continue;
 		}
 
-		// Only a global script declares the global interfaces.
-		for (const statement of file.statements) {
-			if (!isInterfaceDeclaration(statement)) {
-				continue;
-			}
-
-			const kind = DERIVED_SOURCES.get(statement.name.text);
-			if (kind === undefined || found.has(kind)) {
-				continue;
-			}
-
-			const symbol = checker.getSymbolAtLocation(statement.name);
-			if (symbol !== undefined) {
-				found.set(kind, symbol);
-			}
-		}
+		addSourceInterfaces(checker, file, found);
 	}
 
 	return found;
@@ -405,7 +422,8 @@ function findSourceInterfaces(program: Program, checker: TypeChecker): Map<Kind,
  */
 function derivePureMethods(program: Program, checker: TypeChecker, symbol: TsSymbol): Set<string> {
 	const methods = new Set<string>();
-	for (const property of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
+	const properties = checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol));
+	for (const property of properties) {
 		const { name } = property;
 		// Well-known symbol members are keyed `__@iterator@<id>`.
 		if (name.startsWith("__@") || !isLibrarySymbol(program, property)) {
@@ -443,7 +461,13 @@ function getTables(program: Program): Tables {
 		tables.set(kind, derivePureMethods(program, checker, symbol));
 	}
 
-	const names = new Set([...tables.values()].flatMap((methods) => [...methods]));
+	const names = new Set<string>();
+	for (const methods of tables.values()) {
+		for (const method of methods) {
+			names.add(method);
+		}
+	}
+
 	const result = { names, tables };
 	tablesByProgram.set(program, result);
 	return result;
@@ -454,7 +478,7 @@ function parsePureFunctions(entries: ReadonlyArray<string>): PureEntries {
 		BUILTIN_NAMESPACES.map((name) => [name, "all"]),
 	);
 	for (const entry of entries) {
-		const [owner = entry, member] = entry.split(".");
+		const [owner = entry, member] = entry.split(".", 2);
 		const current = parsed.get(owner);
 		if (member === undefined) {
 			parsed.set(owner, "all");
@@ -557,11 +581,15 @@ function hasCallbackWithEffect(
 	node: TSESTree.CallExpression,
 ): boolean {
 	return node.arguments.some((argument) => {
-		return (
-			(argument.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-				argument.type === AST_NODE_TYPES.FunctionExpression) &&
-			new EffectFinder(sourceCode, argument).hasEffect(argument.body)
-		);
+		if (
+			argument.type !== AST_NODE_TYPES.ArrowFunctionExpression &&
+			argument.type !== AST_NODE_TYPES.FunctionExpression
+		) {
+			return false;
+		}
+
+		const finder = new EffectFinder(sourceCode, argument);
+		return finder.hasEffect(argument.body);
 	});
 }
 
@@ -590,7 +618,7 @@ function isPureLibraryFunction(program: Program, symbol: TsSymbol | undefined): 
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
-	let pureEntries: PureEntries = parsePureFunctions([]);
+	let pureEntries = parsePureFunctions([]);
 	let services: ParserServicesWithTypeInformation | undefined;
 
 	function report(node: TSESTree.CallExpression, methodName: string): void {
@@ -718,7 +746,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			pureEntries = parsePureFunctions(options[0]?.pureFunctions ?? DEFAULTS.pureFunctions);
 			return true;
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			if (node.parent.type !== AST_NODE_TYPES.ExpressionStatement) {
 				return;
 			}
@@ -757,7 +785,6 @@ export const noIgnoredReturn: FlawlessRuleModule<Options, MessageIds> = createFl
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

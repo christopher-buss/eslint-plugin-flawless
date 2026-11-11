@@ -6,19 +6,13 @@ import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import { isIdentifierPart, isIdentifierStart, ScriptTarget } from "typescript";
 
-import type { EslintRuleModule } from "../../util";
-import { createEslintRule } from "../../util";
-import { collectVariables } from "../../utils/collect-variables";
-import {
-	type Context,
-	type ContextualTypeCache,
-	isDictatedByContextualType,
-	type NamingSelector,
-	parseOptions,
-	SCHEMA,
-	type ValidatorFunction,
-} from "./utils";
-import { Modifier, type ModifierType } from "./utils/enums";
+import type { EslintRuleModule } from "../../util.ts";
+import { createEslintRule } from "../../util.ts";
+import { collectVariables } from "../../utils/collect-variables.ts";
+import { Modifier } from "./utils/enums.ts";
+import type { ModifierType } from "./utils/enums.ts";
+import { isDictatedByContextualType, parseOptions, SCHEMA } from "./utils/index.ts";
+import type { ContextualTypeCache, NamingSelector, ValidatorFunction } from "./utils/index.ts";
 
 export const RULE_NAME = "naming-convention";
 
@@ -105,19 +99,10 @@ const camelCaseNamingConfig: Options = [
 ];
 
 function create(
-	contextWithoutDefaults: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
+	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
-	const context =
-		contextWithoutDefaults.options.length > 0
-			? contextWithoutDefaults
-			: (Object.setPrototypeOf(
-					{
-						options: camelCaseNamingConfig,
-					},
-					contextWithoutDefaults,
-				) as Context);
-
-	const validators = parseOptions(context);
+	const options = context.options.length > 0 ? context.options : camelCaseNamingConfig;
+	const validators = parseOptions(context, options);
 
 	const services = getParserServices(context, true);
 	const compilerOptions = services.program?.getCompilerOptions() ?? {};
@@ -186,7 +171,7 @@ function create(
 
 	// The unused-variable analysis is costly and only feeds `Modifier.unused`,
 	// so skip it when no selector can match on that modifier.
-	const usesUnusedModifier = context.options.some(
+	const usesUnusedModifier = options.some(
 		(option) => option.modifiers?.includes("unused") === true,
 	);
 	const unusedVariables = usesUnusedModifier
@@ -234,24 +219,8 @@ function create(
 
 		const checker = services.program.getTypeChecker();
 
-		// Find the class that contains this method
-		let parentClass: null | TSESTree.ClassDeclaration | TSESTree.ClassExpression = null;
-		let current: TSESTree.Node | undefined = node.parent;
-
-		// eslint-disable-next-line ts/no-unnecessary-condition, ts/strict-boolean-expressions -- Incorrect type narrowing
-		while (current) {
-			if (
-				current.type === AST_NODE_TYPES.ClassDeclaration ||
-				current.type === AST_NODE_TYPES.ClassExpression
-			) {
-				parentClass = current;
-				break;
-			}
-
-			current = current.parent;
-		}
-
-		if (!parentClass?.implements || parentClass.implements.length === 0) {
+		const parentClass = node.parent.parent;
+		if (parentClass.implements.length === 0) {
 			return false;
 		}
 
@@ -870,8 +839,7 @@ function create(
 			return [
 				selector,
 				(node): void => {
-					// eslint-disable-next-line ts/no-unnecessary-type-assertion -- Breaks otherwise
-					handler(node as never, validator);
+					handler(node, validator);
 				},
 			] as const;
 		}),
@@ -884,7 +852,6 @@ export const namingConvention: EslintRuleModule<Options, MessageIds> = createEsl
 >({
 	name: RULE_NAME,
 	create,
-	defaultOptions: camelCaseNamingConfig,
 	meta: {
 		docs: {
 			description: "Enforce naming conventions for everything across a codebase",
@@ -892,6 +859,7 @@ export const namingConvention: EslintRuleModule<Options, MessageIds> = createEsl
 			requiresTypeChecking: true,
 		},
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: SCHEMA,
 		type: "suggestion",
@@ -935,53 +903,66 @@ function checkInterfacesForMethod(
 	return false;
 }
 
+function visitPatternNode(
+	node: TSESTree.Node,
+	stack: Array<TSESTree.Node>,
+	identifiers: Array<TSESTree.Identifier>,
+): void {
+	// oxlint-disable-next-line typescript/switch-exhaustiveness-check -- Only pattern nodes can bind names; everything else falls through
+	switch (node.type) {
+		case AST_NODE_TYPES.ArrayPattern: {
+			for (const element of node.elements) {
+				if (element !== null) {
+					stack.push(element);
+				}
+			}
+
+			break;
+		}
+		case AST_NODE_TYPES.AssignmentPattern: {
+			stack.push(node.left);
+			break;
+		}
+		case AST_NODE_TYPES.Identifier: {
+			identifiers.push(node);
+			break;
+		}
+		case AST_NODE_TYPES.ObjectPattern: {
+			for (const property of node.properties) {
+				stack.push(property);
+			}
+
+			break;
+		}
+		case AST_NODE_TYPES.Property: {
+			stack.push(node.value);
+			break;
+		}
+		case AST_NODE_TYPES.RestElement: {
+			stack.push(node.argument);
+			break;
+		}
+		default: {
+			// Other node types (e.g. MemberExpression) cannot bind new names
+			break;
+		}
+	}
+}
+
 function getIdentifiersFromPattern(
 	pattern: TSESTree.DestructuringPattern,
 ): Array<TSESTree.Identifier> {
 	const identifiers: Array<TSESTree.Identifier> = [];
 	const stack: Array<TSESTree.Node> = [pattern];
 
-	// `for...of` re-checks length each step, so entries pushed during iteration
-	// are still visited
-	for (const node of stack) {
-		// eslint-disable-next-line ts/switch-exhaustiveness-check -- Only pattern nodes can bind names; everything else falls through
-		switch (node.type) {
-			case AST_NODE_TYPES.ArrayPattern: {
-				for (const element of node.elements) {
-					if (element !== null) {
-						stack.push(element);
-					}
-				}
-
-				break;
-			}
-			case AST_NODE_TYPES.AssignmentPattern: {
-				stack.push(node.left);
-				break;
-			}
-			case AST_NODE_TYPES.Identifier: {
-				identifiers.push(node);
-				break;
-			}
-			case AST_NODE_TYPES.ObjectPattern: {
-				for (const property of node.properties) {
-					stack.push(property);
-				}
-
-				break;
-			}
-			case AST_NODE_TYPES.Property: {
-				stack.push(node.value);
-				break;
-			}
-			case AST_NODE_TYPES.RestElement: {
-				stack.push(node.argument);
-				break;
-			}
-			default: {
-				// Other node types (e.g. MemberExpression) cannot bind new names
-				break;
-			}
+	// The length is re-read each step, so entries pushed during iteration are
+	// still visited
+	let index = 0;
+	while (index < stack.length) {
+		const node = stack[index];
+		index += 1;
+		if (node !== undefined) {
+			visitPatternNode(node, stack, identifiers);
 		}
 	}
 
@@ -1195,10 +1176,10 @@ function isObjectStyleEnumDeclaration(
 /**
  * True when `init` is a const-asserted object expression, bare (`{...} as
  * const`) or `satisfies`-wrapped (`{...} as const satisfies T`). Used for the
- * `constAsserted` variable modifier, which - unlike `isObjectStyleEnumDeclaration`
- * - deliberately covers both forms: it exists so consumers can pin a format on
- * const-asserted data objects regardless of whether they carry a `satisfies`
- * clause.
+ * `constAsserted` variable modifier, which - unlike
+ * `isObjectStyleEnumDeclaration` - deliberately covers both forms: it exists
+ * so consumers can pin a format on const-asserted data objects regardless of
+ * whether they carry a `satisfies` clause.
  *
  * @param init - The VariableDeclarator's initializer, if any.
  * @returns True if `init` is a const-asserted object expression.
@@ -1215,8 +1196,9 @@ function isConstAssertedInitializer(init: null | TSESTree.Expression | undefined
 
 /**
  * Determines if an object literal property is a direct key of an
- * object-style-enum declaration's object literal - i.e. `RED` in `const
- * Colors = { RED: 'red' } as const`, but not a key of a nested object value.
+ * object-style-enum declaration's object literal - i.e. `RED` in
+ * `const Colors = { RED: 'red' } as const`, but not a key of a nested object
+ * value.
  * Nested object values aren't reached because their enclosing ObjectExpression
  * is parented by a Property, not the const-assertion node this checks for.
  *

@@ -1,10 +1,11 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { run } from "../test";
-import { noMaterializedFilterMap, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noMaterializedFilterMap, RULE_NAME } from "./rule.ts";
 
 const messageId = "materialized";
 const noHelpersMessageId = "materializedNoHelpers";
@@ -12,7 +13,9 @@ const suggestMessageId = "chainOnIterator";
 
 interface SuggestionCase {
 	readonly code: string;
-	/** The output of the one suggestion, or null when the report offers none. */
+	/**
+	 * The output of the one suggestion, or null when the report offers none.
+	 */
 	readonly suggestion: null | string;
 }
 
@@ -153,12 +156,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const doubled = [...set].filter((n) => n > 0).map((n) => n * 2);
 		`,
-		errors: [{ data: { chain: ".filter().map()", copy: "[...]" }, messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
 			export const doubled = set.values().filter((n) => n > 0).map((n) => n * 2).toArray();
 		`,
+		errors: [{ data: { chain: ".filter().map()", copy: "[...]" }, messageId }],
 	},
 	// A spread of a Map yields its entries.
 	{
@@ -167,12 +170,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const keys = [...map].map(([key]) => key);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const map: Map<string, number>;
 
 			export const keys = map.entries().map(([key]) => key).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -180,12 +183,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const keys = Array.from(map.keys()).filter((key) => key !== "a");
 		`,
-		errors: [{ data: { chain: ".filter()", copy: "Array.from()" }, messageId }],
 		output: unindent`
 			declare const map: ReadonlyMap<string, number>;
 
 			export const keys = map.keys().filter((key) => key !== "a").toArray();
 		`,
+		errors: [{ data: { chain: ".filter()", copy: "Array.from()" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -193,12 +196,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const odd = [...set].map((n) => n * 3).filter((n) => n % 2 === 1).map((n) => n - 1);
 		`,
-		errors: [{ data: { chain: ".map().filter().map()", copy: "[...]" }, messageId }],
 		output: unindent`
 			declare const set: ReadonlySet<number>;
 
 			export const odd = set.values().map((n) => n * 3).filter((n) => n % 2 === 1).map((n) => n - 1).toArray();
 		`,
+		errors: [{ data: { chain: ".map().filter().map()", copy: "[...]" }, messageId }],
 	},
 	// The counter a helper passes is the index in the intermediate array, so a
 	// second parameter is kept. The result stays an array for the later spread.
@@ -212,7 +215,6 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const all = [...names, "end"];
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const map: Map<string, number>;
 
@@ -222,6 +224,7 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const all = [...names, "end"];
 		`,
+		errors: [{ messageId }],
 	},
 	// A union with an array goes through \`Iterator.from\`, which reads the same
 	// \`[Symbol.iterator]\` the spread reads. \`new Map\` takes any iterable.
@@ -233,7 +236,6 @@ const invalid: Array<InvalidTestCase> = [
 				[...(maybeMap ?? [])].filter(([, value]) => value > 0).map(([key, value]) => [key, value * 2]),
 			);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const maybeMap: Map<string, number> | undefined;
 
@@ -241,6 +243,7 @@ const invalid: Array<InvalidTestCase> = [
 				Iterator.from(maybeMap ?? []).filter(([, value]) => value > 0).map(([key, value]) => [key, value * 2]),
 			);
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -251,7 +254,6 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const heavy = new Map([...graph.nodes].filter(([, node]) => node.weight > 1).map(([id, node]) => [id, node.weight]));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Graph {
 				readonly nodes: Map<string, { readonly weight: number }>;
@@ -260,6 +262,7 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const heavy = new Map(graph.nodes.entries().filter(([, node]) => node.weight > 1).map(([id, node]) => [id, node.weight]));
 		`,
+		errors: [{ messageId }],
 	},
 	// Sinks that take any iterable get no `.toArray()`.
 	{
@@ -271,7 +274,6 @@ const invalid: Array<InvalidTestCase> = [
 			export const array = Array.from([...set].filter((n) => n > 0));
 			export const max = Math.max(...[...set].map((n) => n * 2));
 		`,
-		errors: [{ messageId }, { messageId }, { messageId }, { messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
@@ -280,6 +282,7 @@ const invalid: Array<InvalidTestCase> = [
 			export const array = Array.from(set.values().filter((n) => n > 0));
 			export const max = Math.max(...set.values().map((n) => n * 2));
 		`,
+		errors: [{ messageId }, { messageId }, { messageId }, { messageId }],
 	},
 	// An object spread reads own keys, which an iterator lacks.
 	{
@@ -288,12 +291,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const byIndex = { ...[...set].map((n) => n + 1) };
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
 			export const byIndex = { ...set.values().map((n) => n + 1).toArray() };
 		`,
+		errors: [{ messageId }],
 	},
 	// A chain that goes on past `map` still needs an array there.
 	{
@@ -302,12 +305,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const text = [...set].map((n) => n * 2).join(",");
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
 			export const text = set.values().map((n) => n * 2).toArray().join(",");
 		`,
+		errors: [{ messageId }],
 	},
 	// Parentheses around the copy are kept; an iterable that needs them to take
 	// a member access gets them.
@@ -317,12 +320,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const doubled = ([...set]).map((n) => n * 2);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
 			export const doubled = (set.values()).map((n) => n * 2).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -331,13 +334,13 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const doubled = [...(first ?? second)].map((n) => n * 2);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const first: Set<number> | undefined;
 			declare const second: Set<number>;
 
 			export const doubled = (first ?? second).values().map((n) => n * 2).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	// A keyword directly before the copy keeps a space before the new text.
 	{
@@ -348,7 +351,6 @@ const invalid: Array<InvalidTestCase> = [
 				void[...set].map((n) => n * 2);
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
@@ -356,6 +358,7 @@ const invalid: Array<InvalidTestCase> = [
 				void set.values().map((n) => n * 2).toArray();
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -365,7 +368,6 @@ const invalid: Array<InvalidTestCase> = [
 				return[...set].map((n) => n * 2);
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
@@ -373,6 +375,7 @@ const invalid: Array<InvalidTestCase> = [
 				return set.values().map((n) => n * 2).toArray();
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A type guard narrows through the helper's own type-guard overload.
 	{
@@ -381,12 +384,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const defined: Array<string> = [...set].filter((v): v is string => v !== undefined);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<string | undefined>;
 
 			export const defined: Array<string> = set.values().filter((v): v is string => v !== undefined).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -396,7 +399,6 @@ const invalid: Array<InvalidTestCase> = [
 				return n * 2;
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const set: Set<number>;
 
@@ -404,6 +406,7 @@ const invalid: Array<InvalidTestCase> = [
 				return n * 2;
 			}).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 
 	// --- Suggestion: the change could be observed ---
@@ -637,12 +640,12 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const doubled = [...map./* live */keys()].map((key) => key);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const map: Map<string, number>;
 
 			export const doubled = map./* live */keys().map((key) => key).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	// A leading \`(\` after an expression on the line before would join the
 	// lines.
@@ -662,13 +665,13 @@ const invalid: Array<InvalidTestCase> = [
 			let count = 1;
 			Array.from(first ?? second).map((n) => n + count);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const first: Set<number> | undefined;
 			declare const second: Set<number>;
 			let count = 1;
 			(first ?? second).values().map((n) => n + count).toArray();
 		`,
+		errors: [{ messageId }],
 	},
 	// A non-null assertion also ends an expression.
 	suggestionCase({
@@ -725,14 +728,14 @@ const invalid: Array<InvalidTestCase> = [
 
 			export const doubled = [...set].filter((n) => n > 0).map((n) => n * 2);
 		`,
+		output: null,
+		options: [{ iteratorHelpers: false }],
 		errors: [
 			{
 				data: { chain: ".filter().map()", copy: "[...]" },
 				messageId: noHelpersMessageId,
 			},
 		],
-		options: [{ iteratorHelpers: false }],
-		output: null,
 	},
 ];
 

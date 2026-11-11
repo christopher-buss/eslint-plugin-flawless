@@ -1,8 +1,9 @@
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals.ts";
 
 export const RULE_NAME = "prefer-expect-assertions-count";
 
@@ -19,10 +20,10 @@ const messages = {
 
 /**
  * Matches a `expect.hasAssertions()` call. The callee must be a non-computed
- * `<expect>.hasAssertions` member access whose object resolves to a vitest/jest
- * `expect` (a global or an import from a test global source); a locally shadowed
- * `expect` is ignored. Covers either framework, since both name the global
- * `expect`.
+ * `<expect>.hasAssertions` member access whose object resolves to a
+ * vitest/jest `expect` (a global or an import from a test global source); a
+ * locally shadowed `expect` is ignored. Covers either framework, since both
+ * name the global `expect`.
  *
  * @param sourceCode - Provides the scope used to resolve `expect`.
  * @param callee - The call's callee.
@@ -45,9 +46,10 @@ function isExpectHasAssertions(
 }
 
 /**
- * Flags `expect.hasAssertions()`, which only asserts that at least one assertion
- * ran, in favour of `expect.assertions(<count>)`, which pins the exact count and
- * so catches an expectation skipped by an early return or a branch never taken.
+ * Flags `expect.hasAssertions()`, which only asserts that at least one
+ * assertion ran, in favour of `expect.assertions(<count>)`, which pins the
+ * exact count and so catches an expectation skipped by an early return or a
+ * branch never taken.
  *
  * @param context - The rule context.
  * @returns The rule listener.
@@ -59,7 +61,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		before(): void {
 			sources = getTestGlobalSources(context.settings);
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			if (!isExpectHasAssertions(context.sourceCode, node.callee, sources)) {
 				return;
 			}
@@ -76,7 +78,6 @@ export const preferExpectAssertionsCount: FlawlessRuleModule<Options, MessageIds
 	createFlawlessRule<Options, MessageIds>({
 		name: RULE_NAME,
 		createOnce,
-		defaultOptions: [],
 		meta: {
 			docs: {
 				description: "Prefer `expect.assertions(<count>)` over `expect.hasAssertions()`",

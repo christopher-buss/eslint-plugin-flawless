@@ -1,7 +1,8 @@
-import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
+import { unindent } from "eslint-vitest-rule-tester";
+import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
 
-import { run } from "../test";
-import { noSharedTestState, RULE_NAME } from "./rule";
+import { run } from "../test.ts";
+import { noSharedTestState, RULE_NAME } from "./rule.ts";
 
 const messageId = "sharedState";
 
@@ -650,8 +651,8 @@ const invalid: Array<InvalidTestCase> = [
 				queue.enqueue(1);
 			});
 		`,
-		errors: [{ data: { name: "queue" }, messageId }],
 		options: [{ additionalMutatingMethods: ["enqueue"] }],
+		errors: [{ data: { name: "queue" }, messageId }],
 	},
 	// A mock rebuilt in \`beforeEach\` is shared state here, even though
 	// no-shared-mocks allows it.

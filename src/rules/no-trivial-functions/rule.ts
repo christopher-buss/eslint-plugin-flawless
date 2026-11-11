@@ -2,9 +2,9 @@ import { ScopeType } from "@typescript-eslint/scope-manager";
 import type { JSONSchema, TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import { referenceContainsTypeQuery } from "../../utils/reference-contains-type-query";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import { referenceContainsTypeQuery } from "../../utils/reference-contains-type-query.ts";
 
 export const RULE_NAME = "no-trivial-functions";
 
@@ -149,7 +149,7 @@ function isParameterAccess(
 	expression: TSESTree.Expression,
 	parameters: Array<TSESTree.Parameter>,
 ): boolean {
-	let current: TSESTree.Expression = expression;
+	let current = expression;
 	while (current.type === AST_NODE_TYPES.MemberExpression) {
 		const { computed, object, property } = current;
 		if (
@@ -448,7 +448,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				minimumReferences: options?.minimumReferences ?? DEFAULTS.minimumReferences,
 			};
 		},
-		Program(program: TSESTree.Program): void {
+		Program(program): void {
 			// In a script, top-level declarations are globals other files may
 			// use.
 			if (program.sourceType !== "module") {
@@ -509,7 +509,6 @@ export const noTrivialFunctions: FlawlessRuleModule<Options, MessageIds> = creat
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [DEFAULTS],
 	meta: {
 		defaultOptions: [DEFAULTS],
 		docs: {

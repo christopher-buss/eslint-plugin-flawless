@@ -10,7 +10,8 @@
  * Foundation and other contributors.
  */
 
-import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESLint, TSESTree } from "@typescript-eslint/utils";
 import { isArrowToken, isOpeningParenToken } from "@typescript-eslint/utils/ast-utils";
 
 /** The function nodes this rule measures. */
@@ -228,9 +229,9 @@ function getOpeningParenOfParameters(
 	// An arrow function may write a lone parameter without parens, in which case
 	// the parameter's own first token stands in for the opening paren.
 	if (
+		firstParameter !== undefined &&
 		node.type === AST_NODE_TYPES.ArrowFunctionExpression &&
-		node.params.length === 1 &&
-		firstParameter !== undefined
+		node.params.length === 1
 	) {
 		const argumentToken = sourceCode.getFirstToken(firstParameter);
 		if (argumentToken === null) {

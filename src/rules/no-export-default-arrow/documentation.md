@@ -47,7 +47,9 @@ export default () => {
 
 ```tsx
 // File: layout.tsx
-export default () => <div>Layout</div>;
+export default () => {
+	return <div>Layout</div>;
+};
 ```
 
 ```ts

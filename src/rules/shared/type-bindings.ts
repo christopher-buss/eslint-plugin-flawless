@@ -1,4 +1,5 @@
-import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
+import type { TSESTree } from "@typescript-eslint/utils";
 
 type TypeParameterOwner = Extract<
 	TSESTree.Node,
@@ -25,7 +26,8 @@ export function lookupTypeDeclaration(
 			return current;
 		}
 
-		for (const statement of scopeStatements(current) ?? []) {
+		const statements = scopeStatements(current) ?? [];
+		for (const statement of statements) {
 			const declaration = declaredStatement(statement);
 			if (declaration !== undefined && declaredTypeNames(declaration).includes(name)) {
 				return declaration;
@@ -194,9 +196,8 @@ function boundTypeParameterNames(
 	descendant: TSESTree.Node,
 ): ReadonlySet<string> {
 	const names = new Set<string>();
-	for (const parameter of (isTypeParameterOwner(node)
-		? node.typeParameters?.params
-		: undefined) ?? []) {
+	const parameters = (isTypeParameterOwner(node) ? node.typeParameters?.params : undefined) ?? [];
+	for (const parameter of parameters) {
 		names.add(parameter.name.name);
 	}
 

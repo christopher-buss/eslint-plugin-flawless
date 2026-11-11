@@ -85,9 +85,7 @@ export class Conflict extends Error {
 }
 
 function isConflict(value: unknown): value is Conflict {
-	return (
-		value instanceof Error && "isConflict" in value && value.isConflict === true
-	);
+	return value instanceof Error && "isConflict" in value && value.isConflict === true;
 }
 ```
 

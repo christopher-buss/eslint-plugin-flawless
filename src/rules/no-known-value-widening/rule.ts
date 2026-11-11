@@ -1,22 +1,22 @@
 import type { TSESTree } from "@typescript-eslint/utils";
 import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
 
-import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
-import { createFlawlessRule } from "../../util";
-import type { TypeEnvironment, WideningTarget } from "../shared/dictionary-types";
+import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util.ts";
+import { createFlawlessRule } from "../../util.ts";
+import type { TypeEnvironment, WideningTarget } from "../shared/dictionary-types.ts";
 import {
 	classifyUnsafeDictionaryValue,
 	classifyWideningTarget,
 	createTypeEnvironment,
 	isKnownEvidenceExpression,
 	unwrapAssertedExpression,
-} from "../shared/dictionary-types";
+} from "../shared/dictionary-types.ts";
 import {
 	containsUnknownType,
 	parameterAnnotation,
 	parameterBinding,
 	parameterName,
-} from "../shared/function-parameters";
+} from "../shared/function-parameters.ts";
 
 export const RULE_NAME = "no-known-value-widening";
 
@@ -200,57 +200,57 @@ function hasKnownCallArgumentEvidence(
 	environment: TypeEnvironment,
 	visitedVariables = new Set<TSESLint.Scope.Variable>(),
 ): boolean {
-	if (
-		expression.type === AST_NODE_TYPES.TSNonNullExpression ||
-		expression.type === AST_NODE_TYPES.TSSatisfiesExpression
-	) {
-		return hasKnownCallArgumentEvidence(
-			sourceCode,
-			expression.expression,
-			environment,
-			visitedVariables,
-		);
-	}
+	let current = expression;
+	while (true) {
+		if (
+			current.type === AST_NODE_TYPES.TSNonNullExpression ||
+			current.type === AST_NODE_TYPES.TSSatisfiesExpression
+		) {
+			current = current.expression;
+			continue;
+		}
 
-	if (
-		expression.type === AST_NODE_TYPES.TSAsExpression ||
-		expression.type === AST_NODE_TYPES.TSTypeAssertion
-	) {
-		return hasInformativeType(expression.typeAnnotation, environment);
-	}
+		if (
+			current.type === AST_NODE_TYPES.TSAsExpression ||
+			current.type === AST_NODE_TYPES.TSTypeAssertion
+		) {
+			return hasInformativeType(current.typeAnnotation, environment);
+		}
 
-	if (expression.type === AST_NODE_TYPES.CallExpression) {
-		const returnType = localFunctionForCall(sourceCode, expression.callee)?.returnType;
-		return (
-			returnType !== undefined && hasInformativeType(returnType.typeAnnotation, environment)
-		);
-	}
+		if (current.type === AST_NODE_TYPES.CallExpression) {
+			const returnType = localFunctionForCall(sourceCode, current.callee)?.returnType;
+			return (
+				returnType !== undefined &&
+				hasInformativeType(returnType.typeAnnotation, environment)
+			);
+		}
 
-	if (expression.type !== AST_NODE_TYPES.Identifier) {
-		return isKnownEvidenceExpression(expression);
-	}
+		if (current.type !== AST_NODE_TYPES.Identifier) {
+			return isKnownEvidenceExpression(current);
+		}
 
-	const variable = resolveVariable(sourceCode, expression);
-	if (variable === null || visitedVariables.has(variable)) {
-		return false;
-	}
+		const variable = resolveVariable(sourceCode, current);
+		if (variable === null || visitedVariables.has(variable)) {
+			return false;
+		}
 
-	const annotation = variableTypeAnnotation(variable);
-	if (annotation !== null) {
-		return hasInformativeType(annotation.typeAnnotation, environment);
-	}
+		const annotation = variableTypeAnnotation(variable);
+		if (annotation !== null) {
+			return hasInformativeType(annotation.typeAnnotation, environment);
+		}
 
-	const declarator = variableDeclarator(variable);
-	if (declarator === null || !isStableConstVariable(variable, declarator)) {
-		return false;
-	}
+		const declarator = variableDeclarator(variable);
+		if (declarator === null || !isStableConstVariable(variable, declarator)) {
+			return false;
+		}
 
-	if (declarator.init === null) {
-		return false;
-	}
+		if (declarator.init === null) {
+			return false;
+		}
 
-	visitedVariables.add(variable);
-	return hasKnownCallArgumentEvidence(sourceCode, declarator.init, environment, visitedVariables);
+		visitedVariables.add(variable);
+		current = declarator.init;
+	}
 }
 
 function isEmptyObjectExpression(expression: TSESTree.Expression): boolean {
@@ -293,45 +293,49 @@ function hasKnownEvidence(
 	flow: FlowTarget,
 	visitedVariables = new Set<TSESLint.Scope.Variable>(),
 ): boolean {
-	if (isKnownEvidenceExpression(expression)) {
-		// `{}` seeding a dictionary is the one case where the annotation earns
-		// its keep: without it the empty literal infers `{}`, and no key could
-		// ever be written. This holds wherever the seed appears, including at
-		// the end of an unannotated `const` chain.
-		return (
-			!isDictionaryAccumulatorTarget(flow.destination) || !isEmptyObjectExpression(expression)
-		);
-	}
+	let current = expression;
+	while (true) {
+		if (isKnownEvidenceExpression(current)) {
+			// `{}` seeding a dictionary is the one case where the annotation
+			// earns its keep: without it the empty literal infers `{}`, and no
+			// key could ever be written. This holds wherever the seed appears,
+			// including at the end of an unannotated `const` chain.
+			return (
+				!isDictionaryAccumulatorTarget(flow.destination) ||
+				!isEmptyObjectExpression(current)
+			);
+		}
 
-	const unwrapped = unwrapAssertedExpression(expression);
-	if (unwrapped.type !== AST_NODE_TYPES.Identifier) {
-		return false;
-	}
+		const unwrapped = unwrapAssertedExpression(current);
+		if (unwrapped.type !== AST_NODE_TYPES.Identifier) {
+			return false;
+		}
 
-	const variable = resolveVariable(sourceCode, unwrapped);
-	if (variable === null || visitedVariables.has(variable)) {
-		return false;
-	}
+		const variable = resolveVariable(sourceCode, unwrapped);
+		if (variable === null || visitedVariables.has(variable)) {
+			return false;
+		}
 
-	const declarator = variableDeclarator(variable);
-	if (declarator === null || !isStableConstVariable(variable, declarator)) {
-		return false;
-	}
+		const declarator = variableDeclarator(variable);
+		if (declarator === null || !isStableConstVariable(variable, declarator)) {
+			return false;
+		}
 
-	const annotation = variableTypeAnnotation(variable);
-	if (annotation !== null) {
-		return (
-			discardsDeclaredType(flow.destination) &&
-			hasInformativeType(annotation.typeAnnotation, flow.environment)
-		);
-	}
+		const annotation = variableTypeAnnotation(variable);
+		if (annotation !== null) {
+			return (
+				discardsDeclaredType(flow.destination) &&
+				hasInformativeType(annotation.typeAnnotation, flow.environment)
+			);
+		}
 
-	if (declarator.init === null) {
-		return false;
-	}
+		if (declarator.init === null) {
+			return false;
+		}
 
-	visitedVariables.add(variable);
-	return hasKnownEvidence(sourceCode, declarator.init, flow, visitedVariables);
+		visitedVariables.add(variable);
+		current = declarator.init;
+	}
 }
 
 /**
@@ -473,7 +477,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	): null | WideningTarget {
 		return environment === null || annotation === null || annotation === undefined
 			? null
-			: classifyWideningTarget(annotation.typeAnnotation, environment);
+			: classifyWideningTarget(annotation.typeAnnotation);
 	}
 
 	function reportProperty(node: TSESTree.AccessorProperty | TSESTree.PropertyDefinition): void {
@@ -493,16 +497,12 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		reportFlow(
-			node.expression,
-			classifyWideningTarget(node.typeAnnotation, environment),
-			"assertion",
-		);
+		reportFlow(node.expression, classifyWideningTarget(node.typeAnnotation), "assertion");
 	}
 
 	return {
 		AccessorProperty: reportProperty,
-		ArrowFunctionExpression(node: TSESTree.ArrowFunctionExpression): void {
+		ArrowFunctionExpression(node): void {
 			if (node.body.type === AST_NODE_TYPES.BlockStatement) {
 				return;
 			}
@@ -513,7 +513,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				`return value of \`${functionName(context.sourceCode, node)}\``,
 			);
 		},
-		AssignmentExpression(node: TSESTree.AssignmentExpression): void {
+		AssignmentExpression(node): void {
 			if (node.operator !== "=" || node.left.type !== AST_NODE_TYPES.Identifier) {
 				return;
 			}
@@ -534,7 +534,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				`binding \`${declarator.id.name}\``,
 			);
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			if (environment === null) {
 				return;
 			}
@@ -575,11 +575,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				node: argument,
 			});
 		},
-		Program(node: TSESTree.Program): void {
+		Program(node): void {
 			environment = createTypeEnvironment(node);
 		},
 		PropertyDefinition: reportProperty,
-		ReturnStatement(node: TSESTree.ReturnStatement): void {
+		ReturnStatement(node): void {
 			if (node.argument === null) {
 				return;
 			}
@@ -593,7 +593,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 		TSAsExpression: reportAssertion,
 		TSTypeAssertion: reportAssertion,
-		VariableDeclarator(node: TSESTree.VariableDeclarator): void {
+		VariableDeclarator(node): void {
 			if (node.init === null || node.id.type !== AST_NODE_TYPES.Identifier) {
 				return;
 			}
@@ -613,8 +613,8 @@ export const noKnownValueWidening: FlawlessRuleModule<Options, MessageIds> = cre
 >({
 	name: RULE_NAME,
 	createOnce,
-	defaultOptions: [],
 	meta: {
+		defaultOptions: [],
 		docs: {
 			description:
 				"Disallow syntactically established values from flowing into explicitly broad or anonymous target types that discard useful evidence",
