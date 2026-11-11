@@ -541,7 +541,6 @@ function fileKey(name: string): string {
 // not resolve stays unresolved in speculative programs as well.
 const sharedHosts = new WeakMap<ts.Program, SharedHost>();
 
-/** A call whose arrow arguments are compared without `this`. */
 /** The call that receives the callback whose parameter a candidate annotates. */
 interface ReceivingCall {
 	/** The call's arguments that are arrows, without their parentheses. */
