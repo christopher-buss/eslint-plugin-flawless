@@ -22,13 +22,14 @@ export type CountFrom = "body" | "function";
 export interface MaxLinesPerFunctionOptions {
 	/**
 	 * Where the counted range begins. `"body"` (the default) counts from the
-	 * line holding the body's opening brace through the line holding its closing
-	 * brace, so lines spent purely on the signature — destructured parameters, a
-	 * long parameter list, multi-line generics or return types, decorators — do
-	 * not count against `max`. Note the opening-brace line is still counted, and
-	 * it is usually also the last line of the signature (`): void {`), so exactly
-	 * one signature line always remains in the total. `"function"` counts the
-	 * whole function node instead, matching ESLint core.
+	 * line holding the body's opening brace through the line holding its
+	 * closing brace, so lines spent purely on the signature — destructured
+	 * parameters, a long parameter list, multi-line generics or return types,
+	 * decorators — do not count against `max`. Note the opening-brace line is
+	 * still counted, and it is usually also the last line of the signature
+	 * (`): void {`), so exactly one signature line always remains in the
+	 * total. `"function"` counts the whole function node instead, matching
+	 * ESLint core.
 	 */
 	readonly countFrom?: CountFrom;
 	/**

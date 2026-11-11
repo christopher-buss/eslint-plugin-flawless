@@ -247,9 +247,7 @@ rest parameter at the start of the tuple is compared with the whole tuple; a
 callback rest parameter after the start is not reported:
 
 ```ts
-declare function handle(
-	listener: (...args: [chunk: string, size: number]) => void,
-): void;
+declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
 
 handle((chunk: string, size: number) => chunk.length + size); // both are reported
 
@@ -680,10 +678,7 @@ after the `=>`, because a line break before `=>` is a syntax error.
 
 ```json
 {
-	"flawless/no-redundant-type-annotation": [
-		"error",
-		{ "allowExpressions": true }
-	]
+	"flawless/no-redundant-type-annotation": ["error", { "allowExpressions": true }]
 }
 ```
 

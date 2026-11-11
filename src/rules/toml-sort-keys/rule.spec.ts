@@ -91,8 +91,6 @@ const invalid: Array<InvalidTestCase> = [
 			[settings]
 			experimental = true
 		`,
-		errors: [{ messageId }],
-		options,
 		output: unindent`
 			[settings]
 			experimental = true
@@ -100,6 +98,8 @@ const invalid: Array<InvalidTestCase> = [
 			[tools]
 			node = "lts"
 		`,
+		options,
+		errors: [{ messageId }],
 	},
 	// Keys within a table reordered.
 	{
@@ -108,13 +108,13 @@ const invalid: Array<InvalidTestCase> = [
 			lockfile = true
 			experimental = true
 		`,
-		errors: [{ messageId }],
-		options,
 		output: unindent`
 			[settings]
 			experimental = true
 			lockfile = true
 		`,
+		options,
+		errors: [{ messageId }],
 	},
 	// An attached own-line comment travels with its key.
 	{
@@ -124,14 +124,14 @@ const invalid: Array<InvalidTestCase> = [
 			lockfile = true
 			experimental = true
 		`,
-		errors: [{ messageId }],
-		options,
 		output: unindent`
 			[settings]
 			experimental = true
 			# lock it down
 			lockfile = true
 		`,
+		options,
+		errors: [{ messageId }],
 	},
 	// Sub-tables stay grouped under their parent and sort A-Z after it.
 	{
@@ -145,8 +145,6 @@ const invalid: Array<InvalidTestCase> = [
 			[settings]
 			experimental = true
 		`,
-		errors: [{ messageId }],
-		options,
 		output: unindent`
 			[settings]
 			experimental = true
@@ -157,6 +155,8 @@ const invalid: Array<InvalidTestCase> = [
 			[settings.python]
 			compile = false
 		`,
+		options,
+		errors: [{ messageId }],
 	},
 	// Quoted keys interleaved by unquoted value regroup before bare keys, with
 	// case-insensitive order among the quoted block.
@@ -174,8 +174,6 @@ const invalid: Array<InvalidTestCase> = [
 			"npm:corepack" = "latest"
 			nub = "latest"
 		`,
-		errors: [{ messageId }],
-		options,
 		output: unindent`
 			[tools]
 			"github:Apple/harvest" = "1.0.0"
@@ -189,6 +187,8 @@ const invalid: Array<InvalidTestCase> = [
 			node = "26"
 			nub = "latest"
 		`,
+		options,
+		errors: [{ messageId }],
 	},
 	// A floating comment (blank line before the key) is unattributable: report
 	// only, no autofix.
@@ -200,9 +200,9 @@ const invalid: Array<InvalidTestCase> = [
 
 			experimental = true
 		`,
-		errors: [{ messageId }],
-		options,
 		output: null,
+		options,
+		errors: [{ messageId }],
 	},
 ];
 
@@ -220,6 +220,7 @@ describe("toml language mode (Languages API)", () => {
 	const config: Linter.Config = {
 		files: ["**/*.toml"],
 		language: "toml/toml",
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges mismatched `@eslint/core` plugin types; see above.
 		plugins: {
 			flawless: plugin,
 			toml,

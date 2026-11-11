@@ -171,10 +171,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	return {
-		Program(node: TSESTree.Program): void {
+		Program(node): void {
 			environment = createTypeEnvironment(node);
 		},
-		TSIndexSignature(node: TSESTree.TSIndexSignature): void {
+		TSIndexSignature(node): void {
 			const valueType = node.typeAnnotation?.typeAnnotation;
 			if (
 				environment === null ||

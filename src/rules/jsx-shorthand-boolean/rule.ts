@@ -1,5 +1,3 @@
-import type { TSESTree } from "@typescript-eslint/utils";
-
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 
@@ -17,7 +15,7 @@ const messages = {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		JSXAttribute(node: TSESTree.JSXAttribute): void {
+		JSXAttribute(node): void {
 			// A shorthand boolean attribute has no value, e.g. `<C disabled />`.
 			if (node.value !== null) {
 				return;

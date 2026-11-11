@@ -7,13 +7,13 @@ on:
     # Keep in sync with GLOBAL in benchmark/affected-rules.mjs, which narrows
     # the run to the rules a change can affect.
     paths:
-      - "src/**"
-      - "benchmark/**"
-      - "patches/**"
       - .github/workflows/benchmark.yaml
+      - "benchmark/**"
       - package.json
+      - "patches/**"
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
+      - "src/**"
       - tsconfig.json
       - tsdown.config.ts
 
@@ -65,16 +65,16 @@ jobs:
       # slowdown; the job DOES fail if a rule lacks a benchmark fixture, which is
       # config.ts's deliberate coverage gate (see benchmark/README.md). BENCH_RULES
       # limits the run to the affected rules.
-      - env:
+      - name: Benchmark rules
+        run: nr bench
+        env:
           BENCH_RULES: ${{ steps.affected.outputs.rules }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        name: Benchmark rules
-        run: nr bench
 
       # Fails on super-linear rule time (see benchmark/README.md). Unlike the
       # timings above this gates: growth is a same-machine ratio, so runner
       # speed cancels out.
-      - env:
-          BENCH_RULES: ${{ steps.affected.outputs.rules }}
-        name: Check rule-time growth
+      - name: Check rule-time growth
         run: nr bench:scaling
+        env:
+          BENCH_RULES: ${{ steps.affected.outputs.rules }}

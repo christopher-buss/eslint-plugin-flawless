@@ -228,9 +228,9 @@ function getOpeningParenOfParameters(
 	// An arrow function may write a lone parameter without parens, in which case
 	// the parameter's own first token stands in for the opening paren.
 	if (
+		firstParameter !== undefined &&
 		node.type === AST_NODE_TYPES.ArrowFunctionExpression &&
-		node.params.length === 1 &&
-		firstParameter !== undefined
+		node.params.length === 1
 	) {
 		const argumentToken = sourceCode.getFirstToken(firstParameter);
 		if (argumentToken === null) {

@@ -104,6 +104,7 @@ export const PredefinedFormat = {
 	UPPER_CASE: 6,
 } as const;
 
+// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
 export const PredefinedFormatValueToKey = Object.fromEntries(
 	Object.entries(PredefinedFormat).map(([key, value]) => [value, key]),
 ) as Record<PredefinedFormatType, keyof typeof PredefinedFormat>;

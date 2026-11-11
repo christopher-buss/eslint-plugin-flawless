@@ -33,6 +33,7 @@ const valid: Array<ValidTestCase> = [
 const invalid: Array<InvalidTestCase> = [
 	// The name comes from the filename, camelCased for non-JSX arrows.
 	{
+		filename: "useForceUpdate.ts",
 		code: unindent`
 			import { useState } from 'react'
 
@@ -46,8 +47,6 @@ const invalid: Array<InvalidTestCase> = [
 				return forceUpdate
 			}
 		`,
-		errors: [{ messageId }],
-		filename: "useForceUpdate.ts",
 		output: unindent`
 			import { useState } from 'react'
 
@@ -63,17 +62,17 @@ const invalid: Array<InvalidTestCase> = [
 
 			export default useForceUpdate
 		`,
+		errors: [{ messageId }],
 	},
 	// Kebab-case filenames are camelCased, and the export moves below the
 	// remaining statements.
 	{
+		filename: "use-mouse.tsx",
 		code: unindent`
 			export default () => {}
 
 			export const foo = () => 'foo'
 		`,
-		errors: [{ messageId }],
-		filename: "use-mouse.tsx",
 		output: unindent`
 			const useMouse = () => {}
 
@@ -81,16 +80,16 @@ const invalid: Array<InvalidTestCase> = [
 
 			export default useMouse
 		`,
+		errors: [{ messageId }],
 	},
 	// The appended export lands after the file's last token, comments included.
 	{
+		filename: "just_for_fun.js",
 		code: unindent`
 			export default () => 1
 
 			// line comment
 		`,
-		errors: [{ messageId }],
-		filename: "just_for_fun.js",
 		output: unindent`
 			const justForFun = () => 1
 
@@ -98,9 +97,11 @@ const invalid: Array<InvalidTestCase> = [
 
 			export default justForFun
 		`,
+		errors: [{ messageId }],
 	},
 	// A block-bodied arrow returning JSX is a component, so PascalCase.
 	{
+		filename: "layout.tsx",
 		code: unindent`
 			export default () => {
 				return (
@@ -111,8 +112,6 @@ const invalid: Array<InvalidTestCase> = [
 				)
 			}
 		`,
-		errors: [{ messageId }],
-		filename: "layout.tsx",
 		output: unindent`
 			const Layout = () => {
 				return (
@@ -125,161 +124,162 @@ const invalid: Array<InvalidTestCase> = [
 
 			export default Layout
 		`,
+		errors: [{ messageId }],
 	},
 	// A concise arrow returning a fragment is a component too.
 	{
-		code: "export default () => <></>",
-		errors: [{ messageId }],
 		filename: "page.tsx",
+		code: "export default () => <></>",
 		output: unindent`
 			const Page = () => <></>
 
 			export default Page
 		`,
+		errors: [{ messageId }],
 	},
 	// Parentheses are not AST nodes, so a parenthesized arrow is reported. The
 	// fix replaces only the keywords, so parentheses and comments stay.
 	{
-		code: "export default (/* keep */ () => 1)",
-		errors: [{ messageId }],
 		filename: "handler.ts",
+		code: "export default (/* keep */ () => 1)",
 		output: unindent`
 			const handler = (/* keep */ () => 1)
 
 			export default handler
 		`,
+		errors: [{ messageId }],
 	},
 	// Type wrappers do not name the arrow; the fix keeps them on the value.
 	{
-		code: "export default (() => 1) as Handler",
-		errors: [{ column: 17, messageId }],
 		filename: "handler.ts",
+		code: "export default (() => 1) as Handler",
 		output: unindent`
 			const handler = (() => 1) as Handler
 
 			export default handler
 		`,
+		errors: [{ column: 17, messageId }],
 	},
 	{
-		code: "export default (() => 1) satisfies Handler",
-		errors: [{ column: 17, messageId }],
 		filename: "handler.ts",
+		code: "export default (() => 1) satisfies Handler",
 		output: unindent`
 			const handler = (() => 1) satisfies Handler
 
 			export default handler
 		`,
+		errors: [{ column: 17, messageId }],
 	},
 	{
-		code: "export default (() => 1)!",
-		errors: [{ column: 17, messageId }],
 		filename: "handler.ts",
+		code: "export default (() => 1)!",
 		output: unindent`
 			const handler = (() => 1)!
 
 			export default handler
 		`,
+		errors: [{ column: 17, messageId }],
 	},
 	// Wrappers nest in any order.
 	{
-		code: "export default ((() => 1) as unknown) as Handler",
-		errors: [{ column: 18, messageId }],
 		filename: "handler.ts",
+		code: "export default ((() => 1) as unknown) as Handler",
 		output: unindent`
 			const handler = ((() => 1) as unknown) as Handler
 
 			export default handler
 		`,
+		errors: [{ column: 18, messageId }],
 	},
 	{
-		code: "export default ((() => 1)! satisfies Handler) as Handler",
-		errors: [{ column: 18, messageId }],
 		filename: "handler.ts",
+		code: "export default ((() => 1)! satisfies Handler) as Handler",
 		output: unindent`
 			const handler = ((() => 1)! satisfies Handler) as Handler
 
 			export default handler
 		`,
+		errors: [{ column: 18, messageId }],
 	},
 	// An instantiation expression does not name the arrow either.
 	{
-		code: "export default (<T,>(value: T) => value)<string>",
-		errors: [{ column: 17, messageId }],
 		filename: "identity.ts",
+		code: "export default (<T,>(value: T) => value)<string>",
 		output: unindent`
 			const identity = (<T,>(value: T) => value)<string>
 
 			export default identity
 		`,
+		errors: [{ column: 17, messageId }],
 	},
 	// The trailing semicolon stays, so ASI cannot join the next statement.
 	{
+		filename: "handler.ts",
 		code: unindent`
 			export default (() => 1) as Handler;
 			(globalThis as any).x = 1;
 		`,
-		errors: [{ messageId }],
-		filename: "handler.ts",
 		output: unindent`
 			const handler = (() => 1) as Handler;
 			(globalThis as any).x = 1;
 
 			export default handler
 		`,
+		errors: [{ messageId }],
 	},
 	// No fix when the generated name is already bound in the module.
 	{
+		filename: "page.tsx",
 		code: unindent`
 			import type { Page } from './types'
 
 			export default (() => <div />) satisfies Page
 		`,
-		errors: [{ messageId }],
-		filename: "page.tsx",
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
+		filename: "handler.ts",
 		code: unindent`
 			const handler = 1
 
 			export default () => handler
 		`,
-		errors: [{ messageId }],
-		filename: "handler.ts",
 		output: null,
+		errors: [{ messageId }],
 	},
 	// JSX under a type wrapper in the return value is still a component.
 	{
-		code: "export default () => <div /> as ReactElement",
-		errors: [{ messageId }],
 		filename: "page.tsx",
+		code: "export default () => <div /> as ReactElement",
 		output: unindent`
 			const Page = () => <div /> as ReactElement
 
 			export default Page
 		`,
+		errors: [{ messageId }],
 	},
 	// Angle-bracket assertions only parse in `.ts` files, not `.tsx`.
 	{
-		code: "export default <Handler>(() => 1)",
-		errors: [{ column: 26, messageId }],
 		filename: "handler.ts",
+		code: "export default <Handler>(() => 1)",
 		output: unindent`
 			const handler = <Handler>(() => 1)
 
 			export default handler
 		`,
+		errors: [{ column: 26, messageId }],
 	},
 	// The name case comes from the unwrapped arrow, so JSX selects PascalCase.
 	{
-		code: "export default (() => <div />) satisfies Component",
-		errors: [{ messageId }],
 		filename: "page.tsx",
+		code: "export default (() => <div />) satisfies Component",
 		output: unindent`
 			const Page = (() => <div />) satisfies Component
 
 			export default Page
 		`,
+		errors: [{ messageId }],
 	},
 ];
 

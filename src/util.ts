@@ -1,7 +1,7 @@
 import type { TSESLint } from "@typescript-eslint/utils";
 import { RuleCreator } from "@typescript-eslint/utils/eslint-utils";
 
-import { repository, version } from "../package.json";
+import { repository as repo, version } from "../package.json";
 
 export interface PluginDocumentation {
 	description: string;
@@ -9,9 +9,12 @@ export interface PluginDocumentation {
 	requiresTypeChecking: boolean;
 }
 
+const GIT_PREFIX = /^git\+/;
+const GIT_SUFFIX = /\.git$/;
+
 const createRule: ReturnType<typeof RuleCreator<PluginDocumentation>> =
 	RuleCreator<PluginDocumentation>((name) => {
-		const repoUrl = repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+		const repoUrl = repo.url.replace(GIT_PREFIX, "").replace(GIT_SUFFIX, "");
 		return `${repoUrl}/blob/v${version}/src/rules/${name}/documentation.md`;
 	});
 
@@ -88,9 +91,28 @@ export type EslintRuleModule<
 	MessageIds extends string,
 > = ReturnType<typeof createRule<Options, MessageIds>>;
 
-type BaseRule<Options extends ReadonlyArray<unknown>, MessageIds extends string> = Parameters<
-	typeof createRule<Options, MessageIds>
->[0];
+type CreateRuleInput<
+	Options extends ReadonlyArray<unknown>,
+	MessageIds extends string,
+> = Parameters<typeof createRule<Options, MessageIds>>[0];
+
+/**
+ * The rule definition accepted by the rule factories: the `RuleCreator` input
+ * with an optional `meta.languages`, which ESLint reads to check that the rule
+ * supports the configured language. `RuleCreator` passes `meta` through, so
+ * the field reaches the created rule.
+ *
+ * @template Options - The rule's options tuple.
+ * @template MessageIds - The rule's message identifiers.
+ */
+type BaseRule<Options extends ReadonlyArray<unknown>, MessageIds extends string> = Omit<
+	CreateRuleInput<Options, MessageIds>,
+	"meta"
+> & {
+	meta: CreateRuleInput<Options, MessageIds>["meta"] & {
+		readonly languages?: ReadonlyArray<string>;
+	};
+};
 
 /**
  * Creates a rule with a docs URL, allowing a rule's `create` to receive a
@@ -116,6 +138,7 @@ export function createEslintRule<
 		) => TSESLint.RuleListener;
 	},
 ): EslintRuleModule<Options, MessageIds> {
+	// eslint-disable-next-line ts/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
 	return createRule(rule as BaseRule<Options, MessageIds>);
 }
 
@@ -130,9 +153,9 @@ export function createEslintRule<
  * present; ESLint ignores `createOnce`.
  *
  * Rule bodies keep `@typescript-eslint` node/context types at the boundary
- * (oxlint's AST is structurally ESTree at runtime); `@eslint-react/core` helpers
- * are typed against those contexts, so a full switch to oxlint's `ESTree` types
- * is intentionally avoided.
+ * (oxlint's AST is structurally ESTree at runtime); `@eslint-react/core`
+ * helpers are typed against those contexts, so a full switch to oxlint's
+ * `ESTree` types is intentionally avoided.
  *
  * IMPORTANT: `context.sourceCode`, `context.options`, and `context.report` must
  * not be read in the `createOnce` body — only inside `before` or a visitor. In
@@ -160,6 +183,7 @@ export function createFlawlessRule<
 		context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 	): TSESLint.RuleListener {
 		const { after, before, ...visitors } = createOnce(
+			// eslint-disable-next-line ts/no-unsafe-type-assertion -- `SourceCode` is a type-only override of the same runtime context.
 			context as RuleContextWithSourceCode<MessageIds, Options, SourceCode>,
 		);
 		if (before !== undefined && before() === false) {

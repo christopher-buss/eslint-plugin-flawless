@@ -41,7 +41,7 @@ function isTargetAndKeyCall(callArguments: Array<TSESTree.CallExpressionArgument
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			if (!isGlobalReflectMethodCall(context.sourceCode, node.callee, "get")) {
 				return;
 			}

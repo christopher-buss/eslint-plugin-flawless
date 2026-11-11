@@ -233,6 +233,7 @@ const invalid: Array<InvalidTestCase> = [
 	// A simple standalone function is recognized.
 	{
 		code: "function name() {\n}",
+		options: [{ max: 1 }],
 		errors: [
 			{
 				column: 1,
@@ -243,11 +244,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 1 }],
 	},
 	// An anonymous function expression is named just "Function".
 	{
 		code: "var func = function() {\n}",
+		options: [{ max: 1 }],
 		errors: [
 			{
 				column: 12,
@@ -258,12 +259,12 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 1 }],
 	},
 	// An arrow assigned to a variable is plain "Arrow function": it has no `id`,
 	// and its parent is a VariableDeclarator rather than a Property.
 	{
 		code: "const bar = () => {\nconst x = 2 + 1;\nreturn x;\n}",
+		options: [{ max: 3 }],
 		errors: [
 			{
 				column: 16,
@@ -274,13 +275,13 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	// A concise arrow whose `=>` and body sit on different lines. Under
 	// countFrom: "function" the whole node spans two lines; the body-only
 	// default counts just the expression (see the valid cases).
 	{
 		code: "const bar = () =>\n 2",
+		options: [{ countFrom: "function", max: 1 }],
 		errors: [
 			{
 				column: 16,
@@ -291,11 +292,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 1 }],
 	},
 	// An empty options object falls back to max: 50.
 	{
 		code: `() => {${"foo\n".repeat(60)}}`,
+		options: [{}],
 		errors: [
 			{
 				column: 4,
@@ -306,11 +307,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{}],
 	},
 	// skipBlankLines: false counts every whitespace-only line.
 	{
 		code: "function name() {\nvar x = 5;\n\t\n \n\nvar x = 2;\n}",
+		options: [{ max: 6, skipBlankLines: false, skipComments: false }],
 		errors: [
 			{
 				column: 1,
@@ -321,11 +322,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 6, skipBlankLines: false, skipComments: false }],
 	},
 	// The same, with CRLF line endings.
 	{
 		code: "function name() {\r\nvar x = 5;\r\n\t\r\n \r\n\r\nvar x = 2;\r\n}",
+		options: [{ max: 6, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -336,11 +337,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 6, skipBlankLines: false, skipComments: true }],
 	},
 	// skipBlankLines: true drops them.
 	{
 		code: "function name() {\nvar x = 5;\n\t\n \n\nvar x = 2;\n}",
+		options: [{ max: 2, skipBlankLines: true, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -351,11 +352,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: true, skipComments: true }],
 	},
 	// The same, with CRLF line endings.
 	{
 		code: "function name() {\r\nvar x = 5;\r\n\t\r\n \r\n\r\nvar x = 2;\r\n}",
+		options: [{ max: 2, skipBlankLines: true, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -366,11 +367,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: true, skipComments: true }],
 	},
 	// skipComments only drops own-line comments, not trailing or mid-line ones.
 	{
 		code: "function name() { // end of line comment\nvar x = 5; /* mid line comment */\n\t// single line comment taking up whole line\n\t\n \n\nvar x = 2;\n}",
+		options: [{ max: 6, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -381,11 +382,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 6, skipBlankLines: false, skipComments: true }],
 	},
 	// Both skips together.
 	{
 		code: "function name() { // end of line comment\nvar x = 5; /* mid line comment */\n\t// single line comment taking up whole line\n\t\n \n\nvar x = 2;\n}",
+		options: [{ max: 1, skipBlankLines: true, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -396,11 +397,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 1, skipBlankLines: true, skipComments: true }],
 	},
 	// Blank lines only.
 	{
 		code: "function name() { // end of line comment\nvar x = 5; /* mid line comment */\n\t// single line comment taking up whole line\n\t\n \n\nvar x = 2;\n}",
+		options: [{ max: 1, skipBlankLines: true, skipComments: false }],
 		errors: [
 			{
 				column: 1,
@@ -411,7 +412,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 1, skipBlankLines: true, skipComments: false }],
 	},
 	// Under countFrom: "function", parameters on separate lines inflate the
 	// count. The body-only default sees just 3 lines (see the valid cases).
@@ -423,6 +423,7 @@ const invalid: Array<InvalidTestCase> = [
 ) {
     return aaa + bbb + ccc
 }`,
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -433,7 +434,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// Under countFrom: "function", the IIFE's `function` keyword line is counted.
 	{
@@ -444,6 +444,15 @@ function
 }
 )
 ()`,
+		options: [
+			{
+				countFrom: "function",
+				IIFEs: true,
+				max: 2,
+				skipBlankLines: false,
+				skipComments: true,
+			},
+		],
 		errors: [
 			{
 				column: 1,
@@ -452,15 +461,6 @@ function
 				endLine: 3,
 				line: 2,
 				messageId: exceed,
-			},
-		],
-		options: [
-			{
-				countFrom: "function",
-				IIFEs: true,
-				max: 2,
-				skipBlankLines: false,
-				skipComments: true,
 			},
 		],
 	},
@@ -476,6 +476,7 @@ if ( x === y ) {
     x++;
 }
 }`,
+		options: [{ max: 9, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -486,7 +487,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 9, skipBlankLines: false, skipComments: true }],
 	},
 	// Parent and nested are reported independently.
 	{
@@ -500,6 +500,7 @@ if ( x === y ) {
     x++;
 }
 }`,
+		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 1,
@@ -518,7 +519,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// A class method is measured and reported as the MethodDefinition.
 	{
@@ -529,6 +529,7 @@ if ( x === y ) {
         return y + x;
     }
 }`,
+		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -539,7 +540,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// A static method, with its modifier and name on separate lines. Those
 	// signature lines only count under countFrom: "function".
@@ -551,6 +551,7 @@ if ( x === y ) {
         return a
     }
 }`,
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -561,7 +562,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// An object getter.
 	{
@@ -572,6 +572,7 @@ if ( x === y ) {
         return 1
     }
 }`,
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -582,7 +583,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// An object setter.
 	{
@@ -593,6 +593,7 @@ if ( x === y ) {
         this._foo = val;
     }
 }`,
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -603,7 +604,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// A computed key yields no name at all. Its multi-line key only counts under
 	// countFrom: "function".
@@ -618,6 +618,7 @@ if ( x === y ) {
         return a
     }
 }`,
+		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -628,7 +629,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// IIFEs: true measures a function IIFE.
 	{
@@ -639,6 +639,7 @@ if ( x === y ) {
     let foo = {};
     return bar;
 }());`,
+		options: [{ IIFEs: true, max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 2,
@@ -649,7 +650,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ IIFEs: true, max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// IIFEs: true measures an arrow IIFE.
 	{
@@ -660,6 +660,7 @@ if ( x === y ) {
     let foo = {};
     return bar;
 })();`,
+		options: [{ IIFEs: true, max: 2, skipBlankLines: false, skipComments: true }],
 		errors: [
 			{
 				column: 5,
@@ -670,7 +671,6 @@ if ( x === y ) {
 				messageId: exceed,
 			},
 		],
-		options: [{ IIFEs: true, max: 2, skipBlankLines: false, skipComments: true }],
 	},
 	// Only the overload implementation is measured, not the signatures.
 	{
@@ -679,6 +679,7 @@ function foo(a: number): void;
 function foo(a: unknown): void {
 	return;
 }`,
+		options: [{ max: 2 }],
 		errors: [
 			{
 				data: { name: "Function 'foo'", lineCount: 3, maxLines: 2 },
@@ -686,7 +687,6 @@ function foo(a: unknown): void {
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 2 }],
 	},
 	// Under countFrom: "function" a decorator sits inside the MethodDefinition's
 	// range, so it is counted: 4 lines. The body-only default excludes it (see
@@ -698,13 +698,13 @@ function foo(a: unknown): void {
 		return 1;
 	}
 }`,
+		options: [{ countFrom: "function", max: 2 }],
 		errors: [
 			{
 				data: { name: "Method 'method'", lineCount: 4, maxLines: 2 },
 				messageId: exceed,
 			},
 		],
-		options: [{ countFrom: "function", max: 2 }],
 	},
 
 	// --- countFrom: "body" (the default) ---------------------------------------
@@ -720,13 +720,13 @@ function foo(a: unknown): void {
 	three();
 	four();
 }`,
+		options: [{ max: 3 }],
 		errors: [
 			{
 				data: { name: "Function 'logResult'", lineCount: 6, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	{
 		code: `function logResult({
@@ -740,13 +740,13 @@ function foo(a: unknown): void {
 	three();
 	four();
 }`,
+		options: [{ max: 3 }],
 		errors: [
 			{
 				data: { name: "Function 'logResult'", lineCount: 6, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	// A multi-line return type is signature, so it does not count under "body".
 	// Body is 5 lines; the whole node would be 9.
@@ -760,13 +760,13 @@ function foo(a: unknown): void {
 	two();
 	three();
 }`,
+		options: [{ max: 3 }],
 		errors: [
 			{
 				data: { name: "Function 'pick'", lineCount: 5, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	// A decorated method: the `@dec` line is signature, so body-only counts 4,
 	// not the 5 the whole node would.
@@ -778,13 +778,13 @@ function foo(a: unknown): void {
 		two();
 	}
 }`,
+		options: [{ max: 3 }],
 		errors: [
 			{
 				data: { name: "Method 'method'", lineCount: 4, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	// A comment between signature and body is outside the body range, so it does
 	// not count under "body". Body is 4 lines; the whole node would be 7.
@@ -796,13 +796,13 @@ function foo(a: unknown): void {
 	one();
 	two();
 }`,
+		options: [{ max: 3 }],
 		errors: [
 			{
 				data: { name: "Function 'foo'", lineCount: 4, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ max: 3 }],
 	},
 	// An IIFE under the body default: only its body counts, so 4 lines.
 	{
@@ -810,13 +810,13 @@ function foo(a: unknown): void {
 	one();
 	two();
 }());`,
+		options: [{ IIFEs: true, max: 3 }],
 		errors: [
 			{
 				data: { name: "Function", lineCount: 4, maxLines: 3 },
 				messageId: exceed,
 			},
 		],
-		options: [{ IIFEs: true, max: 3 }],
 	},
 ];
 

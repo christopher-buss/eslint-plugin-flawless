@@ -3,7 +3,7 @@ import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSyncFn } from "synckit";
+import { createSyncFn, TsRunner } from "synckit";
 
 import type { FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
@@ -23,9 +23,15 @@ export type Options = [
 	{
 		/** Always use explicit returns for JSX bodies. */
 		jsxAlwaysUseExplicitReturn?: boolean;
-		/** Maximum emitted line length (tab-expanded) before requiring an explicit return. */
+		/**
+		 * Maximum emitted line length (tab-expanded) before requiring an
+		 * explicit return.
+		 */
 		maxLen?: number;
-		/** Object property / array element count above which a literal body counts as complex. */
+		/**
+		 * Object property / array element count above which a literal body
+		 * counts as complex.
+		 */
 		maxObjectProperties?: number;
 		/** Always use explicit returns for arrows assigned to named exports. */
 		namedExportsAlwaysUseExplicitReturn?: boolean;
@@ -33,7 +39,10 @@ export type Options = [
 		objectReturnStyle?: ObjectReturnStyle;
 		/** Columns a tab occupies when measuring against `maxLen`. */
 		tabWidth?: number;
-		/** Consult oxfmt for boundary decisions; `printWidth` defaults to `maxLen`. */
+		/**
+		 * Consult oxfmt for boundary decisions; `printWidth` defaults to
+		 * `maxLen`.
+		 */
 		useOxfmt?: boolean | { printWidth?: number };
 	},
 ];
@@ -96,7 +105,7 @@ function getFormatSync(): FormatSync | null {
 		} else {
 			formatSync = createSyncFn<FormatSync>(workerPath, {
 				timeout: 15_000,
-				...(workerPath.endsWith(".ts") ? { tsRunner: "tsx" as never } : {}),
+				...(workerPath.endsWith(".ts") ? { tsRunner: TsRunner.TSX } : {}),
 			});
 		}
 	} catch {
@@ -155,8 +164,10 @@ function expandedWidth(text: string, tabWidth: number): number {
 	return width;
 }
 
+const LEADING_WHITESPACE = /^[\t ]*/;
+
 function leadingWhitespace(line: string): string {
-	return /^[\t ]*/.exec(line)?.[0] ?? "";
+	return LEADING_WHITESPACE.exec(line)?.[0] ?? "";
 }
 
 // --- AST helpers ------------------------------------------------------------
@@ -250,11 +261,15 @@ function statementOf(node: TSESTree.Node): TSESTree.Node {
 	return current;
 }
 
+function isNode(value: unknown): value is TSESTree.Node {
+	return typeof value === "object" && value !== null && "type" in value;
+}
+
 function pushChildNodes(stack: Array<TSESTree.Node>, value: unknown): void {
-	const candidates = Array.isArray(value) ? value : [value];
+	const candidates: ReadonlyArray<unknown> = Array.isArray(value) ? value : [value];
 	for (const item of candidates) {
-		if (typeof item === "object" && item !== null && "type" in item) {
-			stack.push(item as TSESTree.Node);
+		if (isNode(item)) {
+			stack.push(item);
 		}
 	}
 }
@@ -267,7 +282,7 @@ function pushChildNodes(stack: Array<TSESTree.Node>, value: unknown): void {
  */
 function collectArrows(root: TSESTree.Node): Array<TSESTree.ArrowFunctionExpression> {
 	const arrows: Array<TSESTree.ArrowFunctionExpression> = [];
-	const stack: Array<TSESTree.Node> = [root];
+	const stack = [root];
 
 	while (stack.length > 0) {
 		const current = stack.pop();
@@ -379,11 +394,11 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 		}
 
 		/**
-		 * Prepares the oxfmt question for `node`: how would the formatter render
-		 * the enclosing statement once the candidate fix is applied? `collapse`
-		 * supplies the implicit-direction candidate (the block body textually
-		 * replaced by its collapsed expression); omitting it asks about the
-		 * statement as written.
+		 * Prepares the oxfmt question for `node`: how would the formatter
+		 * render the enclosing statement once the candidate fix is applied?
+		 * `collapse` supplies the implicit-direction candidate (the block
+		 * body textually replaced by its collapsed expression); omitting it
+		 * asks about the statement as written.
 		 *
 		 * @param node - The arrow function in question.
 		 * @param collapse - The implicit-direction candidate, if any.
@@ -426,12 +441,13 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 		}
 
 		/**
-		 * Resolves every deferred oxfmt consult with a single worker round-trip:
-		 * would the formatter render each candidate arrow (params through body) on
-		 * a single line that fits `maxLen`? Explicit consults report when it
-		 * cannot, implicit consults report when it can. Fails open (no report)
-		 * when the worker or oxfmt is unavailable so that an unavailable formatter
-		 * can never introduce reports it would have to fight over.
+		 * Resolves every deferred oxfmt consult with a single worker
+		 * round-trip: would the formatter render each candidate arrow (params
+		 * through body) on a single line that fits `maxLen`? Explicit consults
+		 * report when it cannot, implicit consults report when it can. Fails
+		 * open (no report) when the worker or oxfmt is unavailable so that an
+		 * unavailable formatter can never introduce reports it would have to
+		 * fight over.
 		 */
 		function resolvePendingConsults(): void {
 			if (pendingConsults.length === 0) {
@@ -494,8 +510,9 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 
 		/**
 		 * Derives the one-level indent unit for an inserted block: prefer the
-		 * offset between the arrow's line and the body's (or its continuation's)
-		 * deeper indentation; otherwise infer from the indent character in use.
+		 * offset between the arrow's line and the body's (or its
+		 * continuation's) deeper indentation; otherwise infer from the indent
+		 * character in use.
 		 *
 		 * @param arrowIndent - Leading whitespace of the arrow's line.
 		 * @param node - The arrow function being fixed.
@@ -533,9 +550,9 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 
 		/**
 		 * The `)` of a wrapped sole-argument call whose trailing comma the fix
-		 * should absorb. `foo(() =>\n\tbody,\n)` only carries that comma because
-		 * the argument was wrapped; once the block body hugs the call again the
-		 * comma is debris (`},\n)` where the formatter writes `})`).
+		 * should absorb. `foo(() =>\n\tbody,\n)` only carries that comma
+		 * because the argument was wrapped; once the block body hugs the call
+		 * again the comma is debris (`},\n)` where the formatter writes `})`).
 		 *
 		 * @param node - The arrow function being converted.
 		 * @param bodyEnd - The body's last token or node (including parens).
@@ -653,8 +670,10 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			});
 		}
 
-		function checkBlockBody(node: TSESTree.ArrowFunctionExpression): void {
-			const block = node.body as TSESTree.BlockStatement;
+		function checkBlockBody(
+			node: TSESTree.ArrowFunctionExpression,
+			block: TSESTree.BlockStatement,
+		): void {
 			if (block.body.length !== 1) {
 				return;
 			}
@@ -720,12 +739,13 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			}
 		}
 
-		function checkExpressionBody(node: TSESTree.ArrowFunctionExpression): void {
-			const body = node.body as TSESTree.Expression;
+		function checkExpressionBody(
+			node: TSESTree.ArrowFunctionExpression,
+			body: TSESTree.Expression,
+		): void {
 			const arrowToken = arrowTokenOf(node);
 			const parens = bodyParens(node, arrowToken);
 			const bodyStart = parens?.open ?? body;
-			const bodyEnd = parens?.close ?? body;
 
 			// Comments between `=>` and the body force an explicit block that can
 			// host them as statements.
@@ -733,6 +753,8 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 				reportExplicit(node, EXPLICIT);
 				return;
 			}
+
+			const bodyEnd = parens?.close ?? body;
 
 			if (isJsx(body) && config.jsxAlwaysUseExplicitReturn) {
 				reportExplicit(node, EXPLICIT);
@@ -791,9 +813,9 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 		return {
 			"ArrowFunctionExpression": function (node): void {
 				if (node.body.type === AST_NODE_TYPES.BlockStatement) {
-					checkBlockBody(node);
+					checkBlockBody(node, node.body);
 				} else {
-					checkExpressionBody(node);
+					checkExpressionBody(node, node.body);
 				}
 			},
 			"before": function (): void {

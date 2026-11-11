@@ -64,11 +64,12 @@ export function createUnnecessaryHookRule<MessageIds extends string>({
 	const skipComputation = hook === "useMemo";
 
 	return (context) => {
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- `@eslint-react/core` types its context separately; the runtime object is the same.
 		const reactContext = context as unknown as ReactContext;
 		const detectHookCall = hook === "useMemo" ? core.isUseMemoCall : core.isUseCallbackCall;
 
 		return {
-			VariableDeclarator(node: TSESTree.VariableDeclarator): void {
+			VariableDeclarator(node): void {
 				// Read per file: unsafe to access in the `createOnce` body.
 				const { sourceCode } = context;
 				const { id, init } = node;
@@ -112,7 +113,7 @@ export function createUnnecessaryHookRule<MessageIds extends string>({
 					return;
 				}
 
-				if (!hasEmptyDeps(sourceCode, argument1)) {
+				if (!hasEmptyDependencies(sourceCode, argument1)) {
 					reportIf(context, insideEffectReport);
 					return;
 				}
@@ -165,6 +166,7 @@ function findEnclosingEffect(node: TSESTree.Node): null | TSESTree.Node {
  * @returns A report descriptor, or `null` when the case does not apply.
  * @template MessageIds - The rule's message identifiers.
  */
+const EFFECT_HOOK_PATTERN = /use\w*Effect/u;
 const effectHookMentions = new WeakMap<Readonly<TSESLint.SourceCode>, boolean>();
 
 /**
@@ -177,7 +179,7 @@ const effectHookMentions = new WeakMap<Readonly<TSESLint.SourceCode>, boolean>()
 function mentionsEffectHook(sourceCode: Readonly<TSESLint.SourceCode>): boolean {
 	let mentions = effectHookMentions.get(sourceCode);
 	if (mentions === undefined) {
-		mentions = /use\w*Effect/u.test(sourceCode.text);
+		mentions = EFFECT_HOOK_PATTERN.test(sourceCode.text);
 		effectHookMentions.set(sourceCode, mentions);
 	}
 
@@ -233,7 +235,10 @@ function checkForUsageInsideUseEffect<MessageIds extends string>(
  * @param node - The dependency argument node.
  * @returns `true` if the dependencies are empty.
  */
-function hasEmptyDeps(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Node): boolean {
+function hasEmptyDependencies(
+	sourceCode: Readonly<TSESLint.SourceCode>,
+	node: TSESTree.Node,
+): boolean {
 	if (node.type === AST_NODE_TYPES.ArrayExpression) {
 		return node.elements.length === 0;
 	}
@@ -253,10 +258,19 @@ function hasEmptyDeps(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.
  * @returns The scope and every nested child scope.
  */
 function flattenScopes(scope: TSESLint.Scope.Scope): Array<TSESLint.Scope.Scope> {
-	return scope.childScopes.reduce<Array<TSESLint.Scope.Scope>>(
-		(accumulator, child) => [...accumulator, ...flattenScopes(child)],
-		[scope],
-	);
+	const result: Array<TSESLint.Scope.Scope> = [];
+	const stack = [scope];
+	let current = stack.pop();
+	while (current !== undefined) {
+		result.push(current);
+		for (const child of current.childScopes.toReversed()) {
+			stack.push(child);
+		}
+
+		current = stack.pop();
+	}
+
+	return result;
 }
 
 /**

@@ -55,7 +55,7 @@ type FunctionWithReturnType =
  * @returns True when the function type is a structural matcher.
  */
 function isShapeMatcher(node: TSESTree.TSConstructorType | TSESTree.TSFunctionType): boolean {
-	for (let child: TSESTree.Node = node; child.type !== AST_NODE_TYPES.Program; ) {
+	for (let child: TSESTree.Node = node; child.type !== AST_NODE_TYPES.Program;) {
 		const parent: TSESTree.Node = child.parent;
 		if (parent.type === AST_NODE_TYPES.TSConditionalType) {
 			return parent.extendsType === child;
@@ -118,10 +118,10 @@ function create(
 	 * the checker, then the promise wrapper stripped.
 	 *
 	 * `getAwaitedType` resolves nested promises in one call, but it unwraps
-	 * every thenable, not only promises — so a named domain type that happens to
-	 * carry a `then` method would resolve to whatever `then` hands its callback.
-	 * The promise check keeps it off those: a caller receives that named type,
-	 * not the value inside it.
+	 * every thenable, not only promises — so a named domain type that happens
+	 * to carry a `then` method would resolve to whatever `then` hands its
+	 * callback. The promise check keeps it off those: a caller receives that
+	 * named type, not the value inside it.
 	 *
 	 * @param annotation - The explicit return type annotation.
 	 * @returns The type behind the annotation, awaited when it is a promise.
@@ -130,6 +130,7 @@ function create(
 		// The map's declared result for a `TypeNode` widens to plain `Identifier`
 		// for the reference case, so the cast restates what it returns at
 		// runtime: the TypeScript node behind this type annotation.
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- See above: the map's declared type is wider than the runtime node.
 		const typeNode = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation) as TypeNode;
 		const declared = checker.getTypeFromTypeNode(typeNode);
 		if (!PROMISE_TYPE_NAMES.has(declared.getSymbol()?.getName() ?? "")) {
@@ -188,6 +189,7 @@ export const noUnknownReturns: EslintRuleModule<Options, MessageIds> = createEsl
 			requiresTypeChecking: true,
 		},
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: [],
 		type: "problem",

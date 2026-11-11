@@ -22,7 +22,7 @@ function isEmptyObjectExpression(node: TSESTree.Expression): boolean {
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		SpreadElement(node: TSESTree.SpreadElement): void {
+		SpreadElement(node): void {
 			if (node.parent.type !== AST_NODE_TYPES.ObjectExpression) {
 				return;
 			}

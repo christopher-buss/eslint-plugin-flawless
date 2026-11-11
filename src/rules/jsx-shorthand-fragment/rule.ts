@@ -95,7 +95,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			fragmentName = options.fragmentName ?? DEFAULT_FRAGMENT_NAME;
 			namedFragments = new Set(["Fragment", fragmentName, "React.Fragment"]);
 		},
-		JSXElement(node: TSESTree.JSXElement): void {
+		JSXElement(node): void {
 			if (mode !== "syntax") {
 				return;
 			}
@@ -131,7 +131,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				node,
 			});
 		},
-		JSXFragment(node: TSESTree.JSXFragment): void {
+		JSXFragment(node): void {
 			if (mode !== "element") {
 				return;
 			}

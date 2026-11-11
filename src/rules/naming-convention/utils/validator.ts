@@ -7,7 +7,13 @@ import { TypeFlags } from "typescript";
 
 import type { MessageIds } from "../rule";
 import { isComponentPropertyMember } from "./component-property";
-import type { ModifierType, PredefinedFormatType, SelectorString, SelectorType } from "./enums";
+import type {
+	ModifierType,
+	PredefinedFormatType,
+	SelectorString,
+	SelectorType,
+	TypeModifierType,
+} from "./enums";
 import {
 	MetaSelector,
 	Modifier,
@@ -439,11 +445,11 @@ export function createValidator(
 		}
 
 		const result = custom.regex.test(name);
-		if (custom.match && result) {
+		if (result && custom.match) {
 			return true;
 		}
 
-		if (!custom.match && !result) {
+		if (!result && !custom.match) {
 			return true;
 		}
 
@@ -660,6 +666,35 @@ function matchesTypeReference(type: ts.Type, reference: TypeReference): boolean 
 	return true;
 }
 
+function pushTypeModifierPredicate(
+	predicates: Array<(inner: ts.Type) => boolean>,
+	allowedType: TypeModifierType,
+	checker: ts.TypeChecker,
+): void {
+	switch (allowedType) {
+		case TypeModifier.array: {
+			predicates.push((inner) => checker.isArrayType(inner) || checker.isTupleType(inner));
+			break;
+		}
+		case TypeModifier.boolean:
+		case TypeModifier.number:
+		case TypeModifier.string: {
+			const flag = PRIMITIVE_FLAG[allowedType];
+			predicates.push((inner) => {
+				// this will resolve things like true => boolean, 'a' =>
+				// string and 1 => number
+				const base = checker.getBaseTypeOfLiteralType(inner);
+				return (base.flags & flag) !== 0;
+			});
+			break;
+		}
+		case TypeModifier.function: {
+			predicates.push((inner) => inner.getCallSignatures().length > 0);
+			break;
+		}
+	}
+}
+
 function isCorrectType(
 	node: TSESTree.Node,
 	config: NormalizedSelector,
@@ -688,30 +723,7 @@ function isCorrectType(
 			continue;
 		}
 
-		switch (allowedType) {
-			case TypeModifier.array: {
-				predicates.push(
-					(inner) => checker.isArrayType(inner) || checker.isTupleType(inner),
-				);
-				break;
-			}
-			case TypeModifier.boolean:
-			case TypeModifier.number:
-			case TypeModifier.string: {
-				const flag = PRIMITIVE_FLAG[allowedType];
-				predicates.push((inner) => {
-					// this will resolve things like true => boolean, 'a' =>
-					// string and 1 => number
-					const base = checker.getBaseTypeOfLiteralType(inner);
-					return (base.flags & flag) !== 0;
-				});
-				break;
-			}
-			case TypeModifier.function: {
-				predicates.push((inner) => inner.getCallSignatures().length > 0);
-				break;
-			}
-		}
+		pushTypeModifierPredicate(predicates, allowedType, checker);
 	}
 
 	// a union matches when each arm satisfies at least one configured type,

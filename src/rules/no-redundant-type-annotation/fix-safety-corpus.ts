@@ -2,7 +2,10 @@ import { unindent } from "eslint-vitest-rule-tester";
 
 import { regressions } from "./regressions";
 
-/** A snippet the fix-safety oracle lints and fixes, with no expectation on what is reported. */
+/**
+ * A snippet the fix-safety oracle lints and fixes, with no expectation on what
+ * is reported.
+ */
 export interface CorpusCase {
 	readonly name: string;
 	readonly code: string;

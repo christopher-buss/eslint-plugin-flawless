@@ -29,7 +29,8 @@ const messages = {
  * @param node - The expression statement to inspect.
  * @param sources - The modules whose named exports count as test globals.
  * @returns The matched member name (`expect.assertions` / `expect.hasAssertions`)
- *   for the message, or `undefined` when the statement is not an assertion count.
+ *   for the message, or `undefined` when the statement is not an assertion
+ *   count.
  */
 function getAssertionName(
 	sourceCode: Readonly<TSESLint.SourceCode>,
@@ -127,8 +128,8 @@ function findPaddingAnchor(
 }
 
 /**
- * Requires a blank line after the assertion count that opens a test, keeping the
- * bookkeeping visually separate from the expectations that follow.
+ * Requires a blank line after the assertion count that opens a test, keeping
+ * the bookkeeping visually separate from the expectations that follow.
  *
  * @param context - The rule context.
  * @returns The rule listener.
@@ -140,7 +141,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		before(): void {
 			sources = getTestGlobalSources(context.settings);
 		},
-		ExpressionStatement(node: TSESTree.ExpressionStatement): void {
+		ExpressionStatement(node): void {
 			const { sourceCode } = context;
 			const name = getAssertionName(sourceCode, node, sources);
 			if (name === undefined) {

@@ -6,15 +6,16 @@ import { createFlawlessRule } from "../../util";
 export const RULE_NAME = "prefer-parameter-destructuring";
 
 const MESSAGE_ID = "default";
+const TRAILING_COMMA = /,$/u;
 
 export type MessageIds = typeof MESSAGE_ID;
 
 export type Options = [
 	{
 		/**
-		 * Whether the autofix may hoist pattern defaults and computed keys past
-		 * earlier statements, reordering their side effects. Defaults to `true`;
-		 * set to `false` to withhold the fix in those cases.
+		 * Whether the autofix may hoist pattern defaults and computed keys
+		 * past earlier statements, reordering their side effects. Defaults to
+		 * `true`; set to `false` to withhold the fix in those cases.
 		 */
 		allowSideEffectReordering?: boolean;
 	},
@@ -41,7 +42,9 @@ interface Destructure {
 	readonly pattern: TSESTree.ObjectPattern;
 }
 
-/** Everything needed to rewrite the parameter and delete the body statements. */
+/**
+ * Everything needed to rewrite the parameter and delete the body statements.
+ */
 interface FixPlan {
 	readonly parameterRange: TSESTree.Range;
 	readonly parameterText: string;
@@ -210,7 +213,7 @@ function containsAwaitOrYield(
 	root: TSESTree.Node,
 	visitorKeys: TSESLint.SourceCode.VisitorKeys,
 ): boolean {
-	const stack: Array<TSESTree.Node> = [root];
+	const stack = [root];
 	for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
 		if (
 			current.type === AST_NODE_TYPES.AwaitExpression ||
@@ -219,8 +222,9 @@ function containsAwaitOrYield(
 			return true;
 		}
 
-		for (const key of visitorKeys[current.type] ?? []) {
-			const child = (current as unknown as Record<string, unknown>)[key];
+		const keys = visitorKeys[current.type] ?? [];
+		for (const key of keys) {
+			const child: unknown = Reflect.get(current, key);
 			const children = Array.isArray(child) ? child : [child];
 			for (const item of children) {
 				if (isNodeLike(item)) {
@@ -277,56 +281,55 @@ function hasUnsafePatternReferences(
 		);
 	}
 
-	const stack: Array<TSESLint.Scope.Scope> = [scope];
+	function isUnsafeReference(reference: TSESLint.Scope.Reference): boolean {
+		if (!inPattern(reference.identifier.range)) {
+			return false;
+		}
+
+		const { resolved } = reference;
+		if (resolved === null) {
+			// Unresolved references are globals, unaffected by the move.
+			return false;
+		}
+
+		if (resolved.defs.length === 0) {
+			// An implicit binding (`arguments`): unsafe when it belongs to
+			// this function; an outer function's `arguments` (or a configured
+			// global, whose scope block is the Program) is unaffected.
+			const blockRange = resolved.scope.block.range;
+			return blockRange[0] >= node.range[0] && blockRange[1] <= node.range[1];
+		}
+
+		return resolved.defs.some((definition) => {
+			const { range } = definition.name;
+			if (inPattern(range)) {
+				// The pattern's own bindings move along with it.
+				return false;
+			}
+
+			if (range[1] <= node.range[0] || range[0] >= node.range[1]) {
+				// Declared outside the function — still in scope at the
+				// parameter.
+				return false;
+			}
+
+			if (range[0] >= body.range[0]) {
+				// Declared in the body — out of scope at the parameter.
+				return true;
+			}
+
+			// A parameter: safe only when declared before the target
+			// parameter, otherwise it is uninitialized when the pattern
+			// evaluates.
+			return range[0] >= identifier.range[0];
+		});
+	}
+
+	const stack = [scope];
 	for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
 		stack.push(...current.childScopes);
 		for (const reference of current.references) {
-			if (!inPattern(reference.identifier.range)) {
-				continue;
-			}
-
-			const { resolved } = reference;
-			if (resolved === null) {
-				// Unresolved references are globals, unaffected by the move.
-				continue;
-			}
-
-			if (resolved.defs.length === 0) {
-				// An implicit binding (`arguments`): unsafe when it belongs to
-				// this function; an outer function's `arguments` (or a configured
-				// global, whose scope block is the Program) is unaffected.
-				const blockRange = resolved.scope.block.range;
-				if (blockRange[0] >= node.range[0] && blockRange[1] <= node.range[1]) {
-					return true;
-				}
-
-				continue;
-			}
-
-			const unsafe = resolved.defs.some((definition) => {
-				const { range } = definition.name;
-				if (inPattern(range)) {
-					// The pattern's own bindings move along with it.
-					return false;
-				}
-
-				if (range[1] <= node.range[0] || range[0] >= node.range[1]) {
-					// Declared outside the function — still in scope at the
-					// parameter.
-					return false;
-				}
-
-				if (range[0] >= body.range[0]) {
-					// Declared in the body — out of scope at the parameter.
-					return true;
-				}
-
-				// A parameter: safe only when declared before the target
-				// parameter, otherwise it is uninitialized when the pattern
-				// evaluates.
-				return range[0] >= identifier.range[0];
-			});
-			if (unsafe) {
+			if (isUnsafeReference(reference)) {
 				return true;
 			}
 		}
@@ -365,10 +368,15 @@ function hasUseStrictDirective(body: TSESTree.BlockStatement): boolean {
  * Checks whether evaluating the pattern can execute arbitrary code — a default
  * value or a computed key — as opposed to only performing property reads.
  *
- * @param node - The pattern node to walk.
+ * @param pattern - The pattern node to walk.
  * @returns `true` when the pattern contains a default value or computed key.
  */
-function patternExecutesCode(node: TSESTree.Node): boolean {
+function patternExecutesCode(pattern: TSESTree.Node): boolean {
+	let node = pattern;
+	while (node.type === AST_NODE_TYPES.RestElement) {
+		node = node.argument;
+	}
+
 	if (node.type === AST_NODE_TYPES.AssignmentPattern) {
 		return true;
 	}
@@ -383,10 +391,6 @@ function patternExecutesCode(node: TSESTree.Node): boolean {
 
 	if (node.type === AST_NODE_TYPES.ArrayPattern) {
 		return node.elements.some((element) => element !== null && patternExecutesCode(element));
-	}
-
-	if (node.type === AST_NODE_TYPES.RestElement) {
-		return patternExecutesCode(node.argument);
 	}
 
 	return false;
@@ -460,9 +464,9 @@ function planFix(query: RewriteQuery): FixPlan | null {
 	// see the documented caveat.)
 	if (!allowSideEffectReordering && patterns.some((pattern) => patternExecutesCode(pattern))) {
 		const leadingStatements = new Set<TSESTree.Node>(body.body.slice(0, declarations.length));
-		const isLeadingRun = declarations.every((declaration) =>
-			leadingStatements.has(declaration),
-		);
+		const isLeadingRun = declarations.every((declaration) => {
+			return leadingStatements.has(declaration);
+		});
 		if (!isLeadingRun) {
 			return null;
 		}
@@ -508,7 +512,8 @@ function planFix(query: RewriteQuery): FixPlan | null {
 
 	// Duplicate bindings (possible with `var`) and collisions with the other
 	// parameters are SyntaxErrors in a non-simple parameter list.
-	if (new Set(boundNames).size !== boundNames.length) {
+	const uniqueNames = new Set(boundNames);
+	if (uniqueNames.size !== boundNames.length) {
 		return null;
 	}
 
@@ -522,13 +527,18 @@ function planFix(query: RewriteQuery): FixPlan | null {
 
 	const [firstPattern] = patterns;
 	let parameterText: string;
-	if (patterns.length === 1 && firstPattern !== undefined) {
+	if (firstPattern !== undefined && patterns.length === 1) {
 		parameterText = sourceCode.getText(firstPattern);
 	} else {
 		const innerTexts = patterns
-			.map((pattern) =>
-				sourceCode.getText(pattern).slice(1, -1).trim().replace(/,$/u, "").trim(),
-			)
+			.map((pattern) => {
+				return sourceCode
+					.getText(pattern)
+					.slice(1, -1)
+					.trim()
+					.replace(TRAILING_COMMA, "")
+					.trim();
+			})
 			.filter((text) => text.length > 0);
 		parameterText = innerTexts.length === 0 ? "{}" : `{ ${innerTexts.join(", ")} }`;
 	}

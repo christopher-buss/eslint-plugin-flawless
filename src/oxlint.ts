@@ -3,6 +3,10 @@ import { definePlugin } from "@oxlint/plugins";
 
 import { plugin, PLUGIN_NAME } from "./plugin";
 
+function isDualRuntimeRule(rule: object): rule is Rule {
+	return "createOnce" in rule;
+}
+
 /**
  * Oxlint `jsPlugins` entry point.
  *
@@ -20,8 +24,8 @@ import { plugin, PLUGIN_NAME } from "./plugin";
  */
 const rules: Record<string, Rule> = {};
 for (const [name, rule] of Object.entries(plugin.rules)) {
-	if ("createOnce" in rule) {
-		rules[name] = rule as unknown as Rule;
+	if (isDualRuntimeRule(rule)) {
+		rules[name] = rule;
 	}
 }
 

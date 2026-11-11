@@ -179,6 +179,7 @@ const valid: Array<ValidTestCase> = [
 const invalid: Array<InvalidTestCase> = [
 	{
 		code: 'vi.fn().mockImplementation(() => { throw new Error("boom"); })',
+		output: 'vi.fn().mockThrow(new Error("boom"))',
 		errors: [
 			{
 				column: 9,
@@ -187,45 +188,44 @@ const invalid: Array<InvalidTestCase> = [
 				messageId,
 			},
 		],
-		output: 'vi.fn().mockThrow(new Error("boom"))',
 	},
 	{
 		code: 'vi.fn().mockImplementationOnce(() => { throw new Error("boom"); })',
+		output: 'vi.fn().mockThrowOnce(new Error("boom"))',
 		errors: [
 			{ data: { method: "mockImplementationOnce", replacement: "mockThrowOnce" }, messageId },
 		],
-		output: 'vi.fn().mockThrowOnce(new Error("boom"))',
 	},
 	{
 		code: 'mock.mockImplementation(function () { throw new Error("boom"); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	// Literals, globals, and object and array literals of stable parts.
 	{
 		code: 'mock.mockImplementation(() => { throw "boom"; })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow("boom")',
+		errors: [{ messageId }],
 	},
 	{
 		code: "mock.mockImplementation(() => { throw undefined; })",
-		errors: [{ messageId }],
 		output: "mock.mockThrow(undefined)",
+		errors: [{ messageId }],
 	},
 	{
 		code: "mock.mockImplementation(() => { throw -1; })",
-		errors: [{ messageId }],
 		output: "mock.mockThrow(-1)",
+		errors: [{ messageId }],
 	},
 	{
 		code: 'mock.mockImplementation(() => { throw { code: 42, [`key`]: "value", nested: [1, , "x"] }; })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow({ code: 42, [`key`]: "value", nested: [1, , "x"] })',
+		errors: [{ messageId }],
 	},
 	{
 		code: 'mock.mockImplementation(() => { throw new TypeError("nope", { cause: "inner" }); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(new TypeError("nope", { cause: "inner" }))',
+		errors: [{ messageId }],
 	},
 	// Stable bindings initialized before the call.
 	{
@@ -240,7 +240,6 @@ const invalid: Array<InvalidTestCase> = [
 				fourth.mockImplementation(() => { throw error; });
 			});
 		`,
-		errors: [{ messageId }, { messageId }, { messageId }],
 		output: unindent`
 			const error = new Error("boom");
 			first.mockThrow(error);
@@ -251,6 +250,7 @@ const invalid: Array<InvalidTestCase> = [
 				fourth.mockImplementation(() => { throw error; });
 			});
 		`,
+		errors: [{ messageId }, { messageId }, { messageId }],
 	},
 	{
 		code: unindent`
@@ -259,11 +259,11 @@ const invalid: Array<InvalidTestCase> = [
 				throw error;
 			});
 		`,
-		errors: [{ column: 9, line: 2, messageId }],
 		output: unindent`
 			const error = new Error("boom");
 			vi.fn().mockThrow(error);
 		`,
+		errors: [{ column: 9, line: 2, messageId }],
 	},
 	{
 		code: unindent`
@@ -272,35 +272,35 @@ const invalid: Array<InvalidTestCase> = [
 				mock.mockImplementation(() => { throw new Error(\`failed: \${message}\`); });
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			const message = "boom";
 			beforeEach(() => {
 				mock.mockThrow(new Error(\`failed: \${message}\`));
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			import { Failure } from "./failure";
 			mock.mockImplementation(() => { throw new Failure(); });
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			import { Failure } from "./failure";
 			mock.mockThrow(new Failure());
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			class Failure extends Error {}
 			mock.mockImplementation(() => { throw new Failure(); });
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			class Failure extends Error {}
 			mock.mockThrow(new Failure());
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -308,12 +308,12 @@ const invalid: Array<InvalidTestCase> = [
 				mock.mockImplementation(() => { throw error; });
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			function setup(error) {
 				mock.mockThrow(error);
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -323,7 +323,6 @@ const invalid: Array<InvalidTestCase> = [
 				mock.mockImplementation(() => { throw error; });
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			try {
 				run();
@@ -331,6 +330,7 @@ const invalid: Array<InvalidTestCase> = [
 				mock.mockThrow(error);
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -339,31 +339,31 @@ const invalid: Array<InvalidTestCase> = [
 				return { load: vi.fn().mockImplementation(() => { throw error; }) };
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			vi.mock("./module", () => {
 				const error = new Error("boom");
 				return { load: vi.fn().mockThrow(error) };
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// An unread parameter is harmless.
 	{
 		code: 'mock.mockImplementation((_value, ..._rest) => { throw new Error("boom"); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	// A sequence stays one argument.
 	{
 		code: 'mock.mockImplementation(() => { throw "first", "second"; })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(("first", "second"))',
+		errors: [{ messageId }],
 	},
 	// Type-only wrappers are looked through and kept.
 	{
 		code: 'mock.mockImplementation((): never => { throw new Error("boom"); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -373,7 +373,6 @@ const invalid: Array<InvalidTestCase> = [
 			mock.mockImplementation(() => { throw error!; });
 			mock.mockImplementation(() => { throw <Error>error; });
 		`,
-		errors: [{ messageId }, { messageId }, { messageId }, { messageId }],
 		output: unindent`
 			const error: unknown = new Error("boom");
 			mock.mockThrow(error as Error);
@@ -381,27 +380,28 @@ const invalid: Array<InvalidTestCase> = [
 			mock.mockThrow(error!);
 			mock.mockThrow(<Error>error);
 		`,
+		errors: [{ messageId }, { messageId }, { messageId }, { messageId }],
 	},
 	// Optional chaining and computed access.
 	{
 		code: 'mock?.mockImplementation(() => { throw new Error("boom"); })',
-		errors: [{ messageId }],
 		output: 'mock?.mockThrow(new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	{
 		code: 'mock.mockImplementation?.(() => { throw new Error("boom"); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow?.(new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	{
 		code: "mock['mockImplementationOnce'](() => { throw new Error('boom'); })",
-		errors: [{ messageId }],
 		output: "mock['mockThrowOnce'](new Error('boom'))",
+		errors: [{ messageId }],
 	},
 	{
 		code: "mock[`mockImplementation`](() => { throw new Error('boom'); })",
-		errors: [{ messageId }],
 		output: "mock[`mockThrow`](new Error('boom'))",
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -409,8 +409,8 @@ const invalid: Array<InvalidTestCase> = [
 				throw new Error("boom");
 			});
 		`,
-		errors: [{ column: 30, line: 1, messageId }],
 		output: 'vi.spyOn(fs, "readFileSync").mockThrowOnce(new Error("boom"));',
+		errors: [{ column: 30, line: 1, messageId }],
 	},
 	{
 		code: unindent`
@@ -419,27 +419,27 @@ const invalid: Array<InvalidTestCase> = [
 				.mockImplementation(async () => { throw new Error("two"); })
 				.mockImplementationOnce(() => { throw new Error("three"); });
 		`,
-		errors: [
-			{ column: 3, line: 2, messageId },
-			{ column: 3, line: 4, messageId },
-		],
 		output: unindent`
 			mock
 				.mockThrow(new Error("one"))
 				.mockImplementation(async () => { throw new Error("two"); })
 				.mockThrowOnce(new Error("three"));
 		`,
+		errors: [
+			{ column: 3, line: 2, messageId },
+			{ column: 3, line: 4, messageId },
+		],
 	},
 	// Comments in the implementation move into the argument.
 	{
 		code: 'mock.mockImplementation(() => { /* offline */ throw new Error("boom"); /* done */ })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(/* offline */ /* done */ new Error("boom"))',
+		errors: [{ messageId }],
 	},
 	{
 		code: 'mock.mockImplementation(() => { throw new Error(/* why */ "boom"); })',
-		errors: [{ messageId }],
 		output: 'mock.mockThrow(new Error(/* why */ "boom"))',
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -450,7 +450,6 @@ const invalid: Array<InvalidTestCase> = [
 				});
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("fails", () => {
 				mock.mockThrow(
@@ -460,6 +459,7 @@ const invalid: Array<InvalidTestCase> = [
 				);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 ];
 

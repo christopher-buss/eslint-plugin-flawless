@@ -12,6 +12,8 @@ export const RULE_NAME = "toml-sort-keys";
 
 const MESSAGE_ID = "unsorted";
 
+const NON_WHITESPACE = /\S/u;
+
 export type MessageIds = typeof MESSAGE_ID;
 
 export type Options = Array<SortSpec>;
@@ -96,7 +98,7 @@ function makeRank(order: ReadonlyArray<string>): (name: string) => number {
 			}
 		}
 
-		return Number.POSITIVE_INFINITY;
+		return Infinity;
 	};
 }
 
@@ -146,11 +148,11 @@ function makeComparator(
 			const aRank = rank(nameOf(a));
 			const bRank = rank(nameOf(b));
 			if (aRank !== bRank) {
-				if (aRank === Number.POSITIVE_INFINITY) {
+				if (aRank === Infinity) {
 					return 1;
 				}
 
-				if (bRank === Number.POSITIVE_INFINITY) {
+				if (bRank === Infinity) {
 					return -1;
 				}
 
@@ -247,13 +249,13 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 				return undefined;
 			}
 
-			if (/\S/u.test(text.slice(previous.end, current.start))) {
+			if (NON_WHITESPACE.test(text.slice(previous.end, current.start))) {
 				return undefined;
 			}
 		}
 
 		const first = blocks[0];
-		const last = blocks[blocks.length - 1];
+		const last = blocks.at(-1);
 		if (first === undefined || last === undefined) {
 			return undefined;
 		}
@@ -272,8 +274,9 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 		}
 
 		const sortedText = parts.join("");
-		return (fixer): TSESLint.RuleFix =>
-			fixer.replaceTextRange([first.start, last.end], sortedText);
+		return (fixer): TSESLint.RuleFix => {
+			return fixer.replaceTextRange([first.start, last.end], sortedText);
+		};
 	}
 
 	function verify(path: string, body: ReadonlyArray<Entry>, isTopLevel: boolean): void {
@@ -287,7 +290,7 @@ function create(context: TomlContext<MessageIds, Options>): TSESLint.RuleListene
 		}
 
 		const entries = [...body];
-		const target = [...entries].sort(
+		const target = entries.toSorted(
 			makeComparator(order, isTopLevel, (entry) => sourceCode.getText(entry.key)),
 		);
 
@@ -338,6 +341,7 @@ export const tomlSortKeys: EslintRuleModule<Options, MessageIds> = createEslintR
 		},
 		fixable: "code",
 		hasSuggestions: false,
+		languages: ["js/js", "toml/toml"],
 		messages,
 		schema,
 		type: "layout",

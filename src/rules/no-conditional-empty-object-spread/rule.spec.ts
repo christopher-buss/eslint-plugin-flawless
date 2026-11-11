@@ -36,8 +36,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(timeout !== undefined ? { timeout } : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -45,8 +45,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(timeout === undefined ? {} : { timeout }),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -54,8 +54,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(enabled ? defaults : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -63,8 +63,8 @@ const invalid: Array<InvalidTestCase> = [
 				...((enabled ? { enabled } : {})),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -72,8 +72,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(enabled ? {} : {}),
 			};
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -82,8 +82,8 @@ const invalid: Array<InvalidTestCase> = [
 				...(second ? {} : { second }),
 			};
 		`,
-		errors: [{ messageId }, { messageId }],
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 ];
 

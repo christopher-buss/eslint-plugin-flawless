@@ -87,8 +87,8 @@ const invalid: Array<InvalidTestCase> = [
 				Reflect.set(argv, "_timing", true);
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -96,53 +96,53 @@ const invalid: Array<InvalidTestCase> = [
 				Reflect.set(config, "projects", value);
 			});
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export const written = Reflect.set(o, 0, v);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export const written = Reflect.set(o, \`_coverage\`, v);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			export const written = Reflect["set"](o, "key", v);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const key = "_coverage";
 			export const written = Reflect.set(payload, key, report);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const BRAND = Symbol();
 			export const written = Reflect.set(o, BRAND, true);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const BRAND = Symbol.for("pkg/brand");
 			export const written = Reflect.set(o, BRAND, true);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -154,16 +154,16 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			const key: \`_coverage\` = \`_coverage\`;
 			export const written = Reflect.set(o, key, v);
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -171,8 +171,8 @@ const invalid: Array<InvalidTestCase> = [
 				return Reflect.set(target, key, value);
 			}
 		`,
-		errors: [{ messageId }],
 		output: null,
+		errors: [{ messageId }],
 	},
 ];
 

@@ -66,10 +66,7 @@ export default [
 	{
 		files: [".github/labels.yaml"],
 		rules: {
-			"flawless/yaml-sort-sequence-by-key": [
-				"error",
-				{ key: "name", pathPattern: "^$" },
-			],
+			"flawless/yaml-sort-sequence-by-key": ["error", { key: "name", pathPattern: "^$" }],
 		},
 	},
 ];

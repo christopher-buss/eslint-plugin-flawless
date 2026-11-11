@@ -89,7 +89,7 @@ function isExactlyRepresentableDecimal(raw: string): boolean {
 }
 
 function isExactIntegerDivision(left: number, right: number): boolean {
-	if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right) || right === 0) {
+	if (right === 0 || !Number.isSafeInteger(left) || !Number.isSafeInteger(right)) {
 		return false;
 	}
 
@@ -443,7 +443,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			const name = propertyName(received) ?? "";
 			if (name === "not" && !hasNot) {
 				hasNot = true;
-			} else if (EXPECT_MODIFIERS.has(name) && !hasModifier) {
+			} else if (!hasModifier && EXPECT_MODIFIERS.has(name)) {
 				hasModifier = true;
 			} else {
 				return null;
@@ -538,7 +538,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				indexReferences(variable);
 			}
 		},
-		BinaryExpression(node: TSESTree.BinaryExpression): void {
+		BinaryExpression(node): void {
 			if (
 				EQUALITY_OPERATORS.has(node.operator) &&
 				(isFloatingPointSensitive(node.left) || isFloatingPointSensitive(node.right))
@@ -546,18 +546,18 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				report(node);
 			}
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			const argumentsToCheck = expectArguments(node) ?? assertArguments(node);
 			if (argumentsToCheck?.some(isFloatingPointSensitive) === true) {
 				report(node);
 			}
 		},
-		LogicalExpression(node: TSESTree.LogicalExpression): void {
+		LogicalExpression(node): void {
 			if (isIndirectExactComparison(node)) {
 				report(node);
 			}
 		},
-		SwitchCase(node: TSESTree.SwitchCase): void {
+		SwitchCase(node): void {
 			if (node.test !== null && isFloatingPointSensitive(node.test)) {
 				report(node.test);
 			}

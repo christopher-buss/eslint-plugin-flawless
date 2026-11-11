@@ -186,7 +186,7 @@ function getSentenceRange(
 		}
 
 		const previous = segments[current - 1];
-		if (start > low || previous === undefined || gapHasLineBreak(text, previous[1], low)) {
+		if (previous === undefined || start > low || gapHasLineBreak(text, previous[1], low)) {
 			break;
 		}
 
@@ -197,16 +197,12 @@ function getSentenceRange(
 	for (let current = segmentIndex; current < segments.length; current += 1) {
 		const high = segments[current]?.[1] ?? end;
 		let stopped = false;
-		while (end < high) {
+		while (!stopped && end < high) {
 			if (isLineBreak(text.charCodeAt(end))) {
 				stopped = true;
-				break;
-			}
-
-			end += 1;
-			if (isTerminatorAt(text, end - 1, markdown)) {
-				stopped = true;
-				break;
+			} else {
+				end += 1;
+				stopped = isTerminatorAt(text, end - 1, markdown);
 			}
 		}
 
@@ -332,30 +328,28 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	function reportSpan(segments: ReadonlyArray<Segment>, syntax: SpanSyntax): void {
 		let previousEnd = -1;
 		for (const [segmentIndex, [low, high]] of segments.entries()) {
-			for (let index = lowerBound(dashes, low); index < dashes.length; index += 1) {
-				const dash = dashes[index] ?? high;
-				if (dash >= high) {
-					break;
+			let index = lowerBound(dashes, low);
+			let dash = dashes[index] ?? high;
+			while (dash < high) {
+				if (dash >= previousEnd) {
+					const { end, start } = getSentenceRange(
+						text,
+						{ index: dash, segmentIndex },
+						segments,
+						syntax,
+					);
+					previousEnd = end;
+					context.report({
+						loc: {
+							end: context.sourceCode.getLocFromIndex(end),
+							start: context.sourceCode.getLocFromIndex(start),
+						},
+						messageId: MESSAGE_ID,
+					});
 				}
 
-				if (dash < previousEnd) {
-					continue;
-				}
-
-				const { end, start } = getSentenceRange(
-					text,
-					{ index: dash, segmentIndex },
-					segments,
-					syntax,
-				);
-				previousEnd = end;
-				context.report({
-					loc: {
-						end: context.sourceCode.getLocFromIndex(end),
-						start: context.sourceCode.getLocFromIndex(start),
-					},
-					messageId: MESSAGE_ID,
-				});
+				index += 1;
+				dash = dashes[index] ?? high;
 			}
 		}
 	}
@@ -437,7 +431,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 */
 	function collectProse(block: MarkdownNode): Array<Segment> {
 		const segments: Array<Segment> = [];
-		const stack: Array<MarkdownNode> = [block];
+		const stack = [block];
 		for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
 			checkAttributes(node);
 			if (node.type === "text") {
@@ -467,7 +461,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	function checkMarkdown(root: MarkdownNode): void {
-		const stack: Array<MarkdownNode> = [root];
+		const stack = [root];
 		for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
 			if (MARKDOWN_PROSE_BLOCKS.has(node.type)) {
 				reportSpan(collectProse(node), { markdown: true });
@@ -475,7 +469,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			}
 
 			checkAttributes(node);
-			for (const child of node.children ?? []) {
+			const children = node.children ?? [];
+			for (const child of children) {
 				stack.push(child);
 			}
 		}
@@ -491,10 +486,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			dashes = findDashes(text);
 			return dashes.length > 0;
 		},
-		JSXText(node: TSESTree.JSXText): void {
+		JSXText(node): void {
 			checkSpan(node.range);
 		},
-		Literal(node: TSESTree.Literal): void {
+		Literal(node): void {
 			if (typeof node.value === "string") {
 				checkSpan([node.range[0] + 1, node.range[1] - 1]);
 			}
@@ -512,10 +507,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		 *
 		 * @param node - The mdast `root` node.
 		 */
-		root(node: unknown): void {
-			checkMarkdown(node as MarkdownNode);
+		root(node: MarkdownNode): void {
+			checkMarkdown(node);
 		},
-		TemplateElement(node: TSESTree.TemplateElement): void {
+		TemplateElement(node): void {
 			checkSpan(getTemplateContent(text, node));
 		},
 	};

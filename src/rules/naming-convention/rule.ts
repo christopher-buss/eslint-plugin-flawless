@@ -110,7 +110,8 @@ function create(
 	const context =
 		contextWithoutDefaults.options.length > 0
 			? contextWithoutDefaults
-			: (Object.setPrototypeOf(
+			: // eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.setPrototypeOf` returns `any`; the result is the context with default options.
+				(Object.setPrototypeOf(
 					{
 						options: camelCaseNamingConfig,
 					},
@@ -892,6 +893,7 @@ export const namingConvention: EslintRuleModule<Options, MessageIds> = createEsl
 			requiresTypeChecking: true,
 		},
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: SCHEMA,
 		type: "suggestion",
@@ -935,53 +937,66 @@ function checkInterfacesForMethod(
 	return false;
 }
 
+function visitPatternNode(
+	node: TSESTree.Node,
+	stack: Array<TSESTree.Node>,
+	identifiers: Array<TSESTree.Identifier>,
+): void {
+	// eslint-disable-next-line ts/switch-exhaustiveness-check -- Only pattern nodes can bind names; everything else falls through
+	switch (node.type) {
+		case AST_NODE_TYPES.ArrayPattern: {
+			for (const element of node.elements) {
+				if (element !== null) {
+					stack.push(element);
+				}
+			}
+
+			break;
+		}
+		case AST_NODE_TYPES.AssignmentPattern: {
+			stack.push(node.left);
+			break;
+		}
+		case AST_NODE_TYPES.Identifier: {
+			identifiers.push(node);
+			break;
+		}
+		case AST_NODE_TYPES.ObjectPattern: {
+			for (const property of node.properties) {
+				stack.push(property);
+			}
+
+			break;
+		}
+		case AST_NODE_TYPES.Property: {
+			stack.push(node.value);
+			break;
+		}
+		case AST_NODE_TYPES.RestElement: {
+			stack.push(node.argument);
+			break;
+		}
+		default: {
+			// Other node types (e.g. MemberExpression) cannot bind new names
+			break;
+		}
+	}
+}
+
 function getIdentifiersFromPattern(
 	pattern: TSESTree.DestructuringPattern,
 ): Array<TSESTree.Identifier> {
 	const identifiers: Array<TSESTree.Identifier> = [];
 	const stack: Array<TSESTree.Node> = [pattern];
 
-	// `for...of` re-checks length each step, so entries pushed during iteration
-	// are still visited
-	for (const node of stack) {
-		// eslint-disable-next-line ts/switch-exhaustiveness-check -- Only pattern nodes can bind names; everything else falls through
-		switch (node.type) {
-			case AST_NODE_TYPES.ArrayPattern: {
-				for (const element of node.elements) {
-					if (element !== null) {
-						stack.push(element);
-					}
-				}
-
-				break;
-			}
-			case AST_NODE_TYPES.AssignmentPattern: {
-				stack.push(node.left);
-				break;
-			}
-			case AST_NODE_TYPES.Identifier: {
-				identifiers.push(node);
-				break;
-			}
-			case AST_NODE_TYPES.ObjectPattern: {
-				for (const property of node.properties) {
-					stack.push(property);
-				}
-
-				break;
-			}
-			case AST_NODE_TYPES.Property: {
-				stack.push(node.value);
-				break;
-			}
-			case AST_NODE_TYPES.RestElement: {
-				stack.push(node.argument);
-				break;
-			}
-			default: {
-				// Other node types (e.g. MemberExpression) cannot bind new names
-				break;
-			}
+	// The length is re-read each step, so entries pushed during iteration are
+	// still visited
+	let index = 0;
+	while (index < stack.length) {
+		const node = stack[index];
+		index += 1;
+		if (node !== undefined) {
+			visitPatternNode(node, stack, identifiers);
 		}
 	}
 
@@ -1195,10 +1210,10 @@ function isObjectStyleEnumDeclaration(
 /**
  * True when `init` is a const-asserted object expression, bare (`{...} as
  * const`) or `satisfies`-wrapped (`{...} as const satisfies T`). Used for the
- * `constAsserted` variable modifier, which - unlike `isObjectStyleEnumDeclaration`
- * - deliberately covers both forms: it exists so consumers can pin a format on
- * const-asserted data objects regardless of whether they carry a `satisfies`
- * clause.
+ * `constAsserted` variable modifier, which - unlike
+ * `isObjectStyleEnumDeclaration` - deliberately covers both forms: it exists
+ * so consumers can pin a format on const-asserted data objects regardless of
+ * whether they carry a `satisfies` clause.
  *
  * @param init - The VariableDeclarator's initializer, if any.
  * @returns True if `init` is a const-asserted object expression.

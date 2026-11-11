@@ -21,14 +21,16 @@ export type MessageIds = typeof MESSAGE_ID;
 
 export interface NoConditionalInTestOptions {
 	/**
-	 * Callee names, in addition to a resolved vitest `it`/`test`, whose call is
-	 * treated as a test block. Matched by exact dotted name (no scope resolution),
-	 * for libraries with custom test blocks such as `myTest` or `each.test`.
+	 * Callee names, in addition to a resolved vitest `it`/`test`, whose call
+	 * is treated as a test block. Matched by exact dotted name (no scope
+	 * resolution), for libraries with custom test blocks such as `myTest` or
+	 * `each.test`.
 	 */
 	readonly additionalTestBlockFunctions?: ReadonlyArray<string>;
 	/**
-	 * Whether optional chaining (`?.`) is allowed in tests. When `false`, optional
-	 * chains are reported and auto-fixed to a non-null assertion (`a?.b` -> `a!.b`).
+	 * Whether optional chaining (`?.`) is allowed in tests. When `false`,
+	 * optional chains are reported and auto-fixed to a non-null assertion
+	 * (`a?.b` -> `a!.b`).
 	 */
 	readonly allowOptionalChaining?: boolean;
 }
@@ -42,7 +44,9 @@ const DEFAULTS: Config = {
 	allowOptionalChaining: true,
 };
 
-/** Callee identifiers that name a vitest test block (`describe` is excluded). */
+/**
+ * Callee identifiers that name a vitest test block (`describe` is excluded).
+ */
 const TEST_BLOCK_NAMES = new Set(["it", "test"]);
 
 /** The only module whose named exports count as test globals for this rule. */
@@ -80,7 +84,9 @@ const schema: Array<JSONSchema.JSONSchema4> = [
 
 /** A replacement of a single optional-chaining `?.` token. */
 interface OptionalTokenFix {
-	/** Token the `!` is appended to; `!` may not be preceded by a line break. */
+	/**
+	 * Token the `!` is appended to; `!` may not be preceded by a line break.
+	 */
 	readonly anchor: TSESTree.Token;
 	/** Text replacing `?.` — `.` for a plain member, empty otherwise. */
 	readonly text: string;
@@ -144,15 +150,16 @@ function isInAssertionArgument(
 }
 
 /**
- * Collects the `?.` tokens along an optional chain's primary spine and the parts
- * that convert each into a non-null assertion. The `!` is anchored to the token
- * preceding `?.` rather than written in place of it, because TypeScript forbids
- * a line break before `!` — a chain wrapped as `a\n?.b` has to become `a!\n.b`,
- * not `a\n!.b`. What replaces `?.` is therefore only the connector: `.` for a
- * plain member (`a?.b` -> `a!.b`), nothing for a computed member or optional
- * call (`a?.[x]` -> `a![x]`, `fn?.()` -> `fn!()`). Only the object/callee spine
- * is walked — optional chains inside computed keys or call arguments are their
- * own `ChainExpression` nodes and are visited (and fixed) separately.
+ * Collects the `?.` tokens along an optional chain's primary spine and the
+ * parts that convert each into a non-null assertion. The `!` is anchored to
+ * the token preceding `?.` rather than written in place of it, because
+ * TypeScript forbids a line break before `!` — a chain wrapped as `a\n?.b` has
+ * to become `a!\n.b`, not `a\n!.b`. What replaces `?.` is therefore only the
+ * connector: `.` for a plain member (`a?.b` -> `a!.b`), nothing for a computed
+ * member or optional call (`a?.[x]` -> `a![x]`, `fn?.()` -> `fn!()`). Only the
+ * object/callee spine is walked — optional chains inside computed keys or call
+ * arguments are their own `ChainExpression` nodes and are visited (and fixed)
+ * separately.
  *
  * @param chain - The chain expression to convert.
  * @param sourceCode - Provides token lookups.
@@ -203,8 +210,9 @@ function collectOptionalTokenFixes(
 /**
  * Disallows conditional logic inside vitest test bodies (`it`/`test`), which
  * makes a test's behavior depend on runtime state. Ported from
- * eslint-plugin-jest's `no-conditional-in-test` with vitest-aware resolution and
- * an auto-fix that rewrites disallowed optional chaining to a non-null assertion.
+ * eslint-plugin-jest's `no-conditional-in-test` with vitest-aware resolution
+ * and an auto-fix that rewrites disallowed optional chaining to a non-null
+ * assertion.
  *
  * @param context - The rule context.
  * @returns The rule listener.
@@ -215,8 +223,8 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	const testBlocks: Array<TSESTree.CallExpression> = [];
 
 	/**
-	 * Determines whether a call names a test block (a resolved vitest `it`/`test`,
-	 * or a configured `additionalTestBlockFunctions` name).
+	 * Determines whether a call names a test block (a resolved vitest
+	 * `it`/`test`, or a configured `additionalTestBlockFunctions` name).
 	 *
 	 * @param node - The call to inspect.
 	 * @returns `true` when the call is rooted at a test block name.
@@ -236,9 +244,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 	/**
 	 * Determines whether a test block call is a modifier applied to the block
-	 * rather than the call that opens it. In `it.skipIf(cond)("works", fn)` both
-	 * calls are rooted at `it`, but only the outer one takes the test body — the
-	 * inner one sits in its callee position.
+	 * rather than the call that opens it. In `it.skipIf(cond)("works", fn)`
+	 * both calls are rooted at `it`, but only the outer one takes the test body
+	 * — the inner one sits in its callee position.
 	 *
 	 * @param node - The test block call to inspect.
 	 * @returns `true` when the call is a modifier in a callee chain.
@@ -249,11 +257,11 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
-	 * Determines whether a node sits in the body of the innermost open test block.
-	 * A node reached through that block's callee — a modifier's arguments
-	 * (`it.skipIf(cond)`, `it.each(cases)`) or a computed key (`it[flag ? …]`) —
-	 * decides whether and how the test runs rather than what it does, so it is not
-	 * part of the body.
+	 * Determines whether a node sits in the body of the innermost open test
+	 * block. A node reached through that block's callee — a modifier's
+	 * arguments (`it.skipIf(cond)`, `it.each(cases)`) or a computed key
+	 * (`it[flag ? …]`) — decides whether and how the test runs rather than what
+	 * it does, so it is not part of the body.
 	 *
 	 * @param node - The node to locate.
 	 * @returns `true` when the node is inside a test body.
@@ -300,7 +308,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			({ sourceCode } = context);
 			testBlocks.length = 0;
 		},
-		"CallExpression": function (node: TSESTree.CallExpression): void {
+		"CallExpression": function (node): void {
 			// A modifier is not tracked, so the block stays open across it: its
 			// `:exit` fires before the body is walked, which would otherwise
 			// close the block early and leave the body unchecked.
@@ -308,12 +316,12 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				testBlocks.push(node);
 			}
 		},
-		"CallExpression:exit": function (node: TSESTree.CallExpression): void {
+		"CallExpression:exit": function (node): void {
 			if (testBlocks.at(-1) === node) {
 				testBlocks.pop();
 			}
 		},
-		"ChainExpression": function (node: TSESTree.ChainExpression): void {
+		"ChainExpression": function (node): void {
 			if (config.allowOptionalChaining || !isInTestBody(node)) {
 				return;
 			}
@@ -333,7 +341,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 		"ConditionalExpression": maybeReportConditional,
 		"IfStatement": maybeReportConditional,
-		"LogicalExpression": function (node: TSESTree.LogicalExpression): void {
+		"LogicalExpression": function (node): void {
 			// `&&` in an assertion is a compound condition, not a branch:
 			// both operands feed the one outcome the assertion checks, and
 			// nothing is skipped that would otherwise have been asserted.

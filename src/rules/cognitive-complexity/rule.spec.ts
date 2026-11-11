@@ -259,8 +259,8 @@ const invalid: Array<InvalidTestCase> = [
 	// Above the threshold: report.
 	{
 		code: "function f() { if (a) {} if (b) {} if (c) {} }",
-		errors: [{ data: { complexity: 3, threshold: 2 }, messageId }],
 		options: [{ threshold: 2 }],
+		errors: [{ data: { complexity: 3, threshold: 2 }, messageId }],
 	},
 	// Above the default threshold of 15.
 	{

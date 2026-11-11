@@ -211,14 +211,14 @@ const invalid: Array<InvalidTestCase> = [
 	// kept.
 	{
 		code: labels,
+		output: labelsFixed,
+		options: root,
 		errors: [
 			{
 				message:
 					"Expected sequence entries to be in ascending order by 'name'. 'feature' should be after 'experiment'.",
 			},
 		],
-		options: root,
-		output: labelsFixed,
 	},
 	// Desc.
 	{
@@ -226,6 +226,11 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			- name: b
 		`,
+		output: unindent`
+			- name: b
+			- name: a
+		`,
+		options: [{ key: "name", order: { type: "desc" }, pathPattern: "^$" }],
 		errors: [
 			{
 				column: 3,
@@ -234,11 +239,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [{ key: "name", order: { type: "desc" }, pathPattern: "^$" }],
-		output: unindent`
-			- name: b
-			- name: a
-		`,
 	},
 	// Natural.
 	{
@@ -246,6 +246,11 @@ const invalid: Array<InvalidTestCase> = [
 			- name: item10
 			- name: item2
 		`,
+		output: unindent`
+			- name: item2
+			- name: item10
+		`,
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
 		errors: [
 			{
 				column: 3,
@@ -259,11 +264,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
-		output: unindent`
-			- name: item2
-			- name: item10
-		`,
 	},
 	// Natural order matches the natural-compare package used by yml.
 	{
@@ -271,36 +271,36 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a1
 			- name: a-1
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
 		output: unindent`
 			- name: a-1
 			- name: a1
 		`,
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	{
 		code: unindent`
 			- name: x10
 			- name: x 2
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
 		output: unindent`
 			- name: x 2
 			- name: x10
 		`,
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	{
 		code: unindent`
 			- name: a1
 			- name: a_b
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
 		output: unindent`
 			- name: a_b
 			- name: a1
 		`,
+		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// pathPattern has no `u` flag, so an identity escape is valid.
 	{
@@ -309,13 +309,13 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: b
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: String.raw`^\["a\-b"\]$` }],
 		output: unindent`
 			a-b:
 			  - name: a
 			  - name: b
 		`,
+		options: [{ key: "name", pathPattern: String.raw`^\["a\-b"\]$` }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Case sensitive by default: uppercase sorts first.
 	{
@@ -323,12 +323,12 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			- name: B
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: unindent`
 			- name: B
 			- name: a
 		`,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Case insensitive.
 	{
@@ -336,6 +336,11 @@ const invalid: Array<InvalidTestCase> = [
 			- name: B
 			- name: a
 		`,
+		output: unindent`
+			- name: a
+			- name: B
+		`,
+		options: [{ key: "name", order: { caseSensitive: false }, pathPattern: "^$" }],
 		errors: [
 			{
 				column: 3,
@@ -349,11 +354,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [{ key: "name", order: { caseSensitive: false }, pathPattern: "^$" }],
-		output: unindent`
-			- name: a
-			- name: B
-		`,
 	},
 	// Nested path; first matching option wins.
 	{
@@ -362,6 +362,15 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: b
 			  - name: a
 		`,
+		output: unindent`
+			updates:
+			  - name: a
+			  - name: b
+		`,
+		options: [
+			{ key: "name", pathPattern: "^updates$" },
+			{ key: "name", order: { type: "desc" }, pathPattern: ".*" },
+		],
 		errors: [
 			{
 				column: 5,
@@ -370,15 +379,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [
-			{ key: "name", pathPattern: "^updates$" },
-			{ key: "name", order: { type: "desc" }, pathPattern: ".*" },
-		],
-		output: unindent`
-			updates:
-			  - name: a
-			  - name: b
-		`,
 	},
 	// Deeper nested path syntax.
 	{
@@ -389,8 +389,6 @@ const invalid: Array<InvalidTestCase> = [
 			        - id: 2
 			        - id: 1
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "id", pathPattern: "^foo\\.bar\\[0\\]\\.baz$" }],
 		output: unindent`
 			foo:
 			  bar:
@@ -398,6 +396,8 @@ const invalid: Array<InvalidTestCase> = [
 			        - id: 1
 			        - id: 2
 		`,
+		options: [{ key: "id", pathPattern: "^foo\\.bar\\[0\\]\\.baz$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// No blank lines between entries stays that way; leading comment moves.
 	{
@@ -407,14 +407,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: b
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }, { messageId: "shouldBeBefore" }],
-		options: root,
 		output: unindent`
 			- name: a
 			# about b
 			- name: b
 			- name: c
 		`,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }, { messageId: "shouldBeBefore" }],
 	},
 	// Trailing inline comments move with their entry.
 	{
@@ -423,13 +423,13 @@ const invalid: Array<InvalidTestCase> = [
 			  color: x # b color
 			- name: a # first
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: unindent`
 			- name: a # first
 			- name: b # second
 			  color: x # b color
 		`,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// A loose comment between entries: report without a fix.
 	{
@@ -440,16 +440,16 @@ const invalid: Array<InvalidTestCase> = [
 
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: null,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Flow sequence.
 	{
 		code: "list: [{ name: b }, { name: c }, { name: a }]\n",
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: "^list$" }],
 		output: "list: [{ name: a }, { name: b }, { name: c }]\n",
+		options: [{ key: "name", pathPattern: "^list$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Duplicate keys keep their relative order.
 	{
@@ -460,6 +460,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			  id: 2
 		`,
+		output: unindent`
+			- name: a
+			  id: 1
+			- name: a
+			  id: 2
+			- name: b
+		`,
+		options: root,
 		errors: [
 			{
 				column: 3,
@@ -468,14 +476,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeAfter",
 			},
 		],
-		options: root,
-		output: unindent`
-			- name: a
-			  id: 1
-			- name: a
-			  id: 2
-			- name: b
-		`,
 	},
 	// Anchors: unrelated entries still sort, the alias stays after its anchor.
 	{
@@ -486,6 +486,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			  base: *base
 		`,
+		output: unindent`
+			- name: b
+			- name: c
+			  base: &base 1
+			- name: a
+			  base: *base
+		`,
+		options: root,
 		errors: [
 			{
 				column: 3,
@@ -494,14 +502,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: root,
-		output: unindent`
-			- name: b
-			- name: c
-			  base: &base 1
-			- name: a
-			  base: *base
-		`,
 	},
 	// Numbers compare numerically.
 	{
@@ -509,6 +509,11 @@ const invalid: Array<InvalidTestCase> = [
 			- id: 10
 			- id: 9
 		`,
+		output: unindent`
+			- id: 9
+			- id: 10
+		`,
+		options: [{ key: "id", pathPattern: "^$" }],
 		errors: [
 			{
 				column: 3,
@@ -517,11 +522,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [{ key: "id", pathPattern: "^$" }],
-		output: unindent`
-			- id: 9
-			- id: 10
-		`,
 	},
 	// An alias to an anchor outside the sequence does not block sorting.
 	{
@@ -532,8 +532,6 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: a
 			    v: *x
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: "^list$" }],
 		output: unindent`
 			base: &x 0
 			list:
@@ -541,6 +539,8 @@ const invalid: Array<InvalidTestCase> = [
 			    v: *x
 			  - name: b
 		`,
+		options: [{ key: "name", pathPattern: "^list$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// A null value inside an entry is fine; explicit asc works.
 	{
@@ -549,13 +549,13 @@ const invalid: Array<InvalidTestCase> = [
 			  v:
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", order: { type: "asc" }, pathPattern: "^$" }],
 		output: unindent`
 			- name: a
 			- name: b
 			  v:
 		`,
+		options: [{ key: "name", order: { type: "asc" }, pathPattern: "^$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Report targets: the first earlier entry that should follow.
 	{
@@ -565,6 +565,13 @@ const invalid: Array<InvalidTestCase> = [
 			- name: d
 			- name: b
 		`,
+		output: unindent`
+			- name: a
+			- name: b
+			- name: c
+			- name: d
+		`,
+		options: root,
 		errors: [
 			{
 				data: { key: "name", orderText: "ascending", targetValue: "c", thisValue: "b" },
@@ -572,13 +579,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: root,
-		output: unindent`
-			- name: a
-			- name: b
-			- name: c
-			- name: d
-		`,
 	},
 	// Report targets: else the last later entry that should precede.
 	{
@@ -588,6 +588,13 @@ const invalid: Array<InvalidTestCase> = [
 			- name: b
 			- name: d
 		`,
+		output: unindent`
+			- name: a
+			- name: b
+			- name: c
+			- name: d
+		`,
+		options: root,
 		errors: [
 			{
 				data: { key: "name", orderText: "ascending", targetValue: "b", thisValue: "c" },
@@ -595,13 +602,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "shouldBeAfter",
 			},
 		],
-		options: root,
-		output: unindent`
-			- name: a
-			- name: b
-			- name: c
-			- name: d
-		`,
 	},
 	// Path names: a number key uses its source text, a quoted key its value.
 	{
@@ -610,13 +610,13 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: b
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: String.raw`^\["1"\]$` }],
 		output: unindent`
 			1:
 			  - name: a
 			  - name: b
 		`,
+		options: [{ key: "name", pathPattern: String.raw`^\["1"\]$` }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	{
 		code: unindent`
@@ -624,13 +624,13 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: b
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: String.raw`^\["my list"\]$` }],
 		output: unindent`
 			"my list":
 			  - name: a
 			  - name: b
 		`,
+		options: [{ key: "name", pathPattern: String.raw`^\["my list"\]$` }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Numbers show only the direction, even with string-only options.
 	{
@@ -638,17 +638,17 @@ const invalid: Array<InvalidTestCase> = [
 			- id: 2
 			- id: 1
 		`,
+		output: unindent`
+			- id: 1
+			- id: 2
+		`,
+		options: [{ key: "id", order: { caseSensitive: false, natural: true }, pathPattern: "^$" }],
 		errors: [
 			{
 				data: { key: "id", orderText: "ascending", targetValue: "2", thisValue: "1" },
 				messageId: "shouldBeBefore",
 			},
 		],
-		options: [{ key: "id", order: { caseSensitive: false, natural: true }, pathPattern: "^$" }],
-		output: unindent`
-			- id: 1
-			- id: 2
-		`,
 	},
 	// An anchored entry still sorts.
 	{
@@ -657,13 +657,13 @@ const invalid: Array<InvalidTestCase> = [
 			  name: b
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: unindent`
 			- name: a
 			- &x
 			  name: b
 		`,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// A tagged entry still sorts.
 	{
@@ -672,13 +672,13 @@ const invalid: Array<InvalidTestCase> = [
 			  name: b
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: unindent`
 			- name: a
 			- !!map
 			  name: b
 		`,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// A comment in another column than the dash is loose: no fix.
 	{
@@ -688,9 +688,9 @@ const invalid: Array<InvalidTestCase> = [
 			  # about b color
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: root,
 		output: null,
+		options: root,
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	{
 		code: unindent`
@@ -699,9 +699,9 @@ const invalid: Array<InvalidTestCase> = [
 			# about a
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: "^labels$" }],
 		output: null,
+		options: [{ key: "name", pathPattern: "^labels$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// A nested comment in the dash's column moves with its entry.
 	{
@@ -711,14 +711,14 @@ const invalid: Array<InvalidTestCase> = [
 			  # about a
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: "^labels$" }],
 		output: unindent`
 			labels:
 			  # about a
 			  - name: a
 			  - name: b
 		`,
+		options: [{ key: "name", pathPattern: "^labels$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 	// Pins current behaviour, same as yml/sort-sequence-values: entries that
 	// define the same anchor still swap, so the outer alias changes target.
@@ -731,8 +731,6 @@ const invalid: Array<InvalidTestCase> = [
 			    v: &x 1
 			ref: *x
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
-		options: [{ key: "name", pathPattern: "^list$" }],
 		output: unindent`
 			list:
 			  - name: a
@@ -741,6 +739,8 @@ const invalid: Array<InvalidTestCase> = [
 			    v: &x 2
 			ref: *x
 		`,
+		options: [{ key: "name", pathPattern: "^list$" }],
+		errors: [{ messageId: "shouldBeBefore" }],
 	},
 ];
 
@@ -755,6 +755,7 @@ describe("idempotent fix", () => {
 	const config: Linter.Config = {
 		files: ["**/*.yaml"],
 		languageOptions: { parser: yamlParser },
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- bridges two `@eslint/core` type versions.
 		plugins: { flawless: plugin } as unknown as NonNullable<Linter.Config["plugins"]>,
 		rules: { "flawless/yaml-sort-sequence-by-key": ["error", ...root] },
 	};
@@ -777,6 +778,7 @@ describe("yaml language mode (Languages API)", () => {
 	const config: Linter.Config = {
 		files: ["**/*.yaml"],
 		language: "yaml/yaml",
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- bridges two `@eslint/core` type versions.
 		plugins: {
 			flawless: plugin,
 			yaml: yml,

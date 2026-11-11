@@ -35,7 +35,9 @@ interface ChainState {
 	hasConditionalOperand: boolean;
 	/** `true` when the chain uses more than one operator. */
 	isMixed: boolean;
-	/** The operator before the current position, or `undefined` at the start. */
+	/**
+	 * The operator before the current position, or `undefined` at the start.
+	 */
 	previous: TSESTree.LogicalExpression["operator"] | undefined;
 }
 

@@ -54,13 +54,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect }) => {
 				expect(1).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -68,14 +68,15 @@ const invalid: Array<InvalidTestCase> = [
 			beforeEach(() => expect.hasAssertions());
 			it.concurrent("works", { retry: 1 }, () => expect(1).toBe(1));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { beforeEach, expect, it } from "vitest";
 			beforeEach(() => expect.hasAssertions());
 			it.concurrent("works", { retry: 1 }, ({ expect }) => expect(1).toBe(1));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
+		filename: "file.js",
 		code: unindent`
 			import { expect, it } from "vitest";
 			function assertResult() {
@@ -83,9 +84,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
-		filename: "file.js",
-		languageOptions: { parserOptions: { project: false } },
 		output: unindent`
 			import { it } from "vitest";
 			function assertResult(expect) {
@@ -93,6 +91,8 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", ({ expect }) => assertResult(expect));
 		`,
+		languageOptions: { parserOptions: { project: false } },
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -103,11 +103,6 @@ const invalid: Array<InvalidTestCase> = [
 				check(1).toBe(1);
 			});
 		`,
-		errors: [
-			{ data: { name: "onTestFinished" }, messageId },
-			{ data: { name: "onTestFailed" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect, onTestFailed, onTestFinished }) => {
@@ -116,6 +111,11 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
+		errors: [
+			{ data: { name: "onTestFinished" }, messageId },
+			{ data: { name: "onTestFailed" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	{
 		code: unindent`
@@ -124,13 +124,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(database.value).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ database, expect }) => {
 				expect(database.value).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -139,13 +139,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect }) => {
 				expect(1).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -154,24 +154,24 @@ const invalid: Array<InvalidTestCase> = [
 				expect(value).toBe(expected);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { test } from "vitest";
 			test.for([[1, 1]])("works", ([value, expected], { expect }) => {
 				expect(value).toBe(expected);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
 			import { expect, test } from "vitest";
 			test.for([[1]])("works", () => expect(1).toBe(1));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { test } from "vitest";
 			test.for([[1]])("works", (_value, { expect }) => expect(1).toBe(1));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -183,7 +183,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(database.value).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { test } from "vitest";
 			const fixtureTest = test.extend<{ database: { value: number } }>({
@@ -193,6 +192,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(database.value).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -205,10 +205,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
-		errors: [
-			{ data: { name: "onTestFinished" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
 		output: unindent`
 			import { it } from "vitest";
 			function someFactory(onFinished: (callback: () => void) => void) {
@@ -219,6 +215,10 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
+		errors: [
+			{ data: { name: "onTestFinished" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	{
 		code: unindent`
@@ -231,10 +231,6 @@ const invalid: Array<InvalidTestCase> = [
 				someFactory();
 			});
 		`,
-		errors: [
-			{ data: { name: "onTestFinished" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function someFactory(expect: TestContext["expect"], onTestFinished: TestContext["onTestFinished"]) {
@@ -245,6 +241,10 @@ const invalid: Array<InvalidTestCase> = [
 				someFactory(expect, onTestFinished);
 			});
 		`,
+		errors: [
+			{ data: { name: "onTestFinished" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	{
 		code: unindent`
@@ -257,7 +257,6 @@ const invalid: Array<InvalidTestCase> = [
 				assertResult();
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function assertResult(expect: TestContext["expect"]) {
@@ -268,6 +267,7 @@ const invalid: Array<InvalidTestCase> = [
 				assertResult(expect);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -276,13 +276,13 @@ const invalid: Array<InvalidTestCase> = [
 			const runFactory = () => assertResult();
 			it("works", () => runFactory());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			const assertResult = (expect: TestContext["expect"]) => expect(1).toBe(1);
 			const runFactory = (expect: TestContext["expect"]) => assertResult(expect);
 			it("works", ({ expect }) => runFactory(expect));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -292,7 +292,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function assertResult(value = 1, expect: TestContext["expect"]) {
@@ -300,6 +299,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", ({ expect }) => assertResult(undefined, expect));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -309,7 +309,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", (context) => assertResult(context));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function assertResult(context: TestContext) {
@@ -317,6 +316,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", (context) => assertResult(context));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -326,7 +326,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext as Context } from "vitest";
 			function assertResult(expect: Context["expect"]) {
@@ -334,6 +333,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", ({ expect }) => assertResult(expect));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -343,7 +343,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult(getContext()));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext as Context } from "vitest";
 			function assertResult(context: Context) {
@@ -351,28 +350,29 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult(getContext()));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
 			import vitest, { expect, it } from "vitest";
 			it("works", () => expect(vitest).toBeDefined());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import vitest, { it } from "vitest";
 			it("works", ({ expect }) => expect(vitest).toBeDefined());
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
 			import { expect as check, it } from "vitest";
 			it("works", (context) => consume({ check }));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect }) => consume({ check: expect }));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -382,7 +382,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult(getContext()));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function assertResult(context: TestContext) {
@@ -390,6 +389,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult(getContext()));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -399,8 +399,8 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: null,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -411,8 +411,8 @@ const invalid: Array<InvalidTestCase> = [
 			assertResult();
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: null,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -422,8 +422,8 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => assertResult());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: null,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// A timeout after the callback does not hide the callback.
 	{
@@ -434,10 +434,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			}, 10_000);
 		`,
-		errors: [
-			{ data: { name: "expect" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect }) => {
@@ -445,6 +441,10 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			}, 10_000);
 		`,
+		errors: [
+			{ data: { name: "expect" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	// Helpers receive only the fixtures they use, so tests can destructure and
 	// keep `expect.assertions` as their first statement.
@@ -460,11 +460,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(makeDirectory()).toBe("dir");
 			});
 		`,
-		errors: [
-			{ data: { name: "onTestFinished" }, messageId },
-			{ data: { name: "expect" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function makeDirectory(onTestFinished: TestContext["onTestFinished"]): string {
@@ -476,6 +471,11 @@ const invalid: Array<InvalidTestCase> = [
 				expect(makeDirectory(onTestFinished)).toBe("dir");
 			});
 		`,
+		errors: [
+			{ data: { name: "onTestFinished" }, messageId },
+			{ data: { name: "expect" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	// An existing context parameter read only through properties is
 	// destructured.
@@ -487,7 +487,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(context.task.name).toBe("works");
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect, onTestFinished, task }) => {
@@ -495,17 +494,18 @@ const invalid: Array<InvalidTestCase> = [
 				expect(task.name).toBe("works");
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
 			import { expect, it } from "vitest";
 			it("works", context => expect(context.task).toBeDefined());
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect, task }) => expect(task).toBeDefined());
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// A context that escapes as a whole value keeps member access.
 	{
@@ -516,7 +516,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(1).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", (context) => {
@@ -524,6 +523,7 @@ const invalid: Array<InvalidTestCase> = [
 				context.expect(1).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// Destructuring `task` would shadow the module-level `task`.
 	{
@@ -534,7 +534,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(context.task).not.toBe(task);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			const task = 1;
@@ -542,6 +541,7 @@ const invalid: Array<InvalidTestCase> = [
 				context.expect(context.task).not.toBe(task);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -551,7 +551,6 @@ const invalid: Array<InvalidTestCase> = [
 				const identity = (expect: number) => expect;
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", ({ expect: expect2 }) => {
@@ -559,6 +558,7 @@ const invalid: Array<InvalidTestCase> = [
 				const identity = (expect: number) => expect;
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	{
 		code: unindent`
@@ -567,8 +567,8 @@ const invalid: Array<InvalidTestCase> = [
 				expect(fixtures).toBeDefined();
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: null,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// Past `maxParams`, the fixtures travel in one object parameter. Each
 	// helper picks its own shape.
@@ -584,11 +584,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => run(1));
 		`,
-		errors: [
-			{ data: { name: "onTestFinished" }, messageId },
-			{ data: { name: "expect" }, messageId },
-		],
-		options: [{ maxParams: 3 }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function check(left: number, right: number, { expect, onTestFinished }: Pick<TestContext, "expect" | "onTestFinished">) {
@@ -600,6 +595,11 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", ({ expect, onTestFinished }) => run(1, expect, onTestFinished));
 		`,
+		options: [{ maxParams: 3 }],
+		errors: [
+			{ data: { name: "onTestFinished" }, messageId },
+			{ data: { name: "expect" }, messageId },
+		],
 	},
 	// Reads in a closure inside a helper use the helper's new parameter.
 	{
@@ -610,7 +610,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => check([1]));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function check(values: Array<number>, expect: TestContext["expect"]) {
@@ -618,6 +617,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", ({ expect }) => check([1], expect));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// A reserved word cannot become a shorthand binding.
 	{
@@ -627,13 +627,13 @@ const invalid: Array<InvalidTestCase> = [
 				expect(context.default).toBe(1);
 			});
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it } from "vitest";
 			it("works", (context) => {
 				context.expect(context.default).toBe(1);
 			});
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// Trailing commas in parameter and argument lists are kept valid.
 	{
@@ -648,7 +648,6 @@ const invalid: Array<InvalidTestCase> = [
 				1,
 			));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
 		output: unindent`
 			import { it, type TestContext } from "vitest";
 			function check(
@@ -660,6 +659,7 @@ const invalid: Array<InvalidTestCase> = [
 				1, expect,
 			));
 		`,
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 	// Not even one more parameter fits: report without a fix.
 	{
@@ -670,9 +670,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			it("works", () => check(1, 1));
 		`,
-		errors: [{ data: { name: "expect" }, messageId }],
-		options: [{ maxParams: 2 }],
 		output: null,
+		options: [{ maxParams: 2 }],
+		errors: [{ data: { name: "expect" }, messageId }],
 	},
 ];
 

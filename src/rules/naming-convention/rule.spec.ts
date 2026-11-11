@@ -1788,14 +1788,13 @@ const invalid: Array<InvalidTestCase> = [
 	{
 		// make sure we handle empty options and apply defaults
 		code: "const x_x = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
         const child_process = require('child_process');
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				filter: {
@@ -1806,6 +1805,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "default",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
@@ -1829,7 +1829,6 @@ const invalid: Array<InvalidTestCase> = [
         declare const boolean_camelCase15: false | null | undefined;
         declare const boolean_camelCase16: true | false | null | undefined;
       `,
-		errors: Array(19).fill({ messageId: "doesNotMatchFormatTrimmed" }),
 		options: [
 			{
 				format: ["UPPER_CASE"],
@@ -1856,6 +1855,7 @@ const invalid: Array<InvalidTestCase> = [
 				types: ["boolean"],
 			},
 		],
+		errors: Array.from({ length: 19 }, () => ({ messageId: "doesNotMatchFormatTrimmed" })),
 	},
 	{
 		code: `
@@ -1868,7 +1868,6 @@ const invalid: Array<InvalidTestCase> = [
           | null
           | undefined;
       `,
-		errors: Array(4).fill({ messageId: "doesNotMatchFormatTrimmed" }),
 		options: [
 			{
 				format: ["snake_case"],
@@ -1877,6 +1876,7 @@ const invalid: Array<InvalidTestCase> = [
 				types: ["function"],
 			},
 		],
+		errors: Array.from({ length: 4 }, () => ({ messageId: "doesNotMatchFormatTrimmed" })),
 	},
 	{
 		code: `
@@ -1898,7 +1898,6 @@ const invalid: Array<InvalidTestCase> = [
           | null
           | undefined;
       `,
-		errors: Array(8).fill({ messageId: "doesNotMatchFormatTrimmed" }),
 		options: [
 			{
 				format: ["snake_case"],
@@ -1907,6 +1906,7 @@ const invalid: Array<InvalidTestCase> = [
 				types: ["array"],
 			},
 		],
+		errors: Array.from({ length: 8 }, () => ({ messageId: "doesNotMatchFormatTrimmed" })),
 	},
 	{
 		code: `
@@ -1916,6 +1916,34 @@ const invalid: Array<InvalidTestCase> = [
         class IBar {}
         function fooBar() {}
       `,
+		options: [
+			{
+				custom: {
+					match: false,
+					regex: /^unused_\w/.source,
+				},
+				format: ["snake_case"],
+				leadingUnderscore: "allow",
+				selector: "default",
+			},
+			{
+				custom: {
+					match: false,
+					regex: /^I[A-Z]/.source,
+				},
+				format: ["PascalCase"],
+				selector: "typeLike",
+			},
+			{
+				custom: {
+					match: true,
+					regex: /function/.source,
+				},
+				format: ["camelCase"],
+				leadingUnderscore: "allow",
+				selector: "function",
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -1968,34 +1996,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "satisfyCustom",
 			},
 		],
-		options: [
-			{
-				custom: {
-					match: false,
-					regex: /^unused_\w/.source,
-				},
-				format: ["snake_case"],
-				leadingUnderscore: "allow",
-				selector: "default",
-			},
-			{
-				custom: {
-					match: false,
-					regex: /^I[A-Z]/.source,
-				},
-				format: ["PascalCase"],
-				selector: "typeLike",
-			},
-			{
-				custom: {
-					match: true,
-					regex: /function/.source,
-				},
-				format: ["camelCase"],
-				leadingUnderscore: "allow",
-				selector: "function",
-			},
-		],
 	},
 	{
 		code: `
@@ -2005,6 +2005,21 @@ const invalid: Array<InvalidTestCase> = [
         interface IFoo {}
         class IBar {}
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				leadingUnderscore: "allow",
+				selector: ["variable", "function"],
+			},
+			{
+				custom: {
+					match: false,
+					regex: /^I[A-Z]/.source,
+				},
+				format: ["PascalCase"],
+				selector: ["class", "interface"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2055,21 +2070,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "satisfyCustom",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				leadingUnderscore: "allow",
-				selector: ["variable", "function"],
-			},
-			{
-				custom: {
-					match: false,
-					regex: /^I[A-Z]/.source,
-				},
-				format: ["PascalCase"],
-				selector: ["class", "interface"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2077,6 +2077,16 @@ const invalid: Array<InvalidTestCase> = [
           'Property Name': 'asdf',
         };
       `,
+		options: [
+			{
+				filter: {
+					match: false,
+					regex: /-/.source,
+				},
+				format: ["strictCamelCase"],
+				selector: "default",
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2088,16 +2098,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{
-				filter: {
-					match: false,
-					regex: /-/.source,
-				},
-				format: ["strictCamelCase"],
-				selector: "default",
-			},
-		],
 	},
 	{
 		code: `
@@ -2107,7 +2107,6 @@ const invalid: Array<InvalidTestCase> = [
           Myfoo: string;
         }
       `,
-		errors: Array(3).fill({ messageId: "doesNotMatchFormatTrimmed" }),
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2116,6 +2115,7 @@ const invalid: Array<InvalidTestCase> = [
 				types: ["string"],
 			},
 		],
+		errors: Array.from({ length: 3 }, () => ({ messageId: "doesNotMatchFormatTrimmed" })),
 	},
 	{
 		code: `
@@ -2123,7 +2123,6 @@ const invalid: Array<InvalidTestCase> = [
           private readonly fooBar: boolean;
         }
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2131,6 +2130,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: ["property", "accessor"],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// `types` is honored on function selectors (fork divergence from
@@ -2139,7 +2139,6 @@ const invalid: Array<InvalidTestCase> = [
 		code: `
         function my_foo_bar() {}
       `,
-		errors: [{ messageId: "doesNotMatchFormatTrimmed" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2148,6 +2147,7 @@ const invalid: Array<InvalidTestCase> = [
 				types: ["function"],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormatTrimmed" }],
 	},
 	{
 		code: `
@@ -2157,15 +2157,15 @@ const invalid: Array<InvalidTestCase> = [
 
         export const { otherConstant } = SomeClass;
       `,
+		options: [
+			{ format: ["PascalCase"], selector: "property" },
+			{ format: ["camelCase"], selector: "variable" },
+		],
 		errors: [
 			{
 				line: 3,
 				messageId: "doesNotMatchFormat",
 			},
-		],
-		options: [
-			{ format: ["PascalCase"], selector: "property" },
-			{ format: ["camelCase"], selector: "variable" },
 		],
 	},
 	{
@@ -2174,13 +2174,13 @@ const invalid: Array<InvalidTestCase> = [
           Bar(Baz: string): void;
         }
       `,
+		options: [{ format: ["camelCase"], selector: "parameter" }],
 		errors: [
 			{
 				line: 3,
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["camelCase"], selector: "parameter" }],
 	},
 	{
 		code: `
@@ -2191,7 +2191,6 @@ const invalid: Array<InvalidTestCase> = [
         export interface PascalCaseInterface {}
         export type PascalCaseType = {};
       `,
-		errors: Array(6).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{
 				format: ["snake_case"],
@@ -2228,6 +2227,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "enum",
 			},
 		],
+		errors: Array.from({ length: 6 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2246,7 +2246,6 @@ const invalid: Array<InvalidTestCase> = [
           PascalCaseType,
         };
       `,
-		errors: Array(6).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{ format: ["snake_case"], selector: "default" },
 			{
@@ -2280,6 +2279,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "enum",
 			},
 		],
+		errors: Array.from({ length: 6 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2287,7 +2287,6 @@ const invalid: Array<InvalidTestCase> = [
         function PascalCaseFunction() {}
         declare function PascalCaseDeclaredFunction();
       `,
-		errors: Array(3).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{ format: ["snake_case"], selector: "default" },
 			{
@@ -2301,6 +2300,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "function",
 			},
 		],
+		errors: Array.from({ length: 3 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2310,7 +2310,6 @@ const invalid: Array<InvalidTestCase> = [
         const { ignored: IgnoredDueToModifiers2 = 3 } = {};
         const IgnoredDueToModifiers3 = 1;
       `,
-		errors: Array(2).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2322,6 +2321,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "variable",
 			},
 		],
+		errors: Array.from({ length: 2 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2333,7 +2333,6 @@ const invalid: Array<InvalidTestCase> = [
           IgnoredDueToModifiers2,
         ) {}
       `,
-		errors: Array(2).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2345,6 +2344,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "parameter",
 			},
 		],
+		errors: Array.from({ length: 2 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2353,7 +2353,6 @@ const invalid: Array<InvalidTestCase> = [
           IgnoredDueToModifiers = 1;
         }
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2365,6 +2364,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "classProperty",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
@@ -2375,7 +2375,6 @@ const invalid: Array<InvalidTestCase> = [
           ) {}
         }
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2387,6 +2386,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "parameterProperty",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
@@ -2395,7 +2395,6 @@ const invalid: Array<InvalidTestCase> = [
           IgnoredDueToModifiers() {}
         }
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2407,6 +2406,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "classMethod",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
@@ -2415,7 +2415,6 @@ const invalid: Array<InvalidTestCase> = [
           get IgnoredDueToModifiers() {}
         }
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2427,13 +2426,13 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "accessor",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
         abstract class some_name {}
         class IgnoredDueToModifier {}
       `,
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2445,6 +2444,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "class",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		code: `
@@ -2460,7 +2460,6 @@ const invalid: Array<InvalidTestCase> = [
           UnusedTypeParam,
         > = {};
       `,
-		errors: Array(7).fill({ messageId: "doesNotMatchFormat" }),
 		options: [
 			{
 				format: ["PascalCase"],
@@ -2472,6 +2471,7 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "default",
 			},
 		],
+		errors: Array.from({ length: 7 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2503,14 +2503,6 @@ const invalid: Array<InvalidTestCase> = [
           'a a',
         }
       `,
-		// the object literal's own property and method lead the list, so they
-		// carry the `satisfies` hint; its accessors and every class, interface,
-		// type and enum member below keep the base message
-		errors: [
-			{ messageId: "doesNotMatchFormatForeignContract" },
-			{ messageId: "doesNotMatchFormatForeignContract" },
-			...Array.from({ length: 11 }, () => ({ messageId: "doesNotMatchFormat" })),
-		],
 		options: [
 			{
 				format: ["snake_case"],
@@ -2521,6 +2513,14 @@ const invalid: Array<InvalidTestCase> = [
 				modifiers: ["requiresQuotes"],
 				selector: "default",
 			},
+		],
+		// the object literal's own property and method lead the list, so they
+		// carry the `satisfies` hint; its accessors and every class, interface,
+		// type and enum member below keep the base message
+		errors: [
+			{ messageId: "doesNotMatchFormatForeignContract" },
+			{ messageId: "doesNotMatchFormatForeignContract" },
+			...Array.from({ length: 11 }, () => ({ messageId: "doesNotMatchFormat" })),
 		],
 	},
 	{
@@ -2539,7 +2539,7 @@ const invalid: Array<InvalidTestCase> = [
         }
       `,
 		// 6, not 7 because 'foo' is valid
-		errors: Array(6).fill({ messageId: "doesNotMatchFormat" }),
+		errors: Array.from({ length: 6 }, () => ({ messageId: "doesNotMatchFormat" })),
 	},
 	{
 		code: `
@@ -2570,6 +2570,21 @@ const invalid: Array<InvalidTestCase> = [
           public abstract async ASYNC_BAR(): number;
         }
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "memberLike",
+			},
+			{
+				format: ["PascalCase"],
+				selector: "method",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["async"],
+				selector: ["method", "objectLiteralMethod"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2604,21 +2619,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "memberLike",
-			},
-			{
-				format: ["PascalCase"],
-				selector: "method",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["async"],
-				selector: ["method", "objectLiteralMethod"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2643,6 +2643,21 @@ const invalid: Array<InvalidTestCase> = [
           },
         };
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "memberLike",
+			},
+			{
+				format: ["PascalCase"],
+				selector: "method",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["async"],
+				selector: ["method", "objectLiteralMethod"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2669,21 +2684,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "memberLike",
-			},
-			{
-				format: ["PascalCase"],
-				selector: "method",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["async"],
-				selector: ["method", "objectLiteralMethod"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2699,6 +2699,17 @@ const invalid: Array<InvalidTestCase> = [
         // ❌ error
         const asyncBar5 = async function async_bar6() {};
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "variableLike",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["async"],
+				selector: ["variableLike"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2717,17 +2728,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "variableLike",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["async"],
-				selector: ["variableLike"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2743,6 +2743,17 @@ const invalid: Array<InvalidTestCase> = [
         // ❌ error
         const async_bar3 = async function ASYNC_BAR4() {};
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "variableLike",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["async"],
+				selector: ["variableLike"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2761,17 +2772,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "variableLike",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["async"],
-				selector: ["variableLike"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2782,16 +2782,6 @@ const invalid: Array<InvalidTestCase> = [
           public override someAttributeOverride = 1;
         }
       `,
-		errors: [
-			{
-				data: {
-					name: "someAttributeOverride",
-					formats: "snake_case",
-					type: "Class Property",
-				},
-				messageId: "doesNotMatchFormat",
-			},
-		],
 		options: [
 			{
 				format: ["camelCase"],
@@ -2801,6 +2791,16 @@ const invalid: Array<InvalidTestCase> = [
 				format: ["snake_case"],
 				modifiers: ["override"],
 				selector: ["memberLike"],
+			},
+		],
+		errors: [
+			{
+				data: {
+					name: "someAttributeOverride",
+					formats: "snake_case",
+					type: "Class Property",
+				},
+				messageId: "doesNotMatchFormat",
 			},
 		],
 	},
@@ -2816,16 +2816,6 @@ const invalid: Array<InvalidTestCase> = [
           }
         }
       `,
-		errors: [
-			{
-				data: {
-					name: "someMethodOverride",
-					formats: "snake_case",
-					type: "Class Method",
-				},
-				messageId: "doesNotMatchFormat",
-			},
-		],
 		options: [
 			{
 				format: ["camelCase"],
@@ -2835,6 +2825,16 @@ const invalid: Array<InvalidTestCase> = [
 				format: ["snake_case"],
 				modifiers: ["override"],
 				selector: ["memberLike"],
+			},
+		],
+		errors: [
+			{
+				data: {
+					name: "someMethodOverride",
+					formats: "snake_case",
+					type: "Class Method",
+				},
+				messageId: "doesNotMatchFormat",
 			},
 		],
 	},
@@ -2851,6 +2851,17 @@ const invalid: Array<InvalidTestCase> = [
           public override set someSetterOverride(val: string);
         }
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "memberLike",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["override"],
+				selector: ["memberLike"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2869,17 +2880,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "memberLike",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["override"],
-				selector: ["memberLike"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2892,6 +2892,17 @@ const invalid: Array<InvalidTestCase> = [
           #second_private_field = 1;
         }
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "memberLike",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["#private"],
+				selector: ["memberLike"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2910,17 +2921,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "memberLike",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["#private"],
-				selector: ["memberLike"],
-			},
-		],
 	},
 	{
 		code: `
@@ -2933,6 +2933,17 @@ const invalid: Array<InvalidTestCase> = [
           #second_private_method() {}
         }
       `,
+		options: [
+			{
+				format: ["camelCase"],
+				selector: "memberLike",
+			},
+			{
+				format: ["snake_case"],
+				modifiers: ["#private"],
+				selector: ["memberLike"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2951,20 +2962,20 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: "memberLike",
-			},
-			{
-				format: ["snake_case"],
-				modifiers: ["#private"],
-				selector: ["memberLike"],
-			},
-		],
 	},
 	{
 		code: "import * as fooBar from 'foo_bar';",
+		options: [
+			{
+				format: ["camelCase"],
+				selector: ["import"],
+			},
+			{
+				format: ["PascalCase"],
+				modifiers: ["namespace"],
+				selector: ["import"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -2975,6 +2986,9 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
+	},
+	{
+		code: "import FooBar from 'foo_bar';",
 		options: [
 			{
 				format: ["camelCase"],
@@ -2986,9 +3000,6 @@ const invalid: Array<InvalidTestCase> = [
 				selector: ["import"],
 			},
 		],
-	},
-	{
-		code: "import FooBar from 'foo_bar';",
 		errors: [
 			{
 				data: {
@@ -2999,6 +3010,9 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
+	},
+	{
+		code: "import { default as foo_bar } from 'foo_bar';",
 		options: [
 			{
 				format: ["camelCase"],
@@ -3010,9 +3024,6 @@ const invalid: Array<InvalidTestCase> = [
 				selector: ["import"],
 			},
 		],
-	},
-	{
-		code: "import { default as foo_bar } from 'foo_bar';",
 		errors: [
 			{
 				data: {
@@ -3023,20 +3034,15 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["camelCase"],
-				selector: ["import"],
-			},
-			{
-				format: ["PascalCase"],
-				modifiers: ["namespace"],
-				selector: ["import"],
-			},
-		],
 	},
 	{
 		code: "import { \"🍎\" as foo } from 'foo_bar';",
+		options: [
+			{
+				format: ["PascalCase"],
+				selector: ["import"],
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -3047,18 +3053,18 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["PascalCase"],
-				selector: ["import"],
-			},
-		],
 	},
 	{
 		code: `
         const colors = { RED: 'red', BLUE: 'blue' } as const;
         const statusCodes = { OK: 200, NOT_FOUND: 404 } as const;
       `,
+		options: [
+			{
+				format: ["UPPER_CASE"],
+				selector: "objectStyleEnum",
+			},
+		],
 		errors: [
 			{
 				data: {
@@ -3077,17 +3083,17 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
+	},
+	{
+		code: `
+        const colors = { RED: 'red', BLUE: 'blue' } as const;
+      `,
 		options: [
 			{
 				format: ["UPPER_CASE"],
 				selector: "objectStyleEnum",
 			},
 		],
-	},
-	{
-		code: `
-        const colors = { RED: 'red', BLUE: 'blue' } as const;
-      `,
 		errors: [
 			{
 				data: {
@@ -3098,17 +3104,15 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{
-				format: ["UPPER_CASE"],
-				selector: "objectStyleEnum",
-			},
-		],
 	},
 	// objectStyleEnum: an annotated declaration is still classified as an
 	// objectStyleEnum - only `satisfies` opts out, not a type annotation
 	{
 		code: "interface Options { exec: number } const config: Options = { exec: 1 } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["camelCase"], selector: "variable" },
+		],
 		errors: [
 			{
 				data: {
@@ -3119,16 +3123,16 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
-			{ format: ["camelCase"], selector: "variable" },
-		],
 	},
 	// objectStyleEnum: keys are validated as objectStyleEnumMembers, which fall
 	// back to the `enumMember` config - the message and reported type reflect
 	// the split-off selector, and teach the `satisfies` escape
 	{
 		code: "const COLORS = { red: 'red' } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+		],
 		errors: [
 			{
 				message:
@@ -3136,15 +3140,16 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
-			{ format: ["PascalCase"], selector: "enumMember" },
-		],
 	},
 	// objectStyleEnum: nested object values are ordinary objectLiteralProperty
 	// names, not enum members - only the top-level `Nested` key is affected
 	{
 		code: "const CONFIG = { nested: { red: 'red' } } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["PascalCase"], selector: "enumMember" },
+			{ format: ["camelCase"], selector: "objectLiteralProperty" },
+		],
 		errors: [
 			{
 				data: {
@@ -3155,16 +3160,15 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
-			{ format: ["PascalCase"], selector: "enumMember" },
-			{ format: ["camelCase"], selector: "objectLiteralProperty" },
-		],
 	},
 	// objectStyleEnumMember: an explicit config wins over the `enumMember`
 	// fallback for object-style enum keys
 	{
 		code: "const TIMINGS = { ChargeStartTime: 0.7 } as const;",
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
 		errors: [
 			{
 				data: {
@@ -3175,15 +3179,15 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
-			{ format: ["StrictPascalCase"], selector: "enumMember" },
-		],
 	},
 	// objectStyleEnumMember: real enum members stay on `enumMember` - a loose
 	// objectStyleEnumMember config doesn't reach them
 	{
 		code: "enum InvalidState { idle }",
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+			{ format: ["StrictPascalCase"], selector: "enumMember" },
+		],
 		errors: [
 			{
 				data: {
@@ -3194,15 +3198,12 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
-			{ format: ["StrictPascalCase"], selector: "enumMember" },
-		],
 	},
 	// objectStyleEnumMember: the `enumMember` fallback still reports, so
 	// pre-existing configs keep catching object-style enum keys
 	{
 		code: "const Status = { ready: 'ready' } as const;",
+		options: [{ format: ["StrictPascalCase"], selector: "enumMember" }],
 		errors: [
 			{
 				data: {
@@ -3213,7 +3214,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [{ format: ["StrictPascalCase"], selector: "enumMember" }],
 	},
 	// @external: doesn't leak to sibling members - only the tagged property is
 	// skipped
@@ -3225,6 +3225,7 @@ const invalid: Array<InvalidTestCase> = [
 				display_name: string;
 			}
 		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: {
@@ -3235,7 +3236,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 	},
 	// @external: the declaration's own name is still validated
 	{
@@ -3247,6 +3247,10 @@ const invalid: Array<InvalidTestCase> = [
 				user_id: string;
 			}
 		`,
+		options: [
+			{ format: ["PascalCase"], selector: "interface" },
+			{ format: ["PascalCase"], selector: "typeProperty" },
+		],
 		errors: [
 			{
 				data: {
@@ -3256,10 +3260,6 @@ const invalid: Array<InvalidTestCase> = [
 				},
 				messageId: "doesNotMatchFormat",
 			},
-		],
-		options: [
-			{ format: ["PascalCase"], selector: "interface" },
-			{ format: ["PascalCase"], selector: "typeProperty" },
 		],
 	},
 	// @external: a plain (non-JSDoc) line comment doesn't count - only a
@@ -3271,6 +3271,7 @@ const invalid: Array<InvalidTestCase> = [
 				user_id: string;
 			}
 		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: {
@@ -3281,7 +3282,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 	},
 	// @external: an unrelated JSDoc block without the tag doesn't skip
 	// validation
@@ -3294,6 +3294,7 @@ const invalid: Array<InvalidTestCase> = [
 				user_id: string;
 			}
 		`,
+		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: {
@@ -3304,7 +3305,6 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["PascalCase"], selector: "typeProperty" }],
 	},
 	// Regular class methods should still fail naming validation
 	{
@@ -3319,18 +3319,18 @@ const invalid: Array<InvalidTestCase> = [
           }
         }
       `,
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["function", "classMethod"],
+			},
+		],
 		errors: [
 			{
 				messageId: "doesNotMatchFormat",
 			},
 			{
 				messageId: "doesNotMatchFormat",
-			},
-		],
-		options: [
-			{
-				format: ["strictCamelCase"],
-				selector: ["function", "classMethod"],
 			},
 		],
 	},
@@ -3352,15 +3352,15 @@ const invalid: Array<InvalidTestCase> = [
           }
         }
       `,
-		errors: [
-			{
-				messageId: "doesNotMatchFormat",
-			},
-		],
 		options: [
 			{
 				format: ["strictCamelCase"],
 				selector: ["function", "classMethod"],
+			},
+		],
+		errors: [
+			{
+				messageId: "doesNotMatchFormat",
 			},
 		],
 	},
@@ -3368,7 +3368,6 @@ const invalid: Array<InvalidTestCase> = [
 		// type reference (loose name-only) - PascalCase enforced; camelCase
 		// rejected
 		code: "type Entity<TData = unknown> = number & { readonly __type: TData }; declare function component<T = unknown>(): Entity<T>; const myComponent = component();",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3377,11 +3376,11 @@ const invalid: Array<InvalidTestCase> = [
 				types: [{ name: "Entity" }],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// type reference - snake_case rejected on Pair-typed const
 		code: "type Pair<P = unknown, O = unknown> = { readonly __pred: P; readonly __obj: O }; declare function pair<P, O>(p: P, o: O): Pair<P, O>; const my_pair = pair(1, 2);",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3390,12 +3389,12 @@ const invalid: Array<InvalidTestCase> = [
 				types: [{ name: "Pair" }],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// type reference - any-cast must bypass the match and fall back to the
 		// default rule
 		code: "const NotEntity = 42 as any;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3405,12 +3404,12 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{ format: ["camelCase"], selector: "variable" },
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// type reference - union of two referenced types with snake_case
 		// rejected under PascalCase
 		code: "type Entity<TData = unknown> = { readonly __type: TData }; type Pair<P = unknown, O = unknown> = { readonly __pred: P; readonly __obj: O }; type Id<T = unknown> = Entity<T> | Pair<T, unknown>; declare function resolveId<T>(): Id<T>; const resolved_id = resolveId();",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3419,12 +3418,12 @@ const invalid: Array<InvalidTestCase> = [
 				types: [{ name: "Entity" }, { name: "Pair" }],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// type reference - `from` mismatch falls back to default rule
 		// (declaration not in expected module)
 		code: "type LocalEntity = { readonly __local: true }; declare function component(): LocalEntity; const MyComponent = component();",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3434,11 +3433,11 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{ format: ["camelCase"], selector: "variable" },
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// returns matcher - camelCase rejected once the return type matches
 		code: "type Node = { readonly __node: true }; declare function createProbe(): () => Node; const myProbe = createProbe();",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3447,12 +3446,12 @@ const invalid: Array<InvalidTestCase> = [
 				types: [{ returns: { name: "Node" } }],
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// returns matcher - return type mismatch falls back to the default rule;
 		// PascalCase then rejected by the camelCase fallback
 		code: "declare function makeThing(): () => number; const MyThing = makeThing();",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3462,12 +3461,12 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{ format: ["camelCase"], selector: "variable" },
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// returns matcher on typeMethod - non-matching method still held to the
 		// base camelCase format
 		code: "type Node = { readonly __node: true }; interface Api { GetCount(): number; }",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [
 			{
 				format: ["PascalCase"],
@@ -3476,26 +3475,27 @@ const invalid: Array<InvalidTestCase> = [
 			},
 			{ format: ["camelCase"], selector: "typeMethod" },
 		],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// contextual type - no contextual type means the name is the author's
 		// choice; property still validated
 		code: "const x = { PascalProp: 1 };",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	{
 		// contextual type - no contextual type, method
 		code: "const x = { GetThing() { return 1; } };",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	{
 		// contextual type - a string index signature does not dictate the
 		// specific name
 		code: "const x: Record<string, number> = { PascalProp: 1 };",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	{
 		// contextual type - per-property granularity: declared member skipped,
@@ -3503,6 +3503,7 @@ const invalid: Array<InvalidTestCase> = [
 		// carries a `satisfies` clause, so the hint would be noise - base
 		// message
 		code: "interface Config { Declared: number; [key: string]: number } const x = { Declared: 1, NotDeclared: 2 } satisfies Config;",
+		options: dictatedNameOptions,
 		errors: [
 			{
 				data: {
@@ -3513,14 +3514,13 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: dictatedNameOptions,
 	},
 	{
 		// contextual type - generic self-inference guard: `T` is inferred from
 		// the literal itself, so the name is still the author's choice
 		code: "declare function identity<T>(x: T): T; identity({ PascalProp: 1 });",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	{
 		// contextual type - `as const` provides no contextual type. The key is
@@ -3529,14 +3529,14 @@ const invalid: Array<InvalidTestCase> = [
 		// the `enumMember` fallback - and gets the ForeignContract message
 		// variant
 		code: "const x = { PascalProp: 1 } as const;",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: [...dictatedNameOptions, { format: ["camelCase"], selector: "enumMember" }],
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	{
 		// contextual type - contextual type without the property
 		code: "const x: object = { PascalProp: 1 };",
-		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormatForeignContract" }],
 	},
 	// foreign-contract hint - an object-literal method whose name no contextual
 	// type dictates is teachable: `satisfies` is the fix when the shape is
@@ -3544,6 +3544,12 @@ const invalid: Array<InvalidTestCase> = [
 	// infer `T` from the literal
 	{
 		code: "interface Players { GetPlayerByUserId(userId: number): undefined; } declare function fromPartial<T>(mock: Partial<Record<string, unknown>>): T; const players = fromPartial<Players>({ GetPlayerByUserId(userId: number) { return undefined; } });",
+		options: [
+			{
+				format: ["strictCamelCase"],
+				selector: ["objectLiteralMethod", "objectLiteralProperty"],
+			},
+		],
 		errors: [
 			{
 				message:
@@ -3551,16 +3557,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{
-				format: ["strictCamelCase"],
-				selector: ["objectLiteralMethod", "objectLiteralProperty"],
-			},
-		],
 	},
 	// foreign-contract hint - the same for a plain object-literal property
 	{
 		code: "const config = { ApiEndpoint: 'x' };",
+		options: [{ format: ["strictCamelCase"], selector: "objectLiteralProperty" }],
 		errors: [
 			{
 				message:
@@ -3568,12 +3569,12 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "objectLiteralProperty" }],
 	},
 	// foreign-contract hint - author-owned declarations keep the base message;
 	// only object-literal members can reach for `satisfies`
 	{
 		code: "class Foo { ApiEndpoint = 1; GetThing() { return 1; } }",
+		options: [{ format: ["strictCamelCase"], selector: ["classProperty", "classMethod"] }],
 		errors: [
 			{
 				data: {
@@ -3592,21 +3593,21 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: ["classProperty", "classMethod"] }],
 	},
 	// foreign-contract hint - `as const satisfies` already declares
 	// conformance, so a key that contract doesn't name keeps the base message
 	// (the const assertion sits between the literal and its `satisfies` clause)
 	{
 		code: "interface Config { [key: string]: number } const x = { Known: 1 } as const satisfies Config;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: dictatedNameOptions,
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	// foreign-contract hint - the objectStyleEnum *container* name is the
 	// author's own choice, never a name an external shape dictates, so it keeps
 	// the base message
 	{
 		code: "const PORTAL_TIMINGS = { closeTime: 3.5, openTime: 1.7 } as const;",
+		options: [{ format: ["strictCamelCase"], selector: "objectStyleEnum" }],
 		errors: [
 			{
 				message:
@@ -3614,12 +3615,15 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "objectStyleEnum" }],
 	},
 	// foreign-contract hint - container and key split: only the key, whose name
 	// an external shape could dictate, carries the hint
 	{
 		code: "const COLORS = { Red: 'red' } as const;",
+		options: [
+			{ format: ["strictCamelCase"], selector: "objectStyleEnum" },
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+		],
 		errors: [
 			{
 				data: {
@@ -3638,54 +3642,49 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormatForeignContract",
 			},
 		],
-		options: [
-			{ format: ["strictCamelCase"], selector: "objectStyleEnum" },
-			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
-		],
 	},
 	{
 		// allowedWords - unset, so the API spelling still reports
 		code: "const targetCFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - a word that is not in the name does not help
 		code: "const targetCFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["UDim2"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - matching is case-sensitive
 		code: "const targetCFRAME = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - a word cannot split an existing hump: `Frame` sits
 		// behind the `C` of `CFrame`
 		code: "const fooCFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["Frame"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - strictCamelCase still requires a lowercase first
 		// character, so a name cannot open with the word
 		code: "const CFrameGoal = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["CFrame"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - strict formats only, so snake_case stays strict
 		code: "const target_CFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["CFrame"], format: ["snake_case"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - a failing trimmed name still reports against the trimmed
 		// form
 		code: "const getCFRAME = 1;",
-		errors: [{ messageId: "doesNotMatchFormatTrimmed" }],
 		options: [
 			{
 				allowedWords: ["CFrame"],
@@ -3694,32 +3693,34 @@ const invalid: Array<InvalidTestCase> = [
 				selector: "variable",
 			},
 		],
+		errors: [{ messageId: "doesNotMatchFormatTrimmed" }],
 	},
 	{
 		// allowedWords - an empty list opts the selector out of the shared
 		// settings list
 		code: "const targetCFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: [], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 		settings: { flawless: { namingConvention: { allowedWords: ["CFrame"] } } },
 	},
 	{
 		// allowedWords - the lowercased first character is accepted at index 0
 		// only, so a missing hump boundary mid-name still reports
 		code: "const targetmotor6DPart = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["Motor6D"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	{
 		// allowedWords - a word still cannot split an existing hump: `Frame`
 		// sits behind the `C` of `CFrame`
 		code: "const targetCFrame = 1;",
-		errors: [{ messageId: "doesNotMatchFormat" }],
 		options: [{ allowedWords: ["Frame"], format: ["strictCamelCase"], selector: "variable" }],
+		errors: [{ messageId: "doesNotMatchFormat" }],
 	},
 	// literal keys - one report per bad key, positioned on the literal
 	{
 		code: 'type Attributes = Record<"EmitCount", string>;',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				column: 26,
@@ -3733,11 +3734,11 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - every arm of an inline union is its own property name
 	{
 		code: 'type Attributes = Record<"EmitCount" | "EmitDelay" | "EmitRate", number>;',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
@@ -3752,80 +3753,79 @@ const invalid: Array<InvalidTestCase> = [
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - wrapping the `Record` in utility types doesn't hide it
 	{
 		code: 'type Attributes = Readonly<Partial<Record<"EmitCount", number>>>;',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - a `Readonly<...>` wrapper makes the named properties
 	// readonly, so a readonly-only config claims them
 	{
 		code: 'type Attributes = Readonly<Record<"EmitCount", number>>;',
+		options: [
+			{ format: ["strictCamelCase"], modifiers: ["readonly"], selector: "typeProperty" },
+		],
 		errors: [
 			{
 				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [
-			{ format: ["strictCamelCase"], modifiers: ["readonly"], selector: "typeProperty" },
-		],
 	},
 	// literal keys - a heritage clause is reached too
 	{
 		code: 'interface Attributes extends Readonly<Record<"DisplayName", string>> {}',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "DisplayName", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - mapped types are the next bypass after `Record`
 	{
 		code: 'type Attributes = { [K in "EmitCount"]?: number };',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - an `as` clause is what names the resulting property, so it
 	// is the literal that gets checked
 	{
 		code: 'type Attributes = { [K in "emitCount" as "EmitCount"]: number };',
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "EmitCount", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 	// literal keys - `types` reads the type of the named property, so a
 	// string-typed config claims a key whose value type is `string`
 	{
 		code: 'type Attributes = Record<"emitCount", string>;',
+		options: [
+			{ format: ["UPPER_CASE"], selector: "typeProperty", types: ["string"] },
+			{ format: ["strictCamelCase"], selector: "typeProperty" },
+		],
 		errors: [
 			{
 				data: { name: "emitCount", formats: "UPPER_CASE", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
-		],
-		options: [
-			{ format: ["UPPER_CASE"], selector: "typeProperty", types: ["string"] },
-			{ format: ["strictCamelCase"], selector: "typeProperty" },
 		],
 	},
 	// literal keys - `@external` doesn't leak past the declaration it tags
@@ -3837,13 +3837,13 @@ const invalid: Array<InvalidTestCase> = [
 			type Attributes = Record<"EmitCount", number>;
 			type Other = Record<"EmitDelay", number>;
 		`,
+		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 		errors: [
 			{
 				data: { name: "EmitDelay", formats: "strictCamelCase", type: "Type Property" },
 				messageId: "doesNotMatchFormat",
 			},
 		],
-		options: [{ format: ["strictCamelCase"], selector: "typeProperty" }],
 	},
 ];
 
@@ -3874,8 +3874,8 @@ run({
 	invalid: [
 		{
 			code: "const unusedValue = 1;",
-			errors: [{ messageId: "doesNotMatchFormat" }],
 			options: unusedOnlyOptions,
+			errors: [{ messageId: "doesNotMatchFormat" }],
 		},
 		...[
 			'const a = "x";',
@@ -3899,8 +3899,8 @@ run({
 		}),
 		{
 			code: "const g: 1 | 2 = 1;",
-			errors: [{ messageId: "doesNotMatchFormat" }],
 			options: primitiveTypeOptions("number"),
+			errors: [{ messageId: "doesNotMatchFormat" }],
 		},
 	],
 	rule: namingConvention,
@@ -3914,9 +3914,7 @@ run({
 			'const i: string & { __brand: "x" } = "x" as never;',
 			'const j = new String("x");',
 			"function k<T extends string>(value: T) { const l = value; return l; }",
-		].map((code) => {
-			return { code, options: primitiveTypeOptions("string") };
-		}),
+		].map((code) => ({ code, options: primitiveTypeOptions("string") })),
 		{ code: "enum N { A } const m = N.A;", options: primitiveTypeOptions("number") },
 		{ code: "const n = { flag: true };", options: primitiveTypeOptions("boolean") },
 	],
@@ -3941,12 +3939,11 @@ run({
 	name: `${RULE_NAME}/from-match`,
 	invalid: [
 		{
+			filename: fromMatchCase,
 			// camelCase const typed via `fake-pkg` Entity rejected under
 			// PascalCase — proves the bare-package `from` substring against
 			// `/node_modules/fake-pkg/` is active
 			code: 'import { component } from "fake-pkg"; const myComponent = component();',
-			errors: [{ messageId: "doesNotMatchFormat" }],
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -3955,14 +3952,14 @@ run({
 					types: [{ name: "Entity", from: "fake-pkg" }],
 				},
 			],
+			errors: [{ messageId: "doesNotMatchFormat" }],
 		},
 		{
+			filename: fromMatchCase,
 			// module-only matcher (`from` without `name`): every type declared by
 			// the package carries the format, so a camelCase const typed by
 			// `fake-pkg` Widget reports
 			code: 'import { widget } from "fake-pkg"; const myWidget = widget();',
-			errors: [{ messageId: "doesNotMatchFormat" }],
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -3971,16 +3968,17 @@ run({
 					types: [{ from: "fake-pkg" }],
 				},
 			],
+			errors: [{ messageId: "doesNotMatchFormat" }],
 		},
 	],
 	parserOptions: fromMatchParserOptions,
 	rule: namingConvention,
 	valid: [
 		{
+			filename: fromMatchCase,
 			// `from` (bare package): PascalCase const typed via `fake-pkg`
 			// Entity passes
 			code: 'import { component } from "fake-pkg"; const Health = component();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -3991,10 +3989,10 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// `from` (relative path-form): PascalCase const typed via a
 			// project-local type passes
 			code: 'import { makeLocal } from "./src/shared/local-thing"; const LocalValue = makeLocal();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4005,10 +4003,10 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// `from` mismatch (right name, wrong module): falls back to the
 			// second clause; camelCase allowed
 			code: 'import { component } from "fake-pkg"; const myComponent = component();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4020,11 +4018,11 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// module-only matcher (`from` without `name`): matches any type the
 			// package declares, so both `Entity` and `Widget` values pass under
 			// PascalCase without naming either type
 			code: 'import { component, widget } from "fake-pkg"; const Health = component(); const Panel = widget();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4035,10 +4033,10 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// module-only matcher - a type declared elsewhere is not matched, so
 			// the camelCase fallback applies
 			code: 'import { makeLocal } from "./src/shared/local-thing"; const localValue = makeLocal();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4050,11 +4048,11 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// module-only matcher - union arms are matched individually, so a
 			// `string | Widget` union does not match: the `string` arm has no
 			// symbol declared by the package
 			code: 'import { mixed } from "fake-pkg"; const mixedValue = mixed();',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4066,10 +4064,10 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// module-only matcher nested inside `returns`: an anonymous function
 			// type matches when its return type is declared by the package
 			code: 'import type { Widget } from "fake-pkg"; const Factory = () => ({}) as Widget;',
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["PascalCase"],
@@ -4107,6 +4105,7 @@ run({
 	name: `${RULE_NAME}/type-argument-of`,
 	invalid: [
 		{
+			filename: fromMatchCase,
 			// unrelated local function of the same name: `from` points at the
 			// fixture module, so the local declaration does not match and the
 			// property falls back to strictCamelCase
@@ -4117,16 +4116,16 @@ run({
 
 				withAttributes<{ LogLevel: string }>({});
 			`,
+			options: typeArgumentOfOptions,
 			errors: [
 				{
 					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
 					messageId: "doesNotMatchFormat",
 				},
 			],
-			filename: fromMatchCase,
-			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// the identical property outside the call still reports: only the
 			// declaration inside the type argument is exempt
 			code: unindent`
@@ -4136,29 +4135,22 @@ run({
 
 				type Invalid = { LogLevel: string };
 			`,
+			options: typeArgumentOfOptions,
 			errors: [
 				{
 					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
 					messageId: "doesNotMatchFormat",
 				},
 			],
-			filename: fromMatchCase,
-			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// wrong `from`: right callee name, wrong declaring module
 			code: unindent`
 				import withAttributes from "./src/shared/with-attributes";
 
 				withAttributes<{ LogLevel: string }>({});
 			`,
-			errors: [
-				{
-					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
-					messageId: "doesNotMatchFormat",
-				},
-			],
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4167,8 +4159,15 @@ run({
 				},
 				{ format: ["strictCamelCase"], selector: "typeProperty" },
 			],
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
 		},
 		{
+			filename: fromMatchCase,
 			// a type argument of a *different* call is not covered by the
 			// configured callee
 			code: unindent`
@@ -4177,16 +4176,16 @@ run({
 				withAttributes<{ LogLevel: string }>({});
 				withTags<{ LogLevel: string }>({});
 			`,
+			options: typeArgumentOfOptions,
 			errors: [
 				{
 					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
 					messageId: "doesNotMatchFormat",
 				},
 			],
-			filename: fromMatchCase,
-			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// type arguments of a *type reference* are not a call's type
 			// arguments, so the constraint does not reach them
 			code: unindent`
@@ -4194,13 +4193,6 @@ run({
 
 				type Wrapped = Attributes<{ LogLevel: string }>;
 			`,
-			errors: [
-				{
-					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
-					messageId: "doesNotMatchFormat",
-				},
-			],
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4209,8 +4201,15 @@ run({
 				},
 				{ format: ["strictCamelCase"], selector: "typeProperty" },
 			],
+			errors: [
+				{
+					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
+					messageId: "doesNotMatchFormat",
+				},
+			],
 		},
 		{
+			filename: fromMatchCase,
 			// the documented end state: the attribute declaration passes, while
 			// the same name written as a type alias member or an object literal
 			// key still reports
@@ -4222,6 +4221,10 @@ run({
 				type Example = { LogLevel: string };
 				const example = { LogLevel: "Debug" };
 			`,
+			options: [
+				...typeArgumentOfOptions,
+				{ format: ["strictCamelCase"], selector: "objectLiteralProperty" },
+			],
 			errors: [
 				{
 					data: { name: "LogLevel", formats: "strictCamelCase", type: "Type Property" },
@@ -4236,27 +4239,23 @@ run({
 					messageId: "doesNotMatchFormatForeignContract",
 				},
 			],
-			filename: fromMatchCase,
-			options: [
-				...typeArgumentOfOptions,
-				{ format: ["strictCamelCase"], selector: "objectLiteralProperty" },
-			],
 		},
 	],
 	parserOptions: fromMatchParserOptions,
 	rule: namingConvention,
 	valid: [
 		{
+			filename: fromMatchCase,
 			// direct default import
 			code: unindent`
 				import withAttributes from "./src/shared/with-attributes";
 
 				withAttributes<{ LogLevel: string }>({}).LogLevel;
 			`,
-			filename: fromMatchCase,
 			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// aliased default import - the callee is resolved through its
 			// symbol, so the local name it is bound to does not matter
 			code: unindent`
@@ -4264,17 +4263,16 @@ run({
 
 				attributes<{ LogLevel: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// named import
 			code: unindent`
 				import { withTags } from "./src/shared/with-attributes";
 
 				withTags<{ LogLevel: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4285,13 +4283,13 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// aliased named import
 			code: unindent`
 				import { withTags as tagged } from "./src/shared/with-attributes";
 
 				tagged<{ LogLevel: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4302,6 +4300,7 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// nested type literals: the constraint holds anywhere inside the
 			// call's explicit type arguments, at any depth
 			code: unindent`
@@ -4315,10 +4314,10 @@ run({
 					};
 				}>({});
 			`,
-			filename: fromMatchCase,
 			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// several configured callees in one selector
 			code: unindent`
 				import withAttributes, { withMetadata } from "./src/shared/with-attributes";
@@ -4326,7 +4325,6 @@ run({
 				withAttributes<{ LogLevel: string }>({});
 				withMetadata<{ BuildId: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4340,6 +4338,7 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// precedence: the constrained selector outranks an otherwise
 			// equivalent unconstrained one even when it is declared *after* it
 			code: unindent`
@@ -4347,7 +4346,6 @@ run({
 
 				withAttributes<{ LogLevel: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: [
 				{ format: ["strictCamelCase"], selector: "typeProperty" },
 				{
@@ -4358,13 +4356,13 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// `new` expressions carry type arguments the same way calls do
 			code: unindent`
 				import { AttributeMap } from "./src/shared/with-attributes";
 
 				new AttributeMap<{ LogLevel: string }>({ LogLevel: "Debug" });
 			`,
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4375,6 +4373,7 @@ run({
 			],
 		},
 		{
+			filename: fromMatchCase,
 			// a `Record` key inside the type argument declares a property just
 			// as a type literal does, and is covered the same way
 			code: unindent`
@@ -4382,10 +4381,10 @@ run({
 
 				withAttributes<Record<"LogLevel", string>>({});
 			`,
-			filename: fromMatchCase,
 			options: typeArgumentOfOptions,
 		},
 		{
+			filename: fromMatchCase,
 			// `from` on its own matches every callee the module declares
 			code: unindent`
 				import withAttributes, { withTags } from "./src/shared/with-attributes";
@@ -4393,7 +4392,6 @@ run({
 				withAttributes<{ LogLevel: string }>({});
 				withTags<{ BuildId: string }>({});
 			`,
-			filename: fromMatchCase,
 			options: [
 				{
 					format: ["StrictPascalCase"],
@@ -4408,14 +4406,17 @@ run({
 
 /**
  * Schema coverage: an unusable option is rejected at config load rather than
- * silently ignored. `Linter#verify` throws when rule options fail the schema, so
- * a config that throws is a rejected config. The parser is wired up (without a
- * `project`) so that an accepted config gets far enough to run the rule.
+ * silently ignored. `Linter#verify` throws when rule options fail the schema,
+ * so a config that throws is a rejected config. The parser is wired up
+ * (without a `project`) so that an accepted config gets far enough to run the
+ * rule.
  *
  * @param option - The rule option to validate.
  */
 function verifyWithOptions(option: unknown): void {
-	new Linter().verify("const example = 1;", {
+	const linter = new Linter();
+	// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges TSESLint rule types to the ESLint `Linter.Config` type.
+	linter.verify("const example = 1;", {
 		languageOptions: { parser: tsParser },
 		plugins: { flawless: { rules: { [RULE_NAME]: namingConvention } } },
 		rules: { [`flawless/${RULE_NAME}`]: ["error", option] },

@@ -13,6 +13,7 @@ const filename = "file.tsx";
 const valid: Array<ValidTestCase> = [
 	// A higher-order function whose returned arrow already uses destructuring.
 	{
+		filename,
 		code: tsx`
 			export function hof(namespace) {
 				const initialState = {
@@ -27,10 +28,10 @@ const valid: Array<ValidTestCase> = [
 				}
 			}
 		`,
-		filename,
 	},
 	// A reducer returned from a HOF is not a component.
 	{
+		filename,
 		code: tsx`
 			export function hof(namespace) {
 				const initialState = {
@@ -48,45 +49,45 @@ const valid: Array<ValidTestCase> = [
 				}
 			}
 		`,
-		filename,
 	},
 	// Destructured parameter, arrow expression body.
 	{
-		code: "const App = ({ id, className }) => (<div id={id} className={className} />)",
 		filename,
+		code: "const App = ({ id, className }) => (<div id={id} className={className} />)",
 	},
 	// Destructured parameter, block body.
 	{
+		filename,
 		code: tsx`
 			const App = ({ id, className }) => {
 				return <div id={id} className={className} />
 			}
 		`,
-		filename,
 	},
 	// Destructuring the props parameter inside the body.
 	{
+		filename,
 		code: tsx`
 			const App = (props) => {
 				const { id, className } = props
 				return <div id={id} className={className} />
 			}
 		`,
-		filename,
 	},
 	// `props` passed on wholesale, never member-accessed.
-	{ code: "const App = (props) => (<div id={id} props={props} />)", filename },
-	{ code: "const Component = (props) => (<div id={id} props={props} />)", filename },
+	{ filename, code: "const App = (props) => (<div id={id} props={props} />)" },
+	{ filename, code: "const Component = (props) => (<div id={id} props={props} />)" },
 	{
-		code: "const App = (props, { color }) => (<div id={id} props={props} color={color} />)",
 		filename,
+		code: "const App = (props, { color }) => (<div id={id} props={props} color={color} />)",
 	},
 	{
-		code: "const Component = (props, { color }) => (<div id={id} props={props} color={color} />)",
 		filename,
+		code: "const Component = (props, { color }) => (<div id={id} props={props} color={color} />)",
 	},
 	// A styled-components template is not a component.
 	{
+		filename,
 		code: tsx`
 			const div = styled.div\`
 			& .button {
@@ -94,29 +95,29 @@ const valid: Array<ValidTestCase> = [
 			}
 			\`
 		`,
-		filename,
 	},
 	// A factory returning a plain object is not a component.
 	{
+		filename,
 		code: tsx`
 			export default (context: $Context) => ({
 				foo: context.bar
 			})
 		`,
-		filename,
 	},
 	// `context` is a destructured binding, not the props parameter.
 	{
+		filename,
 		code: tsx`
 			function App({ context }) {
 				const d = context.describe()
 				return <div>{d}</div>
 			}
 		`,
-		filename,
 	},
 	// A method whose argument is member-accessed is not a component.
 	{
+		filename,
 		code: tsx`
 			const obj = {
 				foo(arg) {
@@ -125,10 +126,10 @@ const valid: Array<ValidTestCase> = [
 				}
 			}
 		`,
-		filename,
 	},
 	// Render callbacks inside a config array are not components.
 	{
+		filename,
 		code: tsx`
 			const columns = [
 				{
@@ -145,9 +146,9 @@ const valid: Array<ValidTestCase> = [
 					}
 				]
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const columns = [
 				{
@@ -167,9 +168,9 @@ const valid: Array<ValidTestCase> = [
 					}
 				]
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			export default (fileName) => {
 				const match = fileName.match(/some expression/)
@@ -179,10 +180,10 @@ const valid: Array<ValidTestCase> = [
 				return null
 			}
 		`,
-		filename,
 	},
 	// Context destructured from `useContext`.
 	{
+		filename,
 		code: tsx`
 			import { useContext } from 'react'
 			const App = (props) => {
@@ -190,9 +191,9 @@ const valid: Array<ValidTestCase> = [
 				return <div>{foo}</div>
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useContext } from 'react'
 			const App = (props) => {
@@ -200,10 +201,10 @@ const valid: Array<ValidTestCase> = [
 				return <div>{foo.test}</div>
 			}
 		`,
-		filename,
 	},
 	// `forwardRef` / `memo` wrappers with a destructured parameter.
 	{
+		filename,
 		code: tsx`
 			import { forwardRef } from "react";
 
@@ -217,9 +218,9 @@ const valid: Array<ValidTestCase> = [
 				}
 			);
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { memo } from "react";
 
@@ -233,9 +234,9 @@ const valid: Array<ValidTestCase> = [
 				}
 			);
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { memo, forwardRef } from "react";
 
@@ -252,10 +253,10 @@ const valid: Array<ValidTestCase> = [
 				)
 			);
 		`,
-		filename,
 	},
 	// https://github.com/Rel1cx/eslint-react/issues/1416
 	{
+		filename,
 		code: tsx`
 			type DeliveryNoteCheck = (data: { supplierCompany: string | null }) => string | null;
 
@@ -266,10 +267,10 @@ const valid: Array<ValidTestCase> = [
 				},
 			];
 		`,
-		filename,
 	},
 	// Destructured parameters with member access on the destructured bindings.
 	{
+		filename,
 		code: tsx`
 			const App = ({ title, description, meta }) => {
 				return (
@@ -281,9 +282,9 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const UserProfile = ({ user }) => {
 				const { avatar, name, bio } = user
@@ -296,9 +297,9 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = ({ data = {} }) => {
 				const { user = {} } = data
@@ -310,9 +311,9 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const List = ({ items }) => {
 				return (
@@ -324,10 +325,10 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	// Destructuring the props parameter inside the body (various shapes).
 	{
+		filename,
 		code: tsx`
 			const Modal = (props) => {
 				const { isOpen, onClose, children } = props
@@ -340,18 +341,18 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = (props) => {
 				const { className, ...restProps } = props
 				return <div className={className} {...restProps} />
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = ({ data: { user, settings } }) => {
 				return (
@@ -362,18 +363,18 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = ({ isLoading, data }) => {
 				if (isLoading) return <div>Loading...</div>
 				return <div>{data.result}</div>
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = (props) => {
 				const { type } = props
@@ -384,9 +385,9 @@ const valid: Array<ValidTestCase> = [
 				return <div>Regular user</div>
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const Component = (props, context) => {
 				const { theme } = context
@@ -399,11 +400,11 @@ const valid: Array<ValidTestCase> = [
 				)
 			}
 		`,
-		filename,
 	},
 	// https://github.com/Rel1cx/eslint-react/issues/1488 — array-method callbacks
 	// are not components.
 	{
+		filename,
 		code: tsx`
 			const items = [{ property: "value" }];
 
@@ -427,57 +428,57 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			});
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	// Member access alongside an unrelated destructuring: fixable.
 	{
+		filename,
 		code: tsx`
 			const App = (props) => {
 				const { h, i } = hi
 				return <div id={props.id} className={props.className} />
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: tsx`
 			const App = ({ id, className }) => {
 				const { h, i } = hi
 				return <div id={id} className={className} />
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// `props` is also destructured wholesale: report only, no fix.
 	{
+		filename,
 		code: tsx`
 			const App = (props) => {
 				const { h, i } = props
 				return <div id={props.id} className={props.className} />
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }, { messageId }],
 	},
 	// A plain function component: fixable.
 	{
+		filename,
 		code: tsx`
 			function App(props) {
 				return <div id={props.id} className={props.className} />
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: tsx`
 			function App({ id, className }) {
 				return <div id={id} className={className} />
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// `forwardRef` wrapper: fixable.
 	{
+		filename,
 		code: tsx`
 			import { forwardRef } from "react";
 
@@ -491,8 +492,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			import { forwardRef } from "react";
 
@@ -506,9 +505,11 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			);
 		`,
+		errors: [{ messageId }],
 	},
 	// `memo` wrapper with a typed parameter: fixable, type annotation preserved.
 	{
+		filename,
 		code: tsx`
 			import { memo } from "react";
 
@@ -522,8 +523,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			import { memo } from "react";
 
@@ -537,9 +536,11 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			);
 		`,
+		errors: [{ messageId }],
 	},
 	// Nested `memo(forwardRef(...))`: fixable.
 	{
+		filename,
 		code: tsx`
 			import { memo, forwardRef } from "react";
 
@@ -555,8 +556,6 @@ const invalid: Array<InvalidTestCase> = [
 				)
 			);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			import { memo, forwardRef } from "react";
 
@@ -572,9 +571,11 @@ const invalid: Array<InvalidTestCase> = [
 				)
 			);
 		`,
+		errors: [{ messageId }],
 	},
 	// Multiple accesses, `props` also destructured wholesale: report only.
 	{
+		filename,
 		code: tsx`
 			const App = (props) => {
 				const { h, i } = props
@@ -587,12 +588,12 @@ const invalid: Array<InvalidTestCase> = [
 				)
 			}
 		`,
-		errors: [{ messageId }, { messageId }, { messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }, { messageId }, { messageId }],
 	},
 	// The accessed name collides with a local binding: report only, no fix.
 	{
+		filename,
 		code: tsx`
 			const NestedComponent = (props) => {
 				const data = props.data || {}
@@ -604,57 +605,57 @@ const invalid: Array<InvalidTestCase> = [
 				)
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }],
 	},
 	// The accessed name is shadowed by a binding in a nested scope: report only,
 	// since rewriting `props.id` to `id` would resolve to the inner binding.
 	{
+		filename,
 		code: tsx`
 			function App(props) {
 				return <ul>{[1, 2].map((id) => <li key={id}>{props.id}</li>)}</ul>
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }],
 	},
 	// An un-parenthesized single arrow parameter is wrapped in parentheses.
 	{
-		code: "const App = props => <div id={props.id} />",
-		errors: [{ messageId }],
 		filename,
+		code: "const App = props => <div id={props.id} />",
 		output: "const App = ({ id }) => <div id={id} />",
+		errors: [{ messageId }],
 	},
 	// An arrow passed to a wrapper call is still parenthesized correctly.
 	{
+		filename,
 		code: tsx`
 			import { memo } from "react";
 
 			export const App = memo(props => <div id={props.id} />);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			import { memo } from "react";
 
 			export const App = memo(({ id }) => <div id={id} />);
 		`,
+		errors: [{ messageId }],
 	},
 	// A reserved word cannot be a binding: report only, no fix.
 	{
+		filename,
 		code: tsx`
 			function App(props) {
 				return <div className={props.default} />
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }],
 	},
 	// A typed arrow parameter: fixable, type annotation preserved.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				id: string;
@@ -663,8 +664,6 @@ const invalid: Array<InvalidTestCase> = [
 
 			const App = (props: Props) => <div id={props.id} className={props.className} />;
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: tsx`
 			interface Props {
 				id: string;
@@ -673,9 +672,11 @@ const invalid: Array<InvalidTestCase> = [
 
 			const App = ({ id, className }: Props) => <div id={id} className={className} />;
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// A typed arrow parameter with a block body.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				items: Array<string>;
@@ -685,8 +686,6 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{props.items}</div>;
 			};
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			interface Props {
 				items: Array<string>;
@@ -696,24 +695,26 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{items}</div>;
 			};
 		`,
+		errors: [{ messageId }],
 	},
 	// An inline object type annotation is preserved.
 	{
+		filename,
 		code: tsx`
 			function App(props: { id: string; className: string }) {
 				return <div id={props.id} className={props.className} />;
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: tsx`
 			function App({ id, className }: { id: string; className: string }) {
 				return <div id={id} className={className} />;
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// A generic arrow component keeps its type parameters and annotation.
 	{
+		filename,
 		code: tsx`
 			interface Props<T> {
 				value: T;
@@ -721,8 +722,6 @@ const invalid: Array<InvalidTestCase> = [
 
 			const App = <T,>(props: Props<T>) => <div>{props.value}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			interface Props<T> {
 				value: T;
@@ -730,6 +729,7 @@ const invalid: Array<InvalidTestCase> = [
 
 			const App = <T,>({ value }: Props<T>) => <div>{value}</div>;
 		`,
+		errors: [{ messageId }],
 	},
 ];
 

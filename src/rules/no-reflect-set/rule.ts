@@ -101,7 +101,7 @@ function hasFixedKeyType(
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	return {
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			// The four-argument form takes a receiver, which a plain assignment
 			// cannot rebind.
 			if (node.arguments.length !== 3) {

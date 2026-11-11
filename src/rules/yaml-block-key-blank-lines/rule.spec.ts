@@ -52,13 +52,13 @@ const invalid: Array<InvalidTestCase> = [
 			packages:
 			  - a
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			version: 1.0.0
 
 			packages:
 			  - a
 		`,
+		errors: [{ messageId }],
 	},
 	// Extra blank lines between two scalars are collapsed away.
 	{
@@ -68,11 +68,11 @@ const invalid: Array<InvalidTestCase> = [
 
 			version: b
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			name: a
 			version: b
 		`,
+		errors: [{ messageId }],
 	},
 	// A single blank line between two scalars is removed.
 	{
@@ -81,11 +81,11 @@ const invalid: Array<InvalidTestCase> = [
 
 			version: b
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			name: a
 			version: b
 		`,
+		errors: [{ messageId }],
 	},
 	// Extra blank lines around a block mapping key are collapsed to one.
 	{
@@ -96,13 +96,13 @@ const invalid: Array<InvalidTestCase> = [
 			overrides:
 			  foo: bar
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			version: b
 
 			overrides:
 			  foo: bar
 		`,
+		errors: [{ messageId }],
 	},
 	// Adjacent block keys (sequence then mapping) get a blank line between them.
 	{
@@ -112,7 +112,6 @@ const invalid: Array<InvalidTestCase> = [
 			overrides:
 			  foo: bar
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			packages:
 			  - a
@@ -120,6 +119,7 @@ const invalid: Array<InvalidTestCase> = [
 			overrides:
 			  foo: bar
 		`,
+		errors: [{ messageId }],
 	},
 ];
 
@@ -137,6 +137,7 @@ describe("yaml language mode (Languages API)", () => {
 	const config: Linter.Config = {
 		files: ["**/*.yaml"],
 		language: "yaml/yaml",
+		// eslint-disable-next-line ts/no-unsafe-type-assertion -- Bridges mismatched `@eslint/core` plugin types; see above.
 		plugins: {
 			flawless: plugin,
 			yaml: yml,

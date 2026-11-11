@@ -943,21 +943,21 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const open: Array<number> = [-1];
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			const open = [-1];
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function read(): number;
 			const values: Array<number> = [read(), 2];
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function read(): number;
 			const values = [read(), 2];
 		`,
+		errors: [{ messageId }],
 	},
 	// A spread of a typed value takes no context.
 	{
@@ -965,11 +965,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare const values: Array<number>;
 			const more: Array<number> = [...values, 1];
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const values: Array<number>;
 			const more = [...values, 1];
 		`,
+		errors: [{ messageId }],
 	},
 	// A generic alias with type arguments keeps its name in the inferred type.
 	{
@@ -977,22 +977,22 @@ const invalid: Array<InvalidTestCase> = [
 			declare function getReadonly(): Readonly<Record<string, number>>;
 			const map: Readonly<Record<string, number>> = getReadonly();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getReadonly(): Readonly<Record<string, number>>;
 			const map = getReadonly();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function getRecord(): Record<string, number>;
 			const record: Record<string, number> = getRecord();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getRecord(): Record<string, number>;
 			const record = getRecord();
 		`,
+		errors: [{ messageId }],
 	},
 	// Only a `const` aliases a condition, so a `let` narrows nothing.
 	{
@@ -1003,7 +1003,6 @@ const invalid: Array<InvalidTestCase> = [
 				return isText && v === 5;
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const v: string | number;
 			export function f(): boolean {
@@ -1011,6 +1010,7 @@ const invalid: Array<InvalidTestCase> = [
 				return isText && v === 5;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A `const` that no condition reads narrows nothing.
 	{
@@ -1023,7 +1023,6 @@ const invalid: Array<InvalidTestCase> = [
 				v.toString();
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const v: string | number;
 			declare function log(value: boolean): void;
@@ -1033,6 +1032,7 @@ const invalid: Array<InvalidTestCase> = [
 				v.toString();
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// An argument infers `T` before the context is consulted.
 	{
@@ -1041,12 +1041,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<string>;
 			const value: string = first(items);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function first<T>(items: Array<T>): T;
 			declare const items: Array<string>;
 			const value = first(items);
 		`,
+		errors: [{ messageId }],
 	},
 	// The callback parameter names no type parameter of the call.
 	{
@@ -1054,11 +1054,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason: unknown) => String(reason));
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason) => String(reason));
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// The call resolves to one overload, which gives the callback its context.
 	// The removal does not change which overload resolves.
@@ -1071,7 +1071,6 @@ const invalid: Array<InvalidTestCase> = [
 			declare const emitter: Emitter;
 			emitter.once("exit", (code: null | number) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Emitter {
 				once(event: "exit", listener: (code: null | number) => void): this;
@@ -1080,6 +1079,7 @@ const invalid: Array<InvalidTestCase> = [
 			declare const emitter: Emitter;
 			emitter.once("exit", (code) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// An `any` catch-all does not resolve here, with or without the annotation.
 	{
@@ -1091,7 +1091,6 @@ const invalid: Array<InvalidTestCase> = [
 			declare const stream: Stream;
 			stream.on("data", (chunk: Uint8Array) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Stream {
 				on(event: "data", listener: (chunk: Uint8Array) => void): this;
@@ -1100,6 +1099,7 @@ const invalid: Array<InvalidTestCase> = [
 			declare const stream: Stream;
 			stream.on("data", (chunk) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Both overloads of `find` give `item` the element type, and the generic
 	// one does not give it the type parameter `S`.
@@ -1108,33 +1108,33 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<string>;
 			const first = items.find((item: string) => item.length > 0);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare const items: Array<string>;
 			const first = items.find((item) => item.length > 0);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			declare const values: Array<string | undefined>;
 			const present = values.filter((value: string | undefined, index: number) => value !== undefined && index > 0);
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare const values: Array<string | undefined>;
 			const present = values.filter((value, index) => value !== undefined && index > 0);
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			declare const values: Array<number | string>;
 			const allStrings = values.every((value: number | string) => typeof value === "string");
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare const values: Array<number | string>;
 			const allStrings = values.every((value) => typeof value === "string");
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Both overloads give `value` the type `string`, but `index` gets a
 	// different type from each, so only `value` is reported.
@@ -1144,25 +1144,25 @@ const invalid: Array<InvalidTestCase> = [
 			declare function pick(predicate: (value: string, index: string) => unknown): string;
 			pick((value: string, index: string) => value.length > 0);
 		`,
-		errors: [{ column: 12, messageId: parameterMessageId }],
 		output: unindent`
 			declare function pick<S extends string>(predicate: (value: string, index: number) => value is S): S;
 			declare function pick(predicate: (value: string, index: string) => unknown): string;
 			pick((value, index: string) => value.length > 0);
 		`,
+		errors: [{ column: 12, messageId: parameterMessageId }],
 	},
 	// Past the work limit, a parameter of a generic overload pick is not
 	// verified, so it is not reported. The next fix pass verifies it.
 	{
 		code: [
 			"declare const items: Array<string>;",
-			...Array.from({ length: 11 }, () => "items.find((item: string) => item.length);"),
+			...Array.from({ length: 11 }).fill("items.find((item: string) => item.length);"),
 		].join("\n"),
-		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
 		output: [
 			"declare const items: Array<string>;",
-			...Array.from({ length: 11 }, () => "items.find((item) => item.length);"),
+			...Array.from({ length: 11 }).fill("items.find((item) => item.length);"),
 		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
 	},
 	// Past the work limit, a parameter of an overload pick is not verified, so
 	// it is not reported. The next fix pass verifies it.
@@ -1170,14 +1170,14 @@ const invalid: Array<InvalidTestCase> = [
 		code: [
 			'declare function on(event: "a", handler: (value: string) => void): void;',
 			'declare function on(event: "b", handler: (value: number) => void): void;',
-			...Array.from({ length: 11 }, () => 'on("a", (value: string) => {});'),
+			...Array.from({ length: 11 }).fill('on("a", (value: string) => {});'),
 		].join("\n"),
-		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
 		output: [
 			'declare function on(event: "a", handler: (value: string) => void): void;',
 			'declare function on(event: "b", handler: (value: number) => void): void;',
-			...Array.from({ length: 11 }, () => 'on("a", (value) => {});'),
+			...Array.from({ length: 11 }).fill('on("a", (value) => {});'),
 		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId: parameterMessageId })),
 	},
 	// An arrow callback ignores an inferred `this`.
 	{
@@ -1188,7 +1188,6 @@ const invalid: Array<InvalidTestCase> = [
 			): Array<U>;
 			const lengths = map((item: string) => item.length);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function map<U, This = undefined>(
 				callback: (this: This, item: string) => U,
@@ -1196,6 +1195,7 @@ const invalid: Array<InvalidTestCase> = [
 			): Array<U>;
 			const lengths = map((item) => item.length);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
@@ -1204,13 +1204,13 @@ const invalid: Array<InvalidTestCase> = [
 			const flat = items.flatMap((item: unknown) => [item]);
 			const flatList = list.flatMap((item: string) => [item]);
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare const items: ReadonlyArray<unknown>;
 			declare const list: Array<string>;
 			const flat = items.flatMap((item) => [item]);
 			const flatList = list.flatMap((item) => [item]);
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	// An object literal method takes its context from the property it fills.
 	{
@@ -1224,7 +1224,6 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			interface Handlers {
 				format(text: string, width: number): string;
@@ -1235,6 +1234,7 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	// An optional callback's `undefined` offers no signature of its own.
 	{
@@ -1245,7 +1245,6 @@ const invalid: Array<InvalidTestCase> = [
 			declare function report(value: string): void;
 			const options: Options = { onChange: (value: string) => report(value) };
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Options {
 				onChange?: (value: string) => void;
@@ -1253,6 +1252,7 @@ const invalid: Array<InvalidTestCase> = [
 			declare function report(value: string): void;
 			const options: Options = { onChange: (value) => report(value) };
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
@@ -1266,7 +1266,6 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Options {
 				read?(value: string): void;
@@ -1278,16 +1277,17 @@ const invalid: Array<InvalidTestCase> = [
 				},
 			};
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A non-const assertion supplies a real contextual type.
 	{
 		code: unindent`
 			const f = ((n: number) => n) as (n: number) => number;
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			const f = ((n) => n) as (n: number) => number;
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// An explicit type argument fixes `T`, so the annotation restates it.
 	{
@@ -1295,33 +1295,33 @@ const invalid: Array<InvalidTestCase> = [
 			declare function each<T>(cases: ReadonlyArray<T>): void;
 			each<[string, (n: number) => number]>([["a", (n: number) => n]] as const);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function each<T>(cases: ReadonlyArray<T>): void;
 			each<[string, (n: number) => number]>([["a", (n) => n]] as const);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			declare function getString(): string;
 			const value: string = getString();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getString(): string;
 			const value = getString();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function getNumber(): number;
 			const value: number = getNumber();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getNumber(): number;
 			const value = getNumber();
 		`,
+		errors: [{ messageId }],
 	},
 	// The case this rule exists for: `unknown` restating `unknown`.
 	{
@@ -1329,34 +1329,34 @@ const invalid: Array<InvalidTestCase> = [
 			declare function getUnknown(): unknown;
 			const value: unknown = getUnknown();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getUnknown(): unknown;
 			const value = getUnknown();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function getString(): string;
 			let value: string = getString();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getString(): string;
 			let value = getString();
 		`,
+		errors: [{ messageId }],
 	},
 	// `let` widens the literal to `string` anyway.
 	{
 		code: 'let value: string = "";',
-		errors: [{ messageId }],
 		output: 'let value = "";',
+		errors: [{ messageId }],
 	},
 	// `const` keeps the literal type, so the annotation restates it.
 	{
 		code: 'const value: "a" = "a";',
-		errors: [{ messageId }],
 		output: 'const value = "a";',
+		errors: [{ messageId }],
 	},
 	// A class instance restating its own class.
 	{
@@ -1364,11 +1364,11 @@ const invalid: Array<InvalidTestCase> = [
 			class Owner {}
 			const value: Owner = new Owner();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			class Owner {}
 			const value = new Owner();
 		`,
+		errors: [{ messageId }],
 	},
 	// An alias TypeScript keeps by name survives the fix, so it is reported.
 	{
@@ -1377,12 +1377,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare function getHandler(): Handler;
 			const handler: Handler = getHandler();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			type Handler = () => void;
 			declare function getHandler(): Handler;
 			const handler = getHandler();
 		`,
+		errors: [{ messageId }],
 	},
 	// Explicit type arguments pin the generic, so inference cannot shift.
 	{
@@ -1390,22 +1390,22 @@ const invalid: Array<InvalidTestCase> = [
 			declare function pick<T = number>(): T;
 			const value: string = pick<string>();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function pick<T = number>(): T;
 			const value = pick<string>();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
 			const value: Array<string> = tag<string>\`\`;
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
 			const value = tag<string>\`\`;
 		`,
+		errors: [{ messageId }],
 	},
 	// A tag that is not generic has nothing to infer.
 	{
@@ -1413,11 +1413,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function tag(strings: TemplateStringsArray): Array<string>;
 			const value: Array<string> = tag\`\`;
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function tag(strings: TemplateStringsArray): Array<string>;
 			const value = tag\`\`;
 		`,
+		errors: [{ messageId }],
 	},
 	// A callee that is not generic gives a generic argument its context from
 	// the parameter type, not from the annotation.
@@ -1427,12 +1427,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare function createRemoval(name: string, names: Set<string>): Removal;
 			const removal: Removal = createRemoval("a", new Set(["b"]));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Removal { name: string }
 			declare function createRemoval(name: string, names: Set<string>): Removal;
 			const removal = createRemoval("a", new Set(["b"]));
 		`,
+		errors: [{ messageId }],
 	},
 	// Written type arguments stop inference, also under a generic callee.
 	{
@@ -1440,11 +1440,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function size<T>(items: Set<T>): number;
 			const count: number = size(new Set<string>());
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function size<T>(items: Set<T>): number;
 			const count = size(new Set<string>());
 		`,
+		errors: [{ messageId }],
 	},
 	// Both annotations go: the parameter's context comes from `wrap`, not from
 	// the variable, so neither removal depends on the other.
@@ -1453,11 +1453,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function wrap(value: (input: number) => number): (input: number) => number;
 			const fn: (input: number) => number = wrap((input: number) => input);
 		`,
-		errors: [{ messageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare function wrap(value: (input: number) => number): (input: number) => number;
 			const fn = wrap((input) => input);
 		`,
+		errors: [{ messageId }, { messageId: parameterMessageId }],
 	},
 	// `await` is transparent to the comparison.
 	{
@@ -1467,13 +1467,13 @@ const invalid: Array<InvalidTestCase> = [
 				const value: string = await load();
 			}
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function load(): Promise<string>;
 			async function main(): Promise<void> {
 				const value = await load();
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// `let` widens the enum member to the enum, which the annotation restates.
 	{
@@ -1483,13 +1483,13 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			let value: Colour = Colour.Red;
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			enum Colour {
 				Red,
 			}
 			let value = Colour.Red;
 		`,
+		errors: [{ messageId }],
 	},
 
 	// A callback passed to a plain call takes its context from the callee, so
@@ -1499,22 +1499,22 @@ const invalid: Array<InvalidTestCase> = [
 			declare function run(fn: () => "a"): number;
 			const value: number = run(() => "a");
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function run(fn: () => "a"): number;
 			const value = run(() => "a");
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function run(fn: () => object): number;
 			const value: number = run(() => ({}));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function run(fn: () => object): number;
 			const value = run(() => ({}));
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -1523,13 +1523,13 @@ const invalid: Array<InvalidTestCase> = [
 				return this.x;
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function run(fn: (this: { x: number }) => number): number;
 			const value = run(function () {
 				return this.x;
 			});
 		`,
+		errors: [{ messageId }],
 	},
 
 	// An untyped callback takes its parameters from the receiver, not from
@@ -1540,12 +1540,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare const options: ReadonlyArray<{ value: Option }>;
 			const values: Array<Option> = options.map(({ value }) => value);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			type Option = "a" | "b";
 			declare const options: ReadonlyArray<{ value: Option }>;
 			const values = options.map(({ value }) => value);
 		`,
+		errors: [{ messageId }],
 	},
 
 	{
@@ -1554,12 +1554,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<Item>;
 			const v: Array<string> = items.map((i) => { return i.name; });
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Item { name: string }
 			declare const items: Array<Item>;
 			const v = items.map((i) => { return i.name; });
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -1567,12 +1567,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<Item>;
 			const v: Array<"a" | "b"> = items.map((i) => (i.ok ? "a" : "b"));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Item { ok: boolean }
 			declare const items: Array<Item>;
 			const v = items.map((i) => (i.ok ? "a" : "b"));
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -1580,23 +1580,23 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<Item>;
 			const s: Set<string> = new Set(items.map((i) => i.name));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Item { name: string }
 			declare const items: Array<Item>;
 			const s = new Set(items.map((i) => i.name));
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function run(cb: (x: number) => string): string;
 			const s: string = run((x) => String(x));
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function run(cb: (x: number) => string): string;
 			const s = run((x) => String(x));
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -1604,12 +1604,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare function on(cb: (x: number) => void, n: number): 2;
 			const v: 1 = on((x) => {});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function on(cb: (x: string) => void): 1;
 			declare function on(cb: (x: number) => void, n: number): 2;
 			const v = on((x) => {});
 		`,
+		errors: [{ messageId }],
 	},
 	// A generic or overloaded call can take the callback's context from the
 	// annotation, so these are reported only when the removal is verified.
@@ -1619,34 +1619,34 @@ const invalid: Array<InvalidTestCase> = [
 			declare const items: Array<Item>;
 			const f: Array<Item> = items.filter((i) => i.ok);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			interface Item { ok: boolean }
 			declare const items: Array<Item>;
 			const f = items.filter((i) => i.ok);
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare const nums: Array<number>;
 			const total: number = nums.reduce((a, b) => a + b, 0);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare const nums: Array<number>;
 			const total = nums.reduce((a, b) => a + b, 0);
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function pipe<T>(x: T, f: (v: T) => T): T;
 			const r: number = pipe(1, (v) => v);
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function pipe<T>(x: T, f: (v: T) => T): T;
 			const r = pipe(1, (v) => v);
 		`,
+		errors: [{ messageId }],
 	},
 
 	// Past the verification work limit, a removal is not verified. It is
@@ -1716,11 +1716,11 @@ const invalid: Array<InvalidTestCase> = [
 				return `const kept${index}: Array<number> = [read()];`;
 			}),
 		].join("\n"),
-		errors: Array.from({ length: 10 }, () => ({ messageId })),
 		output: [
 			"declare function read(): number;",
 			...Array.from({ length: 11 }, (_, index) => `const kept${index} = [read()];`),
 		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
 	},
 	{
 		code: [
@@ -1730,7 +1730,6 @@ const invalid: Array<InvalidTestCase> = [
 				return `const kept${index}: Array<Item> = items.filter((item) => item.ok);`;
 			}),
 		].join("\n"),
-		errors: Array.from({ length: 10 }, () => ({ messageId })),
 		output: [
 			"interface Item { ok: boolean }",
 			"declare const items: Array<Item>;",
@@ -1738,6 +1737,7 @@ const invalid: Array<InvalidTestCase> = [
 				return `const kept${index} = items.filter((item) => item.ok);`;
 			}),
 		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
 	},
 	// A callback inside a generic argument of a callee that is not generic
 	// still needs proof.
@@ -1750,7 +1750,6 @@ const invalid: Array<InvalidTestCase> = [
 				return `const removal${index}: Removal = createRemoval("a", collect((add) => add("b")));`;
 			}),
 		].join("\n"),
-		errors: Array.from({ length: 10 }, () => ({ messageId })),
 		output: [
 			"interface Removal { name: string }",
 			"declare function createRemoval(name: string, names: Set<string>): Removal;",
@@ -1759,6 +1758,7 @@ const invalid: Array<InvalidTestCase> = [
 				return `const removal${index} = createRemoval("a", collect((add) => add("b")));`;
 			}),
 		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
 	},
 
 	// Each removal of a pair is safe alone, but not together, so the pairs
@@ -1813,7 +1813,6 @@ const invalid: Array<InvalidTestCase> = [
 			const isNum: boolean = typeof v === "number";
 			if (isNum) { console.log(v); }
 		`,
-		errors: [{ line: 4, messageId }],
 		output: unindent`
 			interface Item { ok: boolean }
 			declare const items: Array<Item>;
@@ -1823,6 +1822,7 @@ const invalid: Array<InvalidTestCase> = [
 			const isNum: boolean = typeof v === "number";
 			if (isNum) { console.log(v); }
 		`,
+		errors: [{ line: 4, messageId }],
 	},
 	// Each removal alone is safe, but not both: without both annotations, same
 	// narrows v. The fix of same is verified. ok, which needs proof, is safe
@@ -1838,10 +1838,6 @@ const invalid: Array<InvalidTestCase> = [
 				return v;
 			}
 		`,
-		errors: [
-			{ line: 4, messageId },
-			{ line: 5, messageId },
-		],
 		output: unindent`
 			interface Item { ok: boolean }
 			declare const items: Array<Item>;
@@ -1852,6 +1848,10 @@ const invalid: Array<InvalidTestCase> = [
 				return v;
 			}
 		`,
+		errors: [
+			{ line: 4, messageId },
+			{ line: 5, messageId },
+		],
 	},
 
 	// The removal of q widens w, which is not a candidate, so the static
@@ -1867,8 +1867,8 @@ const invalid: Array<InvalidTestCase> = [
 			use(p, w);
 			export {};
 		`,
-		errors: [{ line: 4, messageId }],
 		output: null,
+		errors: [{ line: 4, messageId }],
 	},
 
 	// --- parameters ---
@@ -1884,7 +1884,6 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(item.id);
 			});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Item {
 				id: string;
@@ -1894,6 +1893,7 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(item.id);
 			});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A destructured parameter is annotated the same way.
 	{
@@ -1906,7 +1906,6 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(a);
 			});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Props {
 				a: string;
@@ -1916,6 +1915,7 @@ const invalid: Array<InvalidTestCase> = [
 				console.log(a);
 			});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Only the parameter is reported: the variable annotation is what supplies
 	// its context, so both cannot go.
@@ -1924,11 +1924,11 @@ const invalid: Array<InvalidTestCase> = [
 			type Handler = (payload: string) => void;
 			const handle: Handler = (payload: string) => {};
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			type Handler = (payload: string) => void;
 			const handle: Handler = (payload) => {};
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Each parameter is judged on its own.
 	{
@@ -1936,11 +1936,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function each(callback: (value: string, index: number) => void): void;
 			each((value: string, index: number | string) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function each(callback: (value: string, index: number) => void): void;
 			each((value, index: number | string) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A rest parameter matched against a rest parameter is comparable.
 	{
@@ -1948,11 +1948,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function each(callback: (...values: Array<string>) => void): void;
 			each((...values: Array<string>) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function each(callback: (...values: Array<string>) => void): void;
 			each((...values) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A rest parameter of a fixed tuple types each position with its element.
 	{
@@ -1960,11 +1960,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
 			handle((chunk: string, size: number) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
 			handle((chunk, size) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	// An unnamed tuple pairs the same way, after the leading parameters.
 	{
@@ -1972,11 +1972,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
 			handle((event, id: number, done: boolean) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			declare function handle(listener: (event: string, ...args: [number, boolean]) => void): void;
 			handle((event, id, done) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	// A rest parameter at the start of the tuple restates the whole tuple.
 	{
@@ -1984,11 +1984,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
 			handle((...args: [chunk: string, size: number]) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function handle(listener: (...args: [chunk: string, size: number]) => void): void;
 			handle((...args) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// `Parameters` gives a fixed tuple, so a mock's parameters restate it.
 	{
@@ -1997,12 +1997,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare function mock(implementation: (...args: Parameters<Listener>) => void): void;
 			mock((value: Parameters<Listener>[0], count: number) => {});
 		`,
-		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 		output: unindent`
 			type Listener = (value: string, count: number) => void;
 			declare function mock(implementation: (...args: Parameters<Listener>) => void): void;
 			mock((value, count) => {});
 		`,
+		errors: [{ messageId: parameterMessageId }, { messageId: parameterMessageId }],
 	},
 	// An explicit type argument pins the generic, so the annotation restates it.
 	{
@@ -2010,11 +2010,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function wrap<T>(callback: (value: T) => T): void;
 			wrap<number>((value: number) => value);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function wrap<T>(callback: (value: T) => T): void;
 			wrap<number>((value) => value);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
@@ -2023,13 +2023,13 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			new Box<(s: string) => string>((s: string) => s);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare class Box<T> {
 				constructor(value: T);
 			}
 			new Box<(s: string) => string>((s) => s);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Without a type parameter, a tag or a generator's yield type is the
 	// context the annotation restates.
@@ -2038,11 +2038,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function tag(strings: TemplateStringsArray, ...values: Array<(s: string) => string>): void;
 			tag\`\${(s: string) => s}\`;
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function tag(strings: TemplateStringsArray, ...values: Array<(s: string) => string>): void;
 			tag\`\${(s) => s}\`;
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
@@ -2051,13 +2051,13 @@ const invalid: Array<InvalidTestCase> = [
 				yield (s: string) => s;
 			});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function gen(make: () => Generator<(s: string) => string>): void;
 			gen(function* () {
 				yield (s) => s;
 			});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A `this` parameter does not shift the positions after it.
 	{
@@ -2066,12 +2066,12 @@ const invalid: Array<InvalidTestCase> = [
 			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
 			on(function (this: Target, event: string, detail: string) {});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Target {}
 			declare function on(fn: (this: Target, event: "click", detail: string) => void): void;
 			on(function (this: Target, event: string, detail) {});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// Wherever the variable's annotation reaches the parameter, only the
 	// parameter is reported: removing both in one pass would leave it
@@ -2081,38 +2081,38 @@ const invalid: Array<InvalidTestCase> = [
 			declare function side(): void;
 			const f: (x: number) => number = (side(), (x: number) => x);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function side(): void;
 			const f: (x: number) => number = (side(), (x) => x);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			const f: (x: number) => number = ((x: number) => x)!;
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			const f: (x: number) => number = ((x) => x)!;
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			const f: (x: number) => number = ((x: number) => x) as const;
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			const f: (x: number) => number = ((x) => x) as const;
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			const f: () => (x: number) => number = () => (x: number) => x;
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			const f: () => (x: number) => number = () => (x) => x;
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// An outer parameter's annotation that types an annotated default value
 	// waits for the next pass, once the default no longer depends on it.
@@ -2120,10 +2120,10 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const g: (cb: (s: string) => string) => void = (cb: (s: string) => string = (s: string) => s) => {};
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			const g: (cb: (s: string) => string) => void = (cb = (s) => s) => {};
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A function an IIFE returns has no proven context, so only the variable
 	// is reported.
@@ -2131,20 +2131,20 @@ const invalid: Array<InvalidTestCase> = [
 		code: unindent`
 			const f: (x: number) => number = (() => (x: number) => x)();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			const f = (() => (x: number) => x)();
 		`,
+		errors: [{ messageId }],
 	},
 	// An IIFE whose parameter is annotated fixes its argument's context.
 	{
 		code: unindent`
 			((cb: (s: string) => string) => cb)((s: string) => s);
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			((cb: (s: string) => string) => cb)((s) => s);
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A `super` call passes its arguments to the base constructor.
 	{
@@ -2158,7 +2158,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			class Base {
 				constructor(fn: (s: string) => void) {}
@@ -2169,6 +2168,7 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A written return type is the returned function's context.
 	{
@@ -2177,12 +2177,12 @@ const invalid: Array<InvalidTestCase> = [
 				return (s: string) => s;
 			}
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			function make(): (s: string) => string {
 				return (s) => s;
 			}
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A function expression in an object literal gets its context from the
 	// object's contextual type.
@@ -2196,7 +2196,6 @@ const invalid: Array<InvalidTestCase> = [
 				click: function (payload: number) {},
 			});
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			interface Handlers {
 				click: (payload: number) => void;
@@ -2206,6 +2205,7 @@ const invalid: Array<InvalidTestCase> = [
 				click: function (payload) {},
 			});
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	// A catch variable is already `unknown` under the compiler option, and
 	// `unknown` is the only thing the annotation can be saying.
@@ -2214,11 +2214,11 @@ const invalid: Array<InvalidTestCase> = [
 			try {
 			} catch (error: unknown) {}
 		`,
-		errors: [{ messageId: catchMessageId }],
 		output: unindent`
 			try {
 			} catch (error) {}
 		`,
+		errors: [{ messageId: catchMessageId }],
 	},
 	// The catch body is irrelevant; only the annotation is read.
 	{
@@ -2229,7 +2229,6 @@ const invalid: Array<InvalidTestCase> = [
 				report(error);
 			}
 		`,
-		errors: [{ messageId: catchMessageId }],
 		output: unindent`
 			declare function report(value: unknown): void;
 			try {
@@ -2237,6 +2236,7 @@ const invalid: Array<InvalidTestCase> = [
 				report(error);
 			}
 		`,
+		errors: [{ messageId: catchMessageId }],
 	},
 	// The fix keeps a comment inside the annotation.
 	{
@@ -2244,11 +2244,11 @@ const invalid: Array<InvalidTestCase> = [
 			declare function getS(): string;
 			const x: /* keep me */ string = getS();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getS(): string;
 			const x /* keep me */ = getS();
 		`,
+		errors: [{ messageId }],
 	},
 	// A line comment still ends before the code after it.
 	{
@@ -2257,18 +2257,18 @@ const invalid: Array<InvalidTestCase> = [
 			const x: // keep me
 				string = getS();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getS(): string;
 			const x // keep me
 			 = getS();
 		`,
+		errors: [{ messageId }],
 	},
 	// The line comment keeps the line break of the source.
 	{
 		code: "declare function getS(): string;\r\nconst x: // keep me\r\n\tstring = getS();\r\n",
-		errors: [{ messageId }],
 		output: "declare function getS(): string;\r\nconst x // keep me\r\n = getS();\r\n",
+		errors: [{ messageId }],
 	},
 	// A comment in the type itself is kept too.
 	{
@@ -2276,33 +2276,33 @@ const invalid: Array<InvalidTestCase> = [
 			declare function getS(): Array<string>;
 			const x: Array</* keep me */ string> = getS();
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			declare function getS(): Array<string>;
 			const x /* keep me */ = getS();
 		`,
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason: /* keep me */ unknown) => String(reason));
 		`,
-		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
 			declare function attempt<R>(onError: (reason: unknown) => R): R;
 			const result = attempt((reason /* keep me */) => String(reason));
 		`,
+		errors: [{ messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
 			try {
 			} catch (error: /* keep me */ unknown) {}
 		`,
-		errors: [{ messageId: catchMessageId }],
 		output: unindent`
 			try {
 			} catch (error /* keep me */) {}
 		`,
+		errors: [{ messageId: catchMessageId }],
 	},
 ];
 
@@ -2388,13 +2388,14 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
+			filename: jsxFilename,
 			code: withJsx(unindent`
 				declare function One<T>(props: { a: Array<T> }): JSX.Element;
 				<One a={[(s: string) => s]} />;
 			`),
-			filename: jsxFilename,
 		},
 		{
+			filename: jsxFilename,
 			code: withJsx(unindent`
 				declare function List<T, R>(props: {
 					items: Array<T>;
@@ -2403,29 +2404,28 @@ run({
 				}): JSX.Element;
 				<List items={[1]} make={() => (s: string) => s} use={(made) => made("x")} />;
 			`),
-			filename: jsxFilename,
 		},
 		{
+			filename: jsxFilename,
 			// Each annotation alone would do, but the fix removes both.
 			code: withJsx(unindent`
 				declare function Pair<T>(props: { a: T; b: T }): JSX.Element;
 				<Pair a={(s: string) => s} b={(s: string) => s} />;
 			`),
-			filename: jsxFilename,
 		},
 		{
+			filename: jsxFilename,
 			code: withJsx(unindent`
 				declare function One<T>(props: { a: T }): JSX.Element;
 				<One {...{ a: (s: string) => s }} />;
 			`),
-			filename: jsxFilename,
 		},
 		{
+			filename: jsxFilename,
 			code: withJsx(unindent`
 				declare function Render<T>(props: { children: T }): JSX.Element;
 				<Render>{(s: string) => s}</Render>;
 			`),
-			filename: jsxFilename,
 		},
 	],
 });
@@ -2451,13 +2451,13 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
+			filename: path.join(looseCatchDirectory, "case.ts"),
 			// Without the option the variable is `any`, so the annotation is
 			// narrowing it rather than restating it.
 			code: unindent`
 				try {
 				} catch (error: unknown) {}
 			`,
-			filename: path.join(looseCatchDirectory, "case.ts"),
 		},
 	],
 });
@@ -2500,13 +2500,13 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
+			filename: path.join(looseNullDirectory, "case.ts"),
 			// Without the annotation the function returns `any`.
 			code: "const fn: () => null = () => null;",
-			filename: path.join(looseNullDirectory, "case.ts"),
 		},
 		{
-			code: "const fn: () => undefined = () => undefined;",
 			filename: path.join(looseNullDirectory, "case.ts"),
+			code: "const fn: () => undefined = () => undefined;",
 		},
 	],
 });
@@ -2808,21 +2808,22 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			// Dropping the annotation here reports error TS9010, so the rule
 			// leaves the exported declaration alone.
 			code: unindent`
 				export const RbxPathParent: unique symbol = Symbol("Parent");
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			code: unindent`
 				declare function getDate(): Date;
 				export const value: Date = getDate();
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			// The emitter still reads a variable an exported declaration
 			// mentions.
 			code: unindent`
@@ -2830,63 +2831,62 @@ run({
 				const value: Date = getDate();
 				export default value;
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			// An export list reaches the declaration just the same.
 			code: unindent`
 				declare function getDate(): Date;
 				const value: Date = getDate();
 				export { value };
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			// `satisfies` leaves the emitter to type the object from its syntax,
 			// so the parameter must keep its annotation: the fix gives TS9011.
 			code: unindent`
 				export const handlers = { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			code: unindent`
 				export default { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			code: unindent`
 				const handlers = { f: (s: string) => s } satisfies Record<string, (s: string) => string>;
 				export { handlers };
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			code: unindent`
 				export class Handlers {
 					f = { g: (s: string) => s } satisfies Record<string, (s: string) => string>;
 				}
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			// A script has no exports: its top-level declarations are global,
 			// and the emitter prints all of them.
 			code: unindent`
 				declare function n(): number;
 				let x: number = n();
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			code: unindent`
 				declare const kinds: Set<string>;
 				function fn(): Set<string> {
 					return kinds;
 				}
 			`,
-			filename: path.join(isolatedDeclarationsDirectory, "case.ts"),
 			options: [{ checkReturnTypes: true }],
 		},
 		// The emitter prints these reads, so the variable keeps its
@@ -2954,9 +2954,7 @@ run({
 				const B: typeof Base0 = mk();
 				export class D extends B {}
 			`,
-		].map((code) => {
-			return { code, filename: path.join(isolatedDeclarationsDirectory, "case.ts") };
-		}),
+		].map((code) => ({ code, filename: path.join(isolatedDeclarationsDirectory, "case.ts") })),
 		// The emitter reads a function or class that an emitted
 		// declaration names (TS9007, TS9008).
 		...[
@@ -3465,15 +3463,15 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{
+			filename: path.join(looseNullDirectory, "case.ts"),
 			// A class field declares the function, so it keeps its return type.
 			code: fieldReturn,
-			filename: path.join(looseNullDirectory, "case.ts"),
 			options: checkExpressions,
 		},
 		{
+			filename: path.join(looseNullDirectory, "case.ts"),
 			// An export default declares the function too.
 			code: exportDefaultReturn,
-			filename: path.join(looseNullDirectory, "case.ts"),
 			options: checkExpressions,
 		},
 	],
@@ -3498,10 +3496,10 @@ run({
 	name: `${RULE_NAME}/declarations`,
 	invalid: [
 		{
-			code: "declare function getDate(): Date; export const value: Date = getDate();",
-			errors: [{ messageId }],
 			filename: path.join(declarationsDirectory, "case.ts"),
+			code: "declare function getDate(): Date; export const value: Date = getDate();",
 			output: "declare function getDate(): Date; export const value = getDate();",
+			errors: [{ messageId }],
 		},
 	],
 	parserOptions: {
@@ -3510,22 +3508,22 @@ run({
 	},
 	rule: noRedundantTypeAnnotation,
 	valid: [
-		{ code: declarationSource, filename: path.join(declarationsDirectory, "case.ts") },
+		{ filename: path.join(declarationsDirectory, "case.ts"), code: declarationSource },
 		{
+			filename: path.join(declarationsDirectory, "case.ts"),
 			code: `${declarationSource.replace(
 				"export const value",
 				"const value",
 			)}export { value };`,
-			filename: path.join(declarationsDirectory, "case.ts"),
 		},
 		{
+			filename: path.join(declarationsDirectory, "case.ts"),
 			// A local symbol with the same spelling cannot name the library's
 			// tag.
 			code: declarationSource.replace(
 				"export const value",
 				"declare const tag: unique symbol;\nexport const value",
 			),
-			filename: path.join(declarationsDirectory, "case.ts"),
 		},
 	],
 });

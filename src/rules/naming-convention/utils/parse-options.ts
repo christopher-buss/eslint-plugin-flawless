@@ -30,9 +30,11 @@ export function parseOptions(context: Context): ParsedOptions {
 		return normalizeOption(option, settingsAllowedWords);
 	});
 
+	// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
 	return Object.fromEntries(
 		Object.keys(Selector).map((key) => [
 			key,
+			// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
 			createValidator(key as SelectorString, context, normalizedOptions),
 		]),
 	) as ParsedOptions;

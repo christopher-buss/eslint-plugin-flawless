@@ -13,7 +13,7 @@ export function pushChildNodes(node: TSESTree.Node, stack: Array<TSESTree.Node>)
 			continue;
 		}
 
-		const value = (node as unknown as Record<string, unknown>)[key];
+		const value: unknown = Reflect.get(node, key);
 		if (Array.isArray(value)) {
 			for (const item of value) {
 				if (isNode(item)) {
@@ -41,7 +41,7 @@ export function pushChildNodes(node: TSESTree.Node, stack: Array<TSESTree.Node>)
  * @returns `true` if a `CallExpression` or `NewExpression` is present.
  */
 export function hasNestedCallOrNew(root: TSESTree.Node): boolean {
-	const stack: Array<TSESTree.Node> = [root];
+	const stack = [root];
 	while (stack.length > 0) {
 		const current = stack.pop();
 		if (current === undefined) {

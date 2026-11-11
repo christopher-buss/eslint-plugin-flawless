@@ -71,8 +71,8 @@ export interface NamingSelector {
 	/**
 	 * Words that may keep their own casing inside a name when checking the
 	 * strict formats. Replaces the shared
-	 * `settings.flawless.namingConvention.allowedWords` list when present, so an
-	 * empty array opts this selector out of it.
+	 * `settings.flawless.namingConvention.allowedWords` list when present, so
+	 * an empty array opts this selector out of it.
 	 */
 	allowedWords?: Array<string>;
 	/**

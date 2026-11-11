@@ -11,6 +11,7 @@ const filename = "file.tsx";
 
 const valid: Array<ValidTestCase> = [
 	{
+		filename,
 		code: tsx`
 			import { useState } from "react";
 
@@ -20,40 +21,40 @@ const valid: Array<ValidTestCase> = [
 				return <Button />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const useData = (key) => {
 				return useSWR(key);
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function useData(key) {
 				return useSWR(key);
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function useData(key) {
 				const data = useSWR(key);
 				return data;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const useData = (key) => useSWR(key);
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const onClick = () => {
 				console.log("clicked");
@@ -63,9 +64,9 @@ const valid: Array<ValidTestCase> = [
 				return <Button onClick={onClick} />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -78,9 +79,9 @@ const valid: Array<ValidTestCase> = [
 				return <Button sx={style} />
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useCallback } from "react";
 
@@ -91,9 +92,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -111,9 +112,9 @@ const valid: Array<ValidTestCase> = [
 				}, [])
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 			const deps = []
@@ -131,9 +132,9 @@ const valid: Array<ValidTestCase> = [
 				const refItem = useCallback(cb, deps)
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback, useState, useEffect } from 'react';
 
@@ -155,9 +156,9 @@ const valid: Array<ValidTestCase> = [
 				return <div onClick={() => updateTest()}>{test}</div>;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback, useState, useEffect } from 'react';
 
@@ -179,9 +180,9 @@ const valid: Array<ValidTestCase> = [
 				return <div />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback, useState, useEffect } from 'react';
 
@@ -193,9 +194,9 @@ const valid: Array<ValidTestCase> = [
 				return <div ref={() => updateTest()} />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback, useState, useEffect } from 'react';
 
@@ -207,12 +208,12 @@ const valid: Array<ValidTestCase> = [
 				return <div onClick={updateTest} />;
 			};
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	{
+		filename,
 		code: tsx`
 			import { useState, useCallback } from "react";
 
@@ -224,9 +225,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useCallback } from "react";
 
@@ -238,9 +239,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -253,9 +254,9 @@ const invalid: Array<InvalidTestCase> = [
 			};
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -269,9 +270,9 @@ const invalid: Array<InvalidTestCase> = [
 			};
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -285,9 +286,9 @@ const invalid: Array<InvalidTestCase> = [
 			};
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "react";
 
@@ -301,9 +302,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const { useCallback } = require("react");
 
@@ -317,9 +318,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import React from "react";
 
@@ -333,9 +334,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import React from "roact";
 
@@ -346,7 +347,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -354,6 +354,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import Roact from "roact";
 
@@ -364,7 +365,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -372,6 +372,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "roact";
 
@@ -382,7 +383,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -390,6 +390,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import React from "@pika/react";
 
@@ -400,7 +401,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -408,6 +408,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import Pika from "@pika/react";
 
@@ -418,7 +419,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -426,6 +426,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import { useCallback } from "@pika/react";
 
@@ -436,7 +437,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -444,6 +444,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const React = require("roact");
 
@@ -454,7 +455,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -462,6 +462,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const Roact = require("roact");
 
@@ -472,7 +473,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -480,6 +480,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const { useCallback } = require("roact");
 
@@ -490,7 +491,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "roact",
@@ -498,6 +498,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const React = require("@pika/react");
 
@@ -508,7 +509,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -516,6 +516,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const Pika = require("@pika/react");
 
@@ -526,7 +527,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -534,6 +534,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const { useCallback } = require("@pika/react");
 
@@ -544,7 +545,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",
@@ -552,6 +552,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import {useCallback, useState, useEffect} from 'react';
 
@@ -568,7 +569,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "noUnnecessaryUseCallbackInsideUseEffect" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "react",
@@ -576,6 +576,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import {useCallback, useState, useEffect} from 'react';
 
@@ -592,7 +593,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "react",
@@ -600,6 +600,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			import {useCallback, useState, useEffect} from 'react';
 
@@ -631,7 +632,6 @@ const invalid: Array<InvalidTestCase> = [
 			{ messageId: "noUnnecessaryUseCallbackInsideUseEffect" },
 			{ messageId: "noUnnecessaryUseCallbackInsideUseEffect" },
 		],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "react",
@@ -639,6 +639,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const { useCallback, useEffect } = require("@pika/react");
 
@@ -655,7 +656,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "noUnnecessaryUseCallbackInsideUseEffect" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",

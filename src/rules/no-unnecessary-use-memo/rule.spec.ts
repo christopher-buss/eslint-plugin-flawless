@@ -11,15 +11,16 @@ const filename = "file.tsx";
 
 const valid: Array<ValidTestCase> = [
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const foo = "foo";
 				const bar = useMemo(() => foo, [foo]);
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState } from "react";
 
@@ -29,40 +30,40 @@ const valid: Array<ValidTestCase> = [
 				return <Button />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const useData = (key) => {
 				return useSWR(key);
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function useData(key) {
 				return useSWR(key);
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			function useData(key) {
 				const data = useSWR(key);
 				return data;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const useData = (key) => useSWR(key);
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			const onClick = () => {
 				console.log("clicked");
@@ -72,9 +73,9 @@ const valid: Array<ValidTestCase> = [
 				return <Button onClick={onClick} />;
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -83,9 +84,9 @@ const valid: Array<ValidTestCase> = [
 				return <div>{count}</div>;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -103,9 +104,9 @@ const valid: Array<ValidTestCase> = [
 				}, [])
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 			const deps = []
@@ -123,9 +124,9 @@ const valid: Array<ValidTestCase> = [
 				const refItem = useMemo(cb, deps)
 			};
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -138,9 +139,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -151,9 +152,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -164,9 +165,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -177,9 +178,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -190,9 +191,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useState, useMemo } from "react";
 
@@ -203,12 +204,12 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	// The following cases exercise call/new detection in less obvious positions;
 	// each factory performs real computation, so none should be reported.
 	{
 		name: "useMemo with await expression containing a call in async arrow",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -217,10 +218,10 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
 		name: "useMemo with tagged template expression containing a call",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -229,10 +230,10 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
 		name: "useMemo with call inside computed member expression property",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -241,10 +242,10 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
 		name: "useMemo with chained call expression (callee is a call)",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -253,10 +254,10 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
 		name: "useMemo with new expression inside callee via member expression",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -265,10 +266,10 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
 		name: "useMemo with call inside import expression source",
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -277,9 +278,9 @@ const valid: Array<ValidTestCase> = [
 				return null;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo, useState, useEffect } from 'react';
 
@@ -294,9 +295,9 @@ const valid: Array<ValidTestCase> = [
 				return <div>{heavyStuff.length}</div>;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo, useState, useEffect } from 'react';
 
@@ -315,9 +316,9 @@ const valid: Array<ValidTestCase> = [
 				return <div>{heavyStuff.length}</div>;
 			}
 		`,
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from 'react';
 
@@ -327,21 +328,21 @@ const valid: Array<ValidTestCase> = [
 				return <div>{heavyStuff.length}</div>;
 			}
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	{
+		filename,
 		code: tsx`
 			function Component() {
 				const bar = useMemo(() => "foo", []);
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -355,9 +356,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -372,9 +373,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import { useMemo } from "react";
 
@@ -389,9 +390,9 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "default" }],
-		filename,
 	},
 	{
+		filename,
 		code: tsx`
 			import {useMemo, useState, useEffect} from 'react';
 
@@ -412,7 +413,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "noUnnecessaryUseMemoInsideUseEffect" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "react",
@@ -420,6 +420,7 @@ const invalid: Array<InvalidTestCase> = [
 		},
 	},
 	{
+		filename,
 		code: tsx`
 			const { useMemo, useState, useEffect } = require("@pika/react");
 
@@ -435,7 +436,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 		errors: [{ messageId: "noUnnecessaryUseMemoInsideUseEffect" }],
-		filename,
 		settings: {
 			"react-x": {
 				importSource: "@pika/react",

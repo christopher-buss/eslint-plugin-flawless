@@ -13,6 +13,7 @@ const filename = "file.tsx";
 const valid: Array<ValidTestCase> = [
 	// Named props interface that is already read-only.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				readonly name: string;
@@ -21,10 +22,10 @@ const valid: Array<ValidTestCase> = [
 				return <div>{props.name}</div>;
 			}
 		`,
-		filename,
 	},
 	// Props wrapped in Readonly<>.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				name: string;
@@ -33,31 +34,31 @@ const valid: Array<ValidTestCase> = [
 				return <div>{props.name}</div>;
 			}
 		`,
-		filename,
 	},
 	// Inline read-only type literal.
 	{
-		code: "const App = (props: { readonly name: string }) => <div>{props.name}</div>;",
 		filename,
+		code: "const App = (props: { readonly name: string }) => <div>{props.name}</div>;",
 	},
 	// Component with no parameters.
 	{
-		code: "const App = () => <div />;",
 		filename,
+		code: "const App = () => <div />;",
 	},
 	// Only React built-in props (children/key/ref are treated as read-only).
 	{
-		code: "const App = (props: { children: unknown }) => <div>{props.children}</div>;",
 		filename,
+		code: "const App = (props: { children: unknown }) => <div>{props.children}</div>;",
 	},
 	// Empty props object.
 	{
-		code: "const App = (props: {}) => <div />;",
 		filename,
+		code: "const App = (props: {}) => <div />;",
 	},
 	// Props already wrapped in the configured deep-readonly wrapper. Verifies
 	// the alias short-circuit recognizes a mapped/conditional `Immutable<T>`.
 	{
+		filename,
 		code: tsx`
 			type ImmutablePrimitive = boolean | number | string | undefined;
 			type Immutable<T> = T extends ImmutablePrimitive
@@ -68,55 +69,55 @@ const valid: Array<ValidTestCase> = [
 			}
 			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
 		`,
-		filename,
 		options: [{ wrapperType: "Immutable" }],
 	},
 	// Not a component (lower-case name, no JSX) — must be ignored.
 	{
+		filename,
 		code: tsx`
 			function helper(props: { name: string }) {
 				return props.name;
 			}
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	// Inline type literal on a function declaration.
 	{
+		filename,
 		code: tsx`
 			function App(props: { name: string }) {
 				return <div>{props.name}</div>;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			function App(props: Readonly<{ name: string }>) {
 				return <div>{props.name}</div>;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Named props interface on an arrow component.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				name: string;
 			}
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			interface Props {
 				name: string;
 			}
 			const App = (props: Readonly<Props>) => <div>{props.name}</div>;
 		`,
+		errors: [{ messageId }],
 	},
 	// Partially read-only props still get wrapped.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				readonly a: number;
@@ -126,8 +127,6 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{props.b}</div>;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			interface Props {
 				readonly a: number;
@@ -137,9 +136,11 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{props.b}</div>;
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// FC-style annotation: wrap the type argument.
 	{
+		filename,
 		code: tsx`
 			type FC<P> = (props: P) => any;
 			interface Props {
@@ -147,8 +148,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App: FC<Props> = (props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			type FC<P> = (props: P) => any;
 			interface Props {
@@ -156,9 +155,11 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App: FC<Readonly<Props>> = (props) => <div>{props.name}</div>;
 		`,
+		errors: [{ messageId }],
 	},
 	// forwardRef: wrap the props (second) type argument.
 	{
+		filename,
 		code: tsx`
 			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
 			interface Props {
@@ -166,8 +167,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = forwardRef<HTMLDivElement, Props>((props, ref) => <div>{props.name}</div>);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
 			interface Props {
@@ -175,9 +174,11 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = forwardRef<HTMLDivElement, Readonly<Props>>((props, ref) => <div>{props.name}</div>);
 		`,
+		errors: [{ messageId }],
 	},
 	// memo: wrap the props (first) type argument.
 	{
+		filename,
 		code: tsx`
 			declare function memo<P>(component: (props: P) => any): (props: P) => any;
 			interface Props {
@@ -185,8 +186,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = memo<Props>((props) => <div>{props.name}</div>);
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: tsx`
 			declare function memo<P>(component: (props: P) => any): (props: P) => any;
 			interface Props {
@@ -194,18 +193,17 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = memo<Readonly<Props>>((props) => <div>{props.name}</div>);
 		`,
+		errors: [{ messageId }],
 	},
 	// Custom wrapper with an import source: wrap and insert the type import.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				name: string;
 			}
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
 		output: tsx`
 			import type { Immutable } from "~/types";
 			interface Props {
@@ -213,9 +211,12 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
 		`,
+		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
+		errors: [{ messageId }],
 	},
 	// Custom wrapper merges into an existing named import from the same module.
 	{
+		filename,
 		code: tsx`
 			import { type Foo } from "~/types";
 			interface Props {
@@ -223,9 +224,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
 		output: tsx`
 			import { type Foo, type Immutable } from "~/types";
 			interface Props {
@@ -233,61 +231,64 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = (props: Immutable<Props>) => <div>{props.name}</div>;
 		`,
+		options: [{ importSource: "~/types", wrapperType: "Immutable" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: inline literal gets a per-property readonly modifier.
 	{
+		filename,
 		code: tsx`
 			function App(props: { name: string }) {
 				return <div>{props.name}</div>;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			function App(props: { readonly name: string }) {
 				return <div>{props.name}</div>;
 			}
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: a same-file named interface is modified in place.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				name: string;
 			}
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			interface Props {
 				readonly name: string;
 			}
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: a same-file type alias to a type literal.
 	{
+		filename,
 		code: tsx`
 			type Props = {
 				name: string;
 			};
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			type Props = {
 				readonly name: string;
 			};
 			const App = (props: Props) => <div>{props.name}</div>;
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: only the mutable member of a partially read-only interface.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				readonly a: number;
@@ -297,9 +298,6 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{props.b}</div>;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			interface Props {
 				readonly a: number;
@@ -309,18 +307,21 @@ const invalid: Array<InvalidTestCase> = [
 				return <div>{props.b}</div>;
 			}
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: a mutable index signature gets a readonly modifier.
 	{
-		code: "const App = (props: { [key: string]: number }) => <div>{props.x}</div>;",
-		errors: [{ messageId }],
 		filename,
-		options: [{ fixStyle: "modifier" }],
+		code: "const App = (props: { [key: string]: number }) => <div>{props.x}</div>;",
 		output: "const App = (props: { readonly [key: string]: number }) => <div>{props.x}</div>;",
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: an FC annotation reaches the referenced same-file interface
 	// rather than the type argument.
 	{
+		filename,
 		code: tsx`
 			type FC<P> = (props: P) => any;
 			interface Props {
@@ -328,9 +329,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App: FC<Props> = (props) => <div>{props.name}</div>;
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			type FC<P> = (props: P) => any;
 			interface Props {
@@ -338,9 +336,12 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App: FC<Props> = (props) => <div>{props.name}</div>;
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: forwardRef likewise reaches the same-file interface.
 	{
+		filename,
 		code: tsx`
 			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
 			interface Props {
@@ -348,9 +349,6 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = forwardRef<HTMLDivElement, Props>((props, ref) => <div>{props.name}</div>);
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: tsx`
 			declare function forwardRef<T, P>(render: (props: P, ref: T) => any): (props: P) => any;
 			interface Props {
@@ -358,10 +356,13 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			const App = forwardRef<HTMLDivElement, Props>((props, ref) => <div>{props.name}</div>);
 		`,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: a union props type is not attributable to a single
 	// declaration, so it is reported without a fix.
 	{
+		filename,
 		code: tsx`
 			interface A {
 				a: number;
@@ -374,15 +375,15 @@ const invalid: Array<InvalidTestCase> = [
 				return <div />;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: null,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 	// modifier mode: a method signature cannot take a readonly modifier, so the
 	// component is reported without a fix even though `name` alone could be
 	// fixed.
 	{
+		filename,
 		code: tsx`
 			interface Props {
 				name: string;
@@ -392,10 +393,9 @@ const invalid: Array<InvalidTestCase> = [
 				return <div onClick={props.onClick}>{props.name}</div>;
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
-		options: [{ fixStyle: "modifier" }],
 		output: null,
+		options: [{ fixStyle: "modifier" }],
+		errors: [{ messageId }],
 	},
 ];
 

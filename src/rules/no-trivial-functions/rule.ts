@@ -149,7 +149,7 @@ function isParameterAccess(
 	expression: TSESTree.Expression,
 	parameters: Array<TSESTree.Parameter>,
 ): boolean {
-	let current: TSESTree.Expression = expression;
+	let current = expression;
 	while (current.type === AST_NODE_TYPES.MemberExpression) {
 		const { computed, object, property } = current;
 		if (
@@ -448,7 +448,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				minimumReferences: options?.minimumReferences ?? DEFAULTS.minimumReferences,
 			};
 		},
-		Program(program: TSESTree.Program): void {
+		Program(program): void {
 			// In a script, top-level declarations are globals other files may
 			// use.
 			if (program.sourceType !== "module") {

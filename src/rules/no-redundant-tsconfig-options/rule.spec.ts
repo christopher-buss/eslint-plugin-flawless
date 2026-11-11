@@ -14,91 +14,92 @@ const filename = path.join(fixtures, "tsconfig.json");
 const valid: Array<ValidTestCase> = [
 	// No `extends`: nothing to compare against.
 	{
+		filename,
 		code: unindent`
 			{
 				"compilerOptions": { "strict": true }
 			}
 		`,
-		filename,
 	},
 	// Unresolvable parent: rule bails rather than guessing.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./does-not-exist.json",
 				"compilerOptions": { "strict": true }
 			}
 		`,
-		filename,
 	},
 	// Different value is a legitimate override.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "strict": false }
 			}
 		`,
-		filename,
 	},
 	// A subset array differs structurally from the inherited array.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "lib": ["esnext"] }
 			}
 		`,
-		filename,
 	},
 	// `null` clears an inherited value; it is not equal to that value.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "downlevelIteration": null }
 			}
 		`,
-		filename,
 	},
 	// A plain-relative path repeats the text but resolves against the child's
 	// own directory, so it is not redundant.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "rootDir": "./src" }
 			}
 		`,
-		filename,
 	},
 	// Same for a plain-relative top-level glob.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"exclude": ["node_modules"]
 			}
 		`,
-		filename,
 	},
 	// Diamond extends: both branches share a grandparent, and the later branch
 	// (b.json) inherits the grandparent's `strict: false`, so it wins over
 	// a.json's `strict: true`. The child's `strict: true` is a genuine override.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": ["./diamond/a.json", "./diamond/b.json"],
 				"compilerOptions": { "strict": true }
 			}
 		`,
-		filename,
 	},
 ];
 
 const invalid: Array<InvalidTestCase> = [
 	// A re-set boolean already provided by the parent.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
@@ -108,8 +109,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
@@ -118,9 +117,11 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A redundant last property drops its preceding comma.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
@@ -130,8 +131,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
@@ -140,147 +139,149 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Enum values fold case, matching TypeScript.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "target": "ESNext" }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// An identical array is redundant.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "lib": ["esnext", "dom"] }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// `lib` is an unordered set, so a reordered but identical array is redundant.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "lib": ["dom", "esnext"] }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Diamond extends where the child re-sets the value the later branch actually
 	// resolves to (`strict: false`, inherited by b.json from the grandparent).
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": ["./diamond/a.json", "./diamond/b.json"],
 				"compilerOptions": { "strict": false }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": ["./diamond/a.json", "./diamond/b.json"],
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A `${configDir}`-anchored path resolves to the same files, so it is
 	// redundant.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { "outDir": "\${configDir}/dist" }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Top-level `include` re-declared identically with a `${configDir}` anchor.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
 				"include": ["\${configDir}/src"]
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json"
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// A value defined two levels up the chain is still caught.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./chain/mid.json",
 				"compilerOptions": { "composite": true }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./chain/mid.json",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Package `extends` resolved through the real `@isentinel/tsconfig` exports
 	// map.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "@isentinel/tsconfig/typescript",
 				"compilerOptions": { "skipLibCheck": true }
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "@isentinel/tsconfig/typescript",
 				"compilerOptions": { }
 			}
 		`,
+		errors: [{ messageId }],
 	},
 	// Two redundant options (with a kept option between) are both removed.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
@@ -291,8 +292,6 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }, { messageId }],
-		filename,
 		output: unindent`
 			{
 				"extends": "./base.json",
@@ -301,9 +300,11 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
+		errors: [{ messageId }, { messageId }],
 	},
 	// A comment on the property would be stranded by removal: report, no fix.
 	{
+		filename,
 		code: unindent`
 			{
 				"extends": "./base.json",
@@ -313,9 +314,8 @@ const invalid: Array<InvalidTestCase> = [
 				}
 			}
 		`,
-		errors: [{ messageId }],
-		filename,
 		output: null,
+		errors: [{ messageId }],
 	},
 ];
 

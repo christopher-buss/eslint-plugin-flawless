@@ -73,7 +73,7 @@ class UnusedVariablesVisitor extends Visitor {
 			return cached;
 		}
 
-		const visitor = new this(scopeManager);
+		const visitor = new UnusedVariablesVisitor(scopeManager);
 		visitor.visit(program);
 
 		const unusedVariables = visitor.collectUnusedVariables({
@@ -257,7 +257,11 @@ class UnusedVariablesVisitor extends Visitor {
 
 	private visitClass(node: TSESTree.ClassDeclaration | TSESTree.ClassExpression): void {
 		// skip a variable of class itself name in the class scope
-		const scope = this.getScope(node) as TSESLint.Scope.Scopes.ClassScope;
+		const scope = this.getScope(node);
+		if (scope.type !== ScopeType.class) {
+			return;
+		}
+
 		for (const variable of scope.variables) {
 			if (variable.identifiers[0] === scope.block.id) {
 				this.markVariableAsUsed(variable);
@@ -272,9 +276,8 @@ class UnusedVariablesVisitor extends Visitor {
 		 * (Brad Zacher): I hate that this has to exist.
 		 * But it is required for compat with the base ESLint rule.
 		 *
-		 * In 2015, ESLint decided to add an exception for these two specific cases.
-		 * ```
-		 * for (var key in object) return;
+		 * In 2015, ESLint decided to add an exception for these two specific
+		 * cases. ``` for (var key in object) return;
 		 *
 		 * var key;
 		 * for (key in object) return;
@@ -350,14 +353,21 @@ class UnusedVariablesVisitor extends Visitor {
 	}
 
 	private visitSetter(node: TSESTree.MethodDefinition | TSESTree.Property): void {
-		if (node.kind === "set") {
-			// ignore setter parameters because they're syntactically required to
-			// exist
-			for (const parameter of (node.value as TSESTree.FunctionLike).params) {
-				this.visitPattern(parameter, (id) => {
-					this.markVariableAsUsed(id);
-				});
-			}
+		const { value } = node;
+		if (
+			node.kind !== "set" ||
+			(value.type !== AST_NODE_TYPES.FunctionExpression &&
+				value.type !== AST_NODE_TYPES.TSEmptyBodyFunctionExpression)
+		) {
+			return;
+		}
+
+		// ignore setter parameters because they're syntactically required to
+		// exist
+		for (const parameter of value.params) {
+			this.visitPattern(parameter, (id) => {
+				this.markVariableAsUsed(id);
+			});
 		}
 	}
 
@@ -569,23 +579,18 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 	 * @returns The node is an unused expression.
 	 */
 	function isUnusedExpression(node: TSESTree.Expression): boolean {
-		const { parent } = node;
-
-		if (parent.type === AST_NODE_TYPES.ExpressionStatement) {
-			return true;
-		}
-
-		if (parent.type === AST_NODE_TYPES.SequenceExpression) {
-			const isLastExpression = parent.expressions[parent.expressions.length - 1] === node;
-
-			if (!isLastExpression) {
+		let current: TSESTree.Node = node;
+		let { parent } = node;
+		while (parent.type === AST_NODE_TYPES.SequenceExpression) {
+			if (parent.expressions.at(-1) !== current) {
 				return true;
 			}
 
-			return isUnusedExpression(parent);
+			current = parent;
+			({ parent } = parent);
 		}
 
-		return false;
+		return parent.type === AST_NODE_TYPES.ExpressionStatement;
 	}
 
 	/**
@@ -642,10 +647,10 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 		}
 
 		if (
+			!canBeUsedLater &&
 			parent.type === AST_NODE_TYPES.AssignmentExpression &&
-			isUnusedExpression(parent) &&
 			id === parent.left &&
-			!canBeUsedLater
+			isUnusedExpression(parent)
 		) {
 			return parent.right;
 		}
@@ -664,14 +669,15 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 		rhsNode: TSESTree.Node | undefined,
 	): boolean {
 		/**
-		 * Checks whether a given Identifier node exists inside of a function node which can be used later.
+		 * Checks whether a given Identifier node exists inside of a function
+		 * node which can be used later.
 		 *
-		 * "can be used later" means:
-		 * - the function is assigned to a variable.
-		 * - the function is bound to a property and the object can be used later.
-		 * - the function is bound as an argument of a function call.
+		 * "can be used later" means: - the function is assigned to a variable.
+		 * - the function is bound to a property and the object can be used
+		 * later. - the function is bound as an argument of a function call.
 		 *
-		 * If a reference exists in a function which can be used later, the reference is read when the function is called.
+		 * If a reference exists in a function which can be used later, the
+		 * reference is read when the function is called.
 		 * @param id - An Identifier node to check.
 		 * @param rightHandSideNode - The RHS node of the previous assignment.
 		 * @returns `true` if the `id` node exists inside of a function node which can be used later.
@@ -704,9 +710,10 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 			 * @param funcNode - A function node to check.
 			 * @param storableRhsNode - The RHS node of the previous assignment.
 			 * @returns `true` if under the following conditions:
-			 *      - the funcNode is assigned to a variable.
-			 *      - the funcNode is bound as an argument of a function call.
-			 *      - the function is bound to a property and the object satisfies above conditions.
+			 *      - the funcNode is assigned to a variable. - the funcNode is
+			 *      bound as an argument of a function call. - the function is
+			 *      bound to a property and the object satisfies above
+			 *      conditions.
 			 */
 			function isStorableFunction(
 				funcNode: TSESTree.Node,
@@ -716,6 +723,13 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 				let { parent } = funcNode;
 
 				while (parent && isInside(parent, storableRhsNode)) {
+					if (
+						parent.type === AST_NODE_TYPES.SequenceExpression &&
+						parent.expressions.at(-1) !== node
+					) {
+						return false;
+					}
+
 					// eslint-disable-next-line ts/switch-exhaustiveness-check -- won't be fixed
 					switch (parent.type) {
 						case AST_NODE_TYPES.AssignmentExpression:
@@ -726,13 +740,6 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 						case AST_NODE_TYPES.CallExpression:
 						case AST_NODE_TYPES.NewExpression: {
 							return parent.callee !== node;
-						}
-						case AST_NODE_TYPES.SequenceExpression: {
-							if (parent.expressions[parent.expressions.length - 1] !== node) {
-								return false;
-							}
-
-							break;
 						}
 						default: {
 							if (
@@ -783,14 +790,14 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 	const functionNodes = getFunctionDefinitions(variable);
 	const isFunctionDefinition = functionNodes.size > 0;
 
-	const typeDeclNodes = getTypeDeclarations(variable);
-	const isTypeDecl = typeDeclNodes.size > 0;
+	const typeDeclarationNodes = getTypeDeclarations(variable);
+	const isTypeDeclaration = typeDeclarationNodes.size > 0;
 
-	const moduleDeclNodes = getModuleDeclarations(variable);
-	const isModuleDecl = moduleDeclNodes.size > 0;
+	const moduleDeclarationNodes = getModuleDeclarations(variable);
+	const isModuleDeclaration = moduleDeclarationNodes.size > 0;
 
-	const enumDeclNodes = getEnumDeclarations(variable);
-	const isEnumDecl = enumDeclNodes.size > 0;
+	const enumDeclarationNodes = getEnumDeclarations(variable);
+	const isEnumDeclaration = enumDeclarationNodes.size > 0;
 
 	const isImportedAsType = variable.defs.every(isTypeImport);
 
@@ -806,9 +813,9 @@ function isUsedVariable(variable: ScopeVariable): boolean {
 			!forItself &&
 			(isImportedAsType || !referenceContainsTypeQuery(ref.identifier)) &&
 			(!isFunctionDefinition || !isSelfReference(ref, functionNodes)) &&
-			(!isTypeDecl || !isInsideOneOf(ref, typeDeclNodes)) &&
-			(!isModuleDecl || !isSelfReference(ref, moduleDeclNodes)) &&
-			(!isEnumDecl || !isSelfReference(ref, enumDeclNodes))
+			(!isTypeDeclaration || !isInsideOneOf(ref, typeDeclarationNodes)) &&
+			(!isModuleDeclaration || !isSelfReference(ref, moduleDeclarationNodes)) &&
+			(!isEnumDeclaration || !isSelfReference(ref, enumDeclarationNodes))
 		);
 	});
 }

@@ -126,9 +126,6 @@ Example configuration:
 
 ```json
 {
-	"flawless/no-conditional-in-test": [
-		"error",
-		{ "allowOptionalChaining": false }
-	]
+	"flawless/no-conditional-in-test": ["error", { "allowOptionalChaining": false }]
 }
 ```

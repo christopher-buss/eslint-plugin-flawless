@@ -261,7 +261,8 @@ function functionImplementation(
 	}
 
 	const name = signature.id?.name;
-	for (const statement of siblingStatements(signature) ?? []) {
+	const siblings = siblingStatements(signature) ?? [];
+	for (const statement of siblings) {
 		const candidate = unwrapExport(statement);
 		if (candidate.type === AST_NODE_TYPES.FunctionDeclaration && candidate.id?.name === name) {
 			return candidate;

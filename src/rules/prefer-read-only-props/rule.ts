@@ -16,21 +16,22 @@ type MessageIds = "preferReadOnlyProps";
 type Options = [
 	{
 		/**
-		 * How the autofix makes props read-only. `"wrap"` (the default) wraps the
-		 * props type in `wrapperType`; `"modifier"` instead adds a `readonly`
-		 * modifier to each mutable property, but only when every one is inline or
-		 * declared in the same file (otherwise no fix is offered).
+		 * How the autofix makes props read-only. `"wrap"` (the default) wraps
+		 * the props type in `wrapperType`; `"modifier"` instead adds a
+		 * `readonly` modifier to each mutable property, but only when every one
+		 * is inline or declared in the same file (otherwise no fix is offered).
 		 */
 		fixStyle?: "modifier" | "wrap";
 		/**
-		 * Module to import the wrapper from when the autofix inserts it. Omit when
-		 * the wrapper is globally available (the default `Readonly` needs no
-		 * import).
+		 * Module to import the wrapper from when the autofix inserts it. Omit
+		 * when the wrapper is globally available (the default `Readonly` needs
+		 * no import).
 		 */
 		importSource?: string;
 		/**
-		 * Utility type the autofix wraps props in. Defaults to `Readonly`; set to a
-		 * deep-readonly type such as `Immutable` to enforce nested immutability.
+		 * Utility type the autofix wraps props in. Defaults to `Readonly`; set
+		 * to a deep-readonly type such as `Immutable` to enforce nested
+		 * immutability.
 		 */
 		wrapperType?: string;
 	},
@@ -42,11 +43,19 @@ const messages = {
 	preferReadOnlyProps: "A function component's props should be read-only.",
 };
 
-/** Names of the `React.forwardRef` wrapper whose props are its second type argument. */
+/**
+ * Names of the `React.forwardRef` wrapper whose props are its second type
+ * argument.
+ */
 const FORWARD_REF_NAMES = new Set(["forwardRef"]);
-/** Names of the `React.memo` wrapper whose props are its first type argument. */
+/**
+ * Names of the `React.memo` wrapper whose props are its first type argument.
+ */
 const MEMO_NAMES = new Set(["memo"]);
-/** Named function-component type aliases whose props are their first type argument. */
+/**
+ * Named function-component type aliases whose props are their first type
+ * argument.
+ */
 const FC_TYPE_NAMES = new Set(["FC", "FunctionComponent", "VFC", "VoidFunctionComponent"]);
 
 /**
@@ -57,15 +66,16 @@ const FC_TYPE_NAMES = new Set(["FC", "FunctionComponent", "VFC", "VoidFunctionCo
  * @returns The underlying binding pattern.
  */
 function unwrapParameter(node: TSESTree.Node): TSESTree.Node {
-	if (node.type === AST_NODE_TYPES.AssignmentPattern) {
-		return unwrapParameter(node.left);
+	let current = node;
+	while (true) {
+		if (current.type === AST_NODE_TYPES.AssignmentPattern) {
+			current = current.left;
+		} else if (current.type === AST_NODE_TYPES.RestElement) {
+			current = current.argument;
+		} else {
+			return current;
+		}
 	}
-
-	if (node.type === AST_NODE_TYPES.RestElement) {
-		return unwrapParameter(node.argument);
-	}
-
-	return node;
 }
 
 function getEntityName(typeName: TSESTree.EntityName): string | undefined {
@@ -285,8 +295,9 @@ function create(
 	 *   symbol has none (a synthesized member).
 	 * @param expected - The AST node type the declaration must map to.
 	 * @returns The AST node, or `undefined` when the declaration is missing, lives
-	 *   in another file (absent from this file's node map), or is not the expected
-	 *   kind (such as a method signature, which cannot take a `readonly`).
+	 *   in another file (absent from this file's node map), or is not the
+	 *   expected kind (such as a method signature, which cannot take a
+	 *   `readonly`).
 	 */
 	function resolveMemberNode(
 		declaration: Declaration | undefined,
@@ -310,8 +321,8 @@ function create(
 	 *
 	 * @param members - The mutable properties and index signatures of the props.
 	 * @returns The member nodes, or `undefined` when any member cannot be edited
-	 *   here (cross-file, synthesized, or a method signature) — in which case the
-	 *   `"modifier"` fix is withheld.
+	 *   here (cross-file, synthesized, or a method signature) — in which case
+	 *   the `"modifier"` fix is withheld.
 	 */
 	function resolveModifierTargets(members: MutableMembers): Array<TSESTree.Node> | undefined {
 		const nodes = new Set<TSESTree.Node>();
@@ -366,9 +377,9 @@ function create(
 					targets === undefined
 						? null
 						: (fixer): Array<TSESLint.RuleFix> => {
-								return targets.map((node) =>
-									fixer.insertTextBefore(node, "readonly "),
-								);
+								return targets.map((node) => {
+									return fixer.insertTextBefore(node, "readonly ");
+								});
 							},
 				messageId: "preferReadOnlyProps",
 				node: functionNode,
@@ -438,6 +449,7 @@ export const preferReadOnlyProps: EslintRuleModule<Options, MessageIds> = create
 		},
 		fixable: "code",
 		hasSuggestions: false,
+		languages: ["js/js"],
 		messages,
 		schema: [
 			{

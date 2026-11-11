@@ -10,7 +10,6 @@ import { findVariable } from "@typescript-eslint/utils/ast-utils";
 import type { FlawlessRuleContext, FlawlessRuleListener, FlawlessRuleModule } from "../../util";
 import { createFlawlessRule } from "../../util";
 import { getTestGlobalSources, resolveTestGlobalName } from "../../utils/test-globals";
-import { unwrapAssertedExpression } from "../shared/dictionary-types";
 
 export const RULE_NAME = "prefer-mock-throw";
 
@@ -40,7 +39,9 @@ const HOISTED_METHODS = new Set(["hoisted", "mock"]);
 /** Unary operators that are side-effect free on a literal operand. */
 const LITERAL_UNARY_OPERATORS = new Set(["!", "+", "-", "typeof", "void", "~"]);
 
-/** Definition kinds that can bind a stable value; a `Variable` must be `const`. */
+/**
+ * Definition kinds that can bind a stable value; a `Variable` must be `const`.
+ */
 const STABLE_DEFINITIONS: ReadonlySet<DefinitionType> = new Set([
 	DefinitionType.CatchClause,
 	DefinitionType.ClassName,
@@ -110,6 +111,8 @@ function getThrownExpression(implementation: Implementation): null | TSESTree.Ex
 	return isPlainParameter ? statement.argument : null;
 }
 
+const LEADING_WHITESPACE = /^\s*/;
+
 /**
  * Finds the leading whitespace of the line a node starts on.
  *
@@ -118,7 +121,7 @@ function getThrownExpression(implementation: Implementation): null | TSESTree.Ex
  * @returns The indentation of that line.
  */
 function getIndentation(sourceCode: Readonly<TSESLint.SourceCode>, line: number): string {
-	return /^\s*/.exec(sourceCode.lines[line - 1] ?? "")?.[0] ?? "";
+	return LEADING_WHITESPACE.exec(sourceCode.lines[line - 1] ?? "")?.[0] ?? "";
 }
 
 /**
@@ -163,9 +166,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
-	 * Finds the hoisted `vi.mock()` / `vi.hoisted()` factory a node sits in. The
-	 * factory runs before the rest of the module, so any outer binding it reads
-	 * eagerly is still in its temporal dead zone.
+	 * Finds the hoisted `vi.mock()` / `vi.hoisted()` factory a node sits in.
+	 * The factory runs before the rest of the module, so any outer binding it
+	 * reads eagerly is still in its temporal dead zone.
 	 *
 	 * @param node - The node to start from.
 	 * @returns The enclosing hoisted factory, or `null` when there is none.
@@ -329,7 +332,19 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return child !== null && isStableExpression(child, implementation, call);
 		}
 
-		const expression = unwrapAssertedExpression(node as TSESTree.Expression);
+		// `node` may be a property key or value that is not an expression, so
+		// the assertions are unwrapped here rather than by
+		// `unwrapAssertedExpression`.
+		let expression = node;
+		while (
+			expression.type === AST_NODE_TYPES.TSAsExpression ||
+			expression.type === AST_NODE_TYPES.TSNonNullExpression ||
+			expression.type === AST_NODE_TYPES.TSSatisfiesExpression ||
+			expression.type === AST_NODE_TYPES.TSTypeAssertion
+		) {
+			({ expression } = expression);
+		}
+
 		// eslint-disable-next-line ts/switch-exhaustiveness-check -- Anything off the allow-list is unstable
 		switch (expression.type) {
 			case AST_NODE_TYPES.ArrayExpression: {
@@ -431,7 +446,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			reassignedVariables = new Map();
 			hoistedFactories = new Map();
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			const { arguments: callArguments, callee } = node;
 			if (callee.type !== AST_NODE_TYPES.MemberExpression || callArguments.length !== 1) {
 				return;
@@ -470,7 +485,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					return [
 						fixer.replaceText(
 							property,
-							sourceCode.getText(property).replace(method, replacement),
+							sourceCode.getText(property).replace(method, () => replacement),
 						),
 						fixer.replaceText(
 							implementation,

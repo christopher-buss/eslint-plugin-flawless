@@ -299,7 +299,7 @@ function hasBody(node: ts.Node): boolean {
  * @returns True when a call or `new` receives the node as an argument.
  */
 function isCallArgument(node: ts.Expression): boolean {
-	let argument: ts.Expression = node;
+	let argument = node;
 	while (ts.isParenthesizedExpression(argument.parent)) {
 		argument = argument.parent;
 	}
@@ -363,9 +363,9 @@ function takeSnapshot(program: ts.Program, fileName: string): Snapshot {
 		);
 		const [first] = type !== undefined && ts.isFunctionTypeNode(type) ? type.parameters : [];
 		if (
+			first === undefined ||
 			type === undefined ||
 			!ts.isFunctionTypeNode(type) ||
-			first === undefined ||
 			!ts.isIdentifier(first.name) ||
 			first.name.text !== "this"
 		) {
@@ -490,7 +490,7 @@ function applyFixes(text: string, messages: ReadonlyArray<Linter.LintMessage>): 
 		.sort((left, right) => left.range[0] - right.range[0] || left.range[1] - right.range[1]);
 
 	let output = "";
-	let last = Number.NEGATIVE_INFINITY;
+	let last = -Infinity;
 	for (const fix of fixes) {
 		if (last >= fix.range[0]) {
 			continue;
@@ -545,6 +545,7 @@ function runFixPass({
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: { parser: tsParser, parserOptions: { programs: [program] } },
 		plugins: {
+			// eslint-disable-next-line ts/no-unsafe-type-assertion -- The caller passes a typescript-eslint rule module, which ESLint's plugin type does not accept.
 			subject: { rules: { rule } } as unknown as NonNullable<
 				Linter.Config["plugins"]
 			>[string],

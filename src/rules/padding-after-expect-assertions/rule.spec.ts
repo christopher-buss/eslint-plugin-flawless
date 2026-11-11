@@ -112,7 +112,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.assertions(1);
@@ -120,6 +119,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// hasAssertions is padded the same way.
 	{
@@ -129,7 +129,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.hasAssertions();
@@ -137,6 +136,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// Padding is required regardless of what follows, not just expectations.
 	{
@@ -147,7 +147,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(result).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.assertions(1);
@@ -156,6 +155,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(result).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// A trailing same-line comment keeps its place; the blank line lands after
 	// it.
@@ -166,7 +166,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.assertions(1); // exactly one
@@ -174,6 +173,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// A comment on its own line in the gap gets the blank line before it.
 	{
@@ -184,7 +184,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.assertions(1);
@@ -193,6 +192,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// An awaited expectation is still just the following statement.
 	{
@@ -202,7 +202,6 @@ const invalid: Array<InvalidTestCase> = [
 				await expect(promise).resolves.toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("resolves", async () => {
 				expect.assertions(1);
@@ -210,6 +209,7 @@ const invalid: Array<InvalidTestCase> = [
 				await expect(promise).resolves.toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// Realistic shape: the assertion still gets padded inside a nested describe.
 	{
@@ -221,7 +221,6 @@ const invalid: Array<InvalidTestCase> = [
 				});
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			describe("math", () => {
 				it("divides", () => {
@@ -231,6 +230,7 @@ const invalid: Array<InvalidTestCase> = [
 				});
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// `expect` resolved through a @jest/globals import is still padded.
 	{
@@ -241,7 +241,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			import { expect } from "@jest/globals";
 			it("divides", () => {
@@ -250,6 +249,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// A bun:test import resolves to the same `expect`.
 	{
@@ -260,7 +260,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			import { expect } from "bun:test";
 			it("divides", () => {
@@ -269,6 +268,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 	},
 	// A jest re-export named by `settings.jest.globalPackage` is recognized,
 	// the way eslint-plugin-jest treats the setting.
@@ -280,7 +280,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			import { expect } from "@rbxts/jest-globals";
 			it("divides", () => {
@@ -289,6 +288,7 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
 	// The setting leaves a global `expect` alone: it is not an import.
@@ -299,7 +299,6 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
-		errors: [{ messageId }],
 		output: unindent`
 			it("divides", () => {
 				expect.assertions(1);
@@ -307,17 +306,18 @@ const invalid: Array<InvalidTestCase> = [
 				expect(divide(10, 2)).toBe(5);
 			});
 		`,
+		errors: [{ messageId }],
 		settings: { jest: { globalPackage: "@rbxts/jest-globals" } },
 	},
 	// Both statements on one line: the same-line branch adds a full blank line.
 	{
 		code: "expect.assertions(1);expect(divide(10, 2)).toBe(5);",
-		errors: [{ messageId }],
 		output: unindent`
 			expect.assertions(1);
 
 			expect(divide(10, 2)).toBe(5);
 		`,
+		errors: [{ messageId }],
 	},
 ];
 

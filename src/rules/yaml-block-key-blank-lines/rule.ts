@@ -105,6 +105,7 @@ export const yamlBlockKeyBlankLines: EslintRuleModule<Options, MessageIds> = cre
 		},
 		fixable: "whitespace",
 		hasSuggestions: false,
+		languages: ["js/js", "yml/yaml"],
 		messages,
 		schema: [],
 		type: "layout",

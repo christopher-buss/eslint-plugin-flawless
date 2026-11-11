@@ -137,8 +137,8 @@ const invalid: Array<InvalidTestCase> = [
 			getName(first)
 			getName(second)
 		`,
-		errors: [{ data: { name: "getName", count: 2, minimum: 3 }, messageId }],
 		options: [{ minimumReferences: 3 }],
+		errors: [{ data: { name: "getName", count: 2, minimum: 3 }, messageId }],
 	},
 	// Recursive and `typeof` references do not count.
 	{
@@ -229,5 +229,5 @@ run({
 	invalid: [],
 	parserOptions: { ecmaVersion: "latest", sourceType: "script" },
 	rule: noTrivialFunctions,
-	valid: [{ code: "function getName(user) { return user.name }", filename: "script.js" }],
+	valid: [{ filename: "script.js", code: "function getName(user) { return user.name }" }],
 });

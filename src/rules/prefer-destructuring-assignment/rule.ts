@@ -18,14 +18,16 @@ const messages = {
 };
 
 /**
- * A reference to the props parameter paired with the member expression it is the
- * object of. For a `props.id` usage this pairs the `props` reference with the
- * `props.id` node.
+ * A reference to the props parameter paired with the member expression it is
+ * the object of. For a `props.id` usage this pairs the `props` reference with
+ * the `props.id` node.
  */
 interface MemberReference {
 	readonly member: TSESTree.MemberExpression;
 	readonly reference: TSESLint.Scope.Reference;
 }
+
+type NodeHandler = (node: TSESTree.Node) => void;
 
 /**
  * Collects the unique accessed property names, in first-seen order, when every
@@ -57,13 +59,48 @@ function collectPropertyNames(memberReferences: Array<MemberReference>): Array<s
 }
 
 /**
- * Determines whether rewriting `props.foo` to `foo` would resolve to a different
- * binding than the new destructured parameter at any access site.
+ * Determines whether a name is bound, other than by the props parameter, in a
+ * scope from `innermost` out to and including the component scope.
  *
- * A name is unsafe when it is already bound in the component scope (other than by
- * the props parameter itself) or in any scope nested between an access and the
- * component, since the rewritten `foo` reference would then resolve to that
- * binding instead of the destructured prop.
+ * @param innermost - The scope of the access site.
+ * @param componentScope - The component function's scope, where the walk ends.
+ * @param propsVariable - The props parameter variable (excluded from the check).
+ * @param name - The name to look for.
+ * @returns `true` if a scope on the way binds the name.
+ */
+function isBoundBetween(
+	innermost: TSESLint.Scope.Scope,
+	componentScope: TSESLint.Scope.Scope,
+	propsVariable: TSESLint.Scope.Variable,
+	name: string,
+): boolean {
+	let scope: null | TSESLint.Scope.Scope = innermost;
+	while (scope !== null) {
+		const collides = scope.variables.some(
+			(variable) => variable.name === name && variable !== propsVariable,
+		);
+		if (collides) {
+			return true;
+		}
+
+		if (scope === componentScope) {
+			return false;
+		}
+
+		scope = scope.upper;
+	}
+
+	return false;
+}
+
+/**
+ * Determines whether rewriting `props.foo` to `foo` would resolve to a
+ * different binding than the new destructured parameter at any access site.
+ *
+ * A name is unsafe when it is already bound in the component scope (other than
+ * by the props parameter itself) or in any scope nested between an access and
+ * the component, since the rewritten `foo` reference would then resolve to
+ * that binding instead of the destructured prop.
  *
  * @param sourceCode - Provides scope lookup for each reference.
  * @param componentScope - The component function's scope.
@@ -78,21 +115,16 @@ function wouldShadowExistingBinding(
 	memberReferences: Array<MemberReference>,
 ): boolean {
 	for (const { member, reference } of memberReferences) {
-		const { name } = member.property as TSESTree.Identifier;
-		let scope: null | TSESLint.Scope.Scope = sourceCode.getScope(reference.identifier);
-		while (scope !== null) {
-			const collides = scope.variables.some(
-				(variable) => variable.name === name && variable !== propsVariable,
-			);
-			if (collides) {
-				return true;
-			}
-
-			if (scope === componentScope) {
-				break;
-			}
-
-			scope = scope.upper;
+		if (
+			member.property.type === AST_NODE_TYPES.Identifier &&
+			isBoundBetween(
+				sourceCode.getScope(reference.identifier),
+				componentScope,
+				propsVariable,
+				member.property.name,
+			)
+		) {
+			return true;
 		}
 	}
 
@@ -159,7 +191,13 @@ function reportComponent(
 	const nameEnd = propsParameter.typeAnnotation?.range[0] ?? propsParameter.range[1];
 
 	for (const [index, { member }] of memberReferences.entries()) {
-		const propertyName = (member.property as TSESTree.Identifier).name;
+		// `collectPropertyNames` has already checked that each property is an
+		// identifier.
+		if (member.property.type !== AST_NODE_TYPES.Identifier) {
+			continue;
+		}
+
+		const propertyName = member.property.name;
 		context.report({
 			fix(fixer) {
 				const replaceAccess = fixer.replaceText(member, propertyName);
@@ -181,15 +219,26 @@ function reportComponent(
 }
 
 /**
+ * Narrows a selector handler read from a listener. Listener handlers are typed
+ * to take `never`, but each one accepts the node its selector matched.
+ *
+ * @param value - The handler, if any.
+ * @returns True when the value is a function.
+ */
+function isNodeHandler(value: unknown): value is NodeHandler {
+	return typeof value === "function";
+}
+
+/**
  * Faithfully ports `react-x/prefer-destructuring-assignment`, removed from
  * `eslint-plugin-react-x` in v5.0.0 (deprecated due to low usage). Component
  * detection is delegated to `@eslint-react/core` so it matches the upstream
  * semantics.
  *
  * Unlike upstream, this port adds an autofix that rewrites the props parameter
- * into a destructuring pattern (`(props) => props.id` becomes `({ id }) => id`).
- * The fix is only offered when it is unambiguously safe; see
- * {@link collectPropertyNames} and {@link wouldShadowExistingBinding}.
+ * into a destructuring pattern (`(props) => props.id` becomes `({ id }) =>
+ * id`). The fix is only offered when it is unambiguously safe; see {@link
+ * collectPropertyNames} and {@link wouldShadowExistingBinding}.
  *
  * @param context - The rule context.
  * @returns The rule listener.
@@ -206,7 +255,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		"before": function (): void {
 			collector = core.getFunctionComponentCollector(context);
 		},
-		"Program:exit": function (program: TSESTree.Program): void {
+		"Program:exit": function (program): void {
 			for (const component of collector.api.getAllComponents(program)) {
 				// Anonymous and `export default` components are skipped, matching
 				// upstream.
@@ -233,15 +282,23 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 	};
 
-	// Delegate the collector's selector handlers to the current per-file
-	// instance.
-	const handlers = listener as Record<string, (node: TSESTree.Node) => void>;
-	for (const key of selectorKeys) {
-		handlers[key] = (node): void => {
-			(collector.visitor as Record<string, ((node: TSESTree.Node) => void) | undefined>)[
-				key
-			]?.(node);
+	/**
+	 * Delegates a selector to the current per-file collector.
+	 *
+	 * @param key - The selector.
+	 * @returns The delegating handler.
+	 */
+	function delegate(key: string): NodeHandler {
+		return (node): void => {
+			const handler: unknown = collector.visitor[key];
+			if (isNodeHandler(handler)) {
+				handler(node);
+			}
 		};
+	}
+
+	for (const key of selectorKeys) {
+		listener[key] = delegate(key);
 	}
 
 	return listener;

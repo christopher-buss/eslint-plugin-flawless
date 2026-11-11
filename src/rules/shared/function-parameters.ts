@@ -3,7 +3,9 @@ import { AST_NODE_TYPES, type TSESLint, type TSESTree } from "@typescript-eslint
 /** Every node kind that may carry a parameter's type annotation. */
 type AnnotatedNode = TSESTree.DestructuringPattern | TSESTree.Parameter;
 
-/** What is left of a parameter once rest, default, and modifiers are stripped. */
+/**
+ * What is left of a parameter once rest, default, and modifiers are stripped.
+ */
 type ParameterBinding =
 	| TSESTree.ArrayPattern
 	| TSESTree.Identifier
@@ -11,41 +13,51 @@ type ParameterBinding =
 	| TSESTree.ObjectPattern;
 
 export function parameterAnnotation(node: AnnotatedNode): TSESTree.TSTypeAnnotation | undefined {
-	if (node.type === AST_NODE_TYPES.TSParameterProperty) {
-		return parameterAnnotation(node.parameter);
-	}
+	let current = node;
+	for (;;) {
+		if (current.type === AST_NODE_TYPES.TSParameterProperty) {
+			current = current.parameter;
+			continue;
+		}
 
-	if (node.type === AST_NODE_TYPES.RestElement) {
-		return node.typeAnnotation ?? parameterAnnotation(node.argument);
-	}
+		if (current.type === AST_NODE_TYPES.MemberExpression) {
+			return undefined;
+		}
 
-	if (node.type === AST_NODE_TYPES.AssignmentPattern) {
-		return node.typeAnnotation ?? parameterAnnotation(node.left);
-	}
+		// Oxlint spells an absent annotation `null` where typescript-eslint uses
+		// `undefined`; normalize so callers need one absence check.
+		const annotation = current.typeAnnotation ?? undefined;
+		if (annotation !== undefined) {
+			return annotation;
+		}
 
-	if (node.type === AST_NODE_TYPES.MemberExpression) {
-		return undefined;
+		if (current.type === AST_NODE_TYPES.RestElement) {
+			current = current.argument;
+		} else if (current.type === AST_NODE_TYPES.AssignmentPattern) {
+			current = current.left;
+		} else {
+			return undefined;
+		}
 	}
-
-	// Oxlint spells an absent annotation `null` where typescript-eslint uses
-	// `undefined`; normalize so callers need one absence check.
-	return node.typeAnnotation ?? undefined;
 }
 
 export function parameterBinding(node: AnnotatedNode): ParameterBinding {
-	if (node.type === AST_NODE_TYPES.TSParameterProperty) {
-		return parameterBinding(node.parameter);
+	let current = node;
+	while (
+		current.type === AST_NODE_TYPES.TSParameterProperty ||
+		current.type === AST_NODE_TYPES.RestElement ||
+		current.type === AST_NODE_TYPES.AssignmentPattern
+	) {
+		if (current.type === AST_NODE_TYPES.TSParameterProperty) {
+			current = current.parameter;
+		} else if (current.type === AST_NODE_TYPES.RestElement) {
+			current = current.argument;
+		} else {
+			current = current.left;
+		}
 	}
 
-	if (node.type === AST_NODE_TYPES.RestElement) {
-		return parameterBinding(node.argument);
-	}
-
-	if (node.type === AST_NODE_TYPES.AssignmentPattern) {
-		return parameterBinding(node.left);
-	}
-
-	return node;
+	return current;
 }
 
 /**
@@ -75,7 +87,8 @@ export function parameterName(
 		return text;
 	}
 
-	return text.slice(0, annotation.range[0] - binding.range[0]).replace(/\s*:?\s*$/u, "");
+	const head = text.slice(0, annotation.range[0] - binding.range[0]).trimEnd();
+	return head.endsWith(":") ? head.slice(0, -1).trimEnd() : head;
 }
 
 /**

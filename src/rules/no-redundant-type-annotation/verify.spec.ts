@@ -104,7 +104,8 @@ function project(
  */
 function compilerProblems(code: string, removals: ReadonlyArray<Candidate>): ReadonlyArray<string> {
 	let modified = code;
-	for (const { range } of [...removals].sort((a, b) => b.range[0] - a.range[0])) {
+	const descending = removals.toSorted((a, b) => b.range[0] - a.range[0]);
+	for (const { range } of descending) {
 		modified = modified.slice(0, range[0]) + modified.slice(range[1]);
 	}
 
@@ -175,9 +176,7 @@ describe("annotation verification", () => {
 			'import { createSyncFn } from "synckit"; const make: typeof createSyncFn = createSyncFn;',
 		);
 		// The resolution cache of a program is internal to the compiler.
-		const bare = Object.assign(Object.create(program) as ts.Program, {
-			getModuleResolutionCache: undefined,
-		});
+		const bare = { ...program, getModuleResolutionCache: undefined };
 		expect(verifyAnnotations(bare, source, candidates).accepted).toHaveLength(1);
 	});
 
@@ -194,6 +193,7 @@ describe("annotation verification", () => {
 					parser,
 					parserOptions: { projectService: true, tsconfigRootDir: directory },
 				},
+				// eslint-disable-next-line ts/no-unsafe-type-assertion -- ESLint's plugin type does not accept a typescript-eslint rule module.
 				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
 				rules: { "flawless/redundant": "error" },
 			},
@@ -220,6 +220,7 @@ describe("annotation verification", () => {
 					parser,
 					parserOptions: { projectService: true, tsconfigRootDir: directory },
 				},
+				// eslint-disable-next-line ts/no-unsafe-type-assertion -- ESLint's plugin type does not accept a typescript-eslint rule module.
 				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } as never },
 				rules: { "flawless/redundant": "error" },
 			},
@@ -378,11 +379,9 @@ const d: string = c;`;
 	it("stops sharing checks alone after a shared check in which all removals fail", () => {
 		// Each pair is coupled, and each removal fails alone. The variables
 		// share one check alone, and so do the parameters.
-		const code = Array.from(
-			{ length: 5 },
-			(_, index) =>
-				`const f${index}: (x: string) => string | number = (x: string | number) => x;`,
-		).join("\n");
+		const code = Array.from({ length: 5 }, (_, index) => {
+			return `const f${index}: (x: string) => string | number = (x: string | number) => x;`;
+		}).join("\n");
 		/**
 		 * Counts the programs that verification creates. Each program built
 		 * from an old program reads the old root names once to reuse it.
@@ -395,12 +394,13 @@ const d: string = c;`;
 		} {
 			const { candidates, program, source } = project(text);
 			let reads = 0;
-			const counted = Object.assign(Object.create(program) as ts.Program, {
+			const counted: ts.Program = {
+				...program,
 				getRootFileNames: () => {
 					reads += 1;
 					return program.getRootFileNames();
 				},
-			});
+			};
 			const verification = verifyAnnotations(counted, source, candidates);
 			return { programs: reads, verification };
 		}

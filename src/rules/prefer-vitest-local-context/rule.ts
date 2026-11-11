@@ -1,4 +1,8 @@
-import { DefinitionType, type ScopeVariable } from "@typescript-eslint/scope-manager";
+import {
+	DefinitionType,
+	type Reference,
+	type ScopeVariable,
+} from "@typescript-eslint/scope-manager";
 import {
 	AST_NODE_TYPES,
 	type JSONSchema,
@@ -89,6 +93,8 @@ interface Edit {
 }
 
 const CONTEXT_FIXTURES = new Set<FixtureName>(["expect", "onTestFailed", "onTestFinished"]);
+const TEST_CONTEXT_TYPE = /\b(?:Vitest)?TestContext\b/u;
+const TYPESCRIPT_EXTENSION = /\.(?:cts|mts|ts|tsx)$/iu;
 
 const TEST_NAMES = new Set(["it", "test"]);
 
@@ -163,51 +169,59 @@ function importedName(specifier: TSESTree.ImportSpecifier): null | string {
 }
 
 function rootIdentifier(node: TSESTree.Node): null | TSESTree.Identifier {
-	if (node.type === AST_NODE_TYPES.Identifier) {
-		return node;
+	let current = node;
+	while (
+		current.type === AST_NODE_TYPES.CallExpression ||
+		current.type === AST_NODE_TYPES.MemberExpression ||
+		current.type === AST_NODE_TYPES.TaggedTemplateExpression
+	) {
+		if (current.type === AST_NODE_TYPES.CallExpression) {
+			current = current.callee;
+		} else if (current.type === AST_NODE_TYPES.MemberExpression) {
+			current = current.object;
+		} else {
+			current = current.tag;
+		}
 	}
 
-	if (node.type === AST_NODE_TYPES.CallExpression) {
-		return rootIdentifier(node.callee);
+	return current.type === AST_NODE_TYPES.Identifier ? current : null;
+}
+
+function memberName(node: TSESTree.MemberExpression): null | string {
+	if (!node.computed && node.property.type === AST_NODE_TYPES.Identifier) {
+		return node.property.name;
 	}
 
 	if (
-		node.type === AST_NODE_TYPES.MemberExpression ||
-		node.type === AST_NODE_TYPES.TaggedTemplateExpression
+		node.computed &&
+		node.property.type === AST_NODE_TYPES.Literal &&
+		typeof node.property.value === "string"
 	) {
-		return rootIdentifier(
-			node.type === AST_NODE_TYPES.MemberExpression ? node.object : node.tag,
-		);
+		return node.property.value;
 	}
 
 	return null;
 }
 
 function hasMember(node: TSESTree.Node, name: string): boolean {
-	if (node.type === AST_NODE_TYPES.CallExpression) {
-		return hasMember(node.callee, name);
-	}
-
-	if (node.type === AST_NODE_TYPES.TaggedTemplateExpression) {
-		return hasMember(node.tag, name);
-	}
-
-	if (node.type !== AST_NODE_TYPES.MemberExpression) {
-		return false;
-	}
-
-	let propertyName: null | string = null;
-	if (!node.computed && node.property.type === AST_NODE_TYPES.Identifier) {
-		propertyName = node.property.name;
-	} else if (
-		node.computed &&
-		node.property.type === AST_NODE_TYPES.Literal &&
-		typeof node.property.value === "string"
+	let current = node;
+	while (
+		current.type === AST_NODE_TYPES.CallExpression ||
+		current.type === AST_NODE_TYPES.TaggedTemplateExpression ||
+		current.type === AST_NODE_TYPES.MemberExpression
 	) {
-		propertyName = node.property.value;
+		if (current.type === AST_NODE_TYPES.CallExpression) {
+			current = current.callee;
+		} else if (current.type === AST_NODE_TYPES.TaggedTemplateExpression) {
+			current = current.tag;
+		} else if (memberName(current) === name) {
+			return true;
+		} else {
+			current = current.object;
+		}
 	}
 
-	return propertyName === name || hasMember(node.object, name);
+	return false;
 }
 
 function isVitestImportDefinition(variable: ScopeVariable, names: ReadonlySet<string>): boolean {
@@ -232,22 +246,13 @@ function variableFromIdentifier(
 	return findVariable(sourceCode.getScope(identifier), identifier.name);
 }
 
-function isExtendedTestVariable(
+function extendedParent(
 	variable: ScopeVariable,
 	sourceCode: Readonly<TSESLint.SourceCode>,
-	seen: ReadonlySet<ScopeVariable>,
-): boolean {
-	if (seen.has(variable)) {
-		return false;
-	}
-
-	if (isVitestImportDefinition(variable, TEST_NAMES)) {
-		return true;
-	}
-
+): null | ScopeVariable {
 	const definition = variable.defs.at(0);
 	if (definition?.type !== DefinitionType.Variable) {
-		return false;
+		return null;
 	}
 
 	const { init } = definition.node;
@@ -256,22 +261,29 @@ function isExtendedTestVariable(
 		init.callee.type !== AST_NODE_TYPES.MemberExpression ||
 		!hasMember(init.callee, "extend")
 	) {
-		return false;
+		return null;
 	}
 
 	const root = rootIdentifier(init.callee.object);
-	if (root === null) {
-		return false;
+	return root === null ? null : variableFromIdentifier(root, sourceCode);
+}
+
+function isExtendedTestVariable(
+	variable: ScopeVariable,
+	sourceCode: Readonly<TSESLint.SourceCode>,
+): boolean {
+	const seen = new Set<ScopeVariable>();
+	let current: null | ScopeVariable = variable;
+	while (current !== null && !seen.has(current)) {
+		if (isVitestImportDefinition(current, TEST_NAMES)) {
+			return true;
+		}
+
+		seen.add(current);
+		current = extendedParent(current, sourceCode);
 	}
 
-	const parent = variableFromIdentifier(root, sourceCode);
-	if (parent === null) {
-		return false;
-	}
-
-	const nextSeen = new Set(seen);
-	nextSeen.add(variable);
-	return isExtendedTestVariable(parent, sourceCode, nextSeen);
+	return false;
 }
 
 function isTestCall(
@@ -284,7 +296,7 @@ function isTestCall(
 	}
 
 	const variable = variableFromIdentifier(root, sourceCode);
-	return variable !== null && isExtendedTestVariable(variable, sourceCode, new Set());
+	return variable !== null && isExtendedTestVariable(variable, sourceCode);
 }
 
 function enclosingFunction(node: TSESTree.Node): FunctionNode | null {
@@ -339,7 +351,7 @@ function enclosingTest(
 	node: TSESTree.Node,
 	tests: ReadonlyMap<FunctionNode, TestCase>,
 ): null | TestCase {
-	let current: TSESTree.Node = node;
+	let current = node;
 	while (current.type !== AST_NODE_TYPES.Program) {
 		if (isFunction(current)) {
 			const test = tests.get(current);
@@ -394,7 +406,7 @@ function existingContextParameter(
 
 		if (
 			annotation !== undefined &&
-			/\b(?:Vitest)?TestContext\b/u.test(sourceCode.getText(annotation.typeAnnotation))
+			TEST_CONTEXT_TYPE.test(sourceCode.getText(annotation.typeAnnotation))
 		) {
 			return parameter;
 		}
@@ -444,8 +456,8 @@ function isNameFree(
 		pending.push(...current.childScopes);
 	}
 
-	return !scope.through.some((reference) => {
-		return (
+	return scope.through.every((reference) => {
+		return !(
 			reference.identifier.name === name &&
 			(reference.resolved === null || !replaced.has(reference.resolved))
 		);
@@ -612,7 +624,7 @@ function insertArgumentEdit(
 		return { range: [argument.range[0], argument.range[0]], text: `${text}, ` };
 	}
 
-	const missing = Array.from({ length: index - call.arguments.length }, () => "undefined");
+	const missing = Array.from({ length: index - call.arguments.length }).fill("undefined");
 	const close = sourceCode.getLastToken(call);
 	if (close?.value !== ")") {
 		return null;
@@ -722,7 +734,9 @@ function helperParameterText(
 			.join(", ");
 	}
 
-	const pattern = `{ ${entries.map(([fixture, local]) => propertyText(fixture, local)).join(", ")} }`;
+	const pattern = `{ ${entries
+		.map(([fixture, local]) => propertyText(fixture, local))
+		.join(", ")} }`;
 	if (typeName === null) {
 		return pattern;
 	}
@@ -732,13 +746,58 @@ function helperParameterText(
 }
 
 function typeScriptFile(filename: string): boolean {
-	return /\.(?:cts|mts|ts|tsx)$/iu.test(filename);
+	return TYPESCRIPT_EXTENSION.test(filename);
+}
+
+function isFixtureName(name: null | string): name is FixtureName {
+	return (CONTEXT_FIXTURES as ReadonlySet<null | string>).has(name);
+}
+
+function markReachable(helper: Helper, reachable: Set<Helper>): boolean {
+	if (helper.fixtures.size === 0 || reachable.has(helper)) {
+		return false;
+	}
+
+	if (
+		helper.calls.every(({ owner }) => {
+			return owner === null || [...reachable].every(({ node }) => node !== owner);
+		})
+	) {
+		return false;
+	}
+
+	reachable.add(helper);
+	return true;
 }
 
 function createOnce(context: FlawlessRuleContext<MessageIds, Options>): FlawlessRuleListener {
 	let calls: Array<TSESTree.CallExpression> = [];
 	let functions: Array<FunctionNode> = [];
 	let fixtureImports: Array<FixtureImport> = [];
+
+	function collectSpecifier(
+		statement: TSESTree.ImportDeclaration,
+		specifier: TSESTree.ImportClause,
+	): void {
+		if (specifier.type !== AST_NODE_TYPES.ImportSpecifier) {
+			return;
+		}
+
+		const name = importedName(specifier);
+		if (!isFixtureName(name)) {
+			return;
+		}
+
+		const variable = variableFromIdentifier(specifier.local, context.sourceCode);
+		if (variable !== null) {
+			fixtureImports.push({
+				name,
+				declaration: statement,
+				specifier,
+				variable,
+			});
+		}
+	}
 
 	function collectImports(program: TSESTree.Program): void {
 		for (const statement of program.body) {
@@ -750,24 +809,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			}
 
 			for (const specifier of statement.specifiers) {
-				if (specifier.type !== AST_NODE_TYPES.ImportSpecifier) {
-					continue;
-				}
-
-				const name = importedName(specifier);
-				if (!CONTEXT_FIXTURES.has(name as FixtureName)) {
-					continue;
-				}
-
-				const variable = variableFromIdentifier(specifier.local, context.sourceCode);
-				if (variable !== null) {
-					fixtureImports.push({
-						name: name as FixtureName,
-						declaration: statement,
-						specifier,
-						variable,
-					});
-				}
+				collectSpecifier(statement, specifier);
 			}
 		}
 	}
@@ -864,27 +906,36 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	): void {
 		for (const fixture of fixtureImports) {
 			for (const reference of fixture.variable.references) {
-				if (!reference.isRead()) {
-					continue;
-				}
-
-				const { identifier } = reference;
-				if (identifier.type !== AST_NODE_TYPES.Identifier) {
-					continue;
-				}
-
-				const test = enclosingTest(identifier, tests);
-				if (test !== null) {
-					test.directUses.set(identifier, fixture.name);
-					continue;
-				}
-
-				const helper = enclosingHelper(identifier, helpers);
-				if (helper !== undefined) {
-					helper.directUses.set(identifier, fixture.name);
-					helper.fixtures.add(fixture.name);
-				}
+				assignFixtureUse(fixture.name, reference, tests, helpers);
 			}
+		}
+	}
+
+	function assignFixtureUse(
+		name: FixtureName,
+		reference: Reference,
+		tests: ReadonlyMap<FunctionNode, TestCase>,
+		helpers: ReadonlyMap<ScopeVariable, Helper>,
+	): void {
+		if (!reference.isRead()) {
+			return;
+		}
+
+		const { identifier } = reference;
+		if (identifier.type !== AST_NODE_TYPES.Identifier) {
+			return;
+		}
+
+		const test = enclosingTest(identifier, tests);
+		if (test !== null) {
+			test.directUses.set(identifier, name);
+			return;
+		}
+
+		const helper = enclosingHelper(identifier, helpers);
+		if (helper !== undefined) {
+			helper.directUses.set(identifier, name);
+			helper.fixtures.add(name);
 		}
 	}
 
@@ -894,30 +945,39 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	): void {
 		for (const helper of helpers.values()) {
 			for (const reference of helper.variable.references) {
-				if (!reference.isRead()) {
-					continue;
-				}
-
-				if (reference.identifier.type !== AST_NODE_TYPES.Identifier) {
-					continue;
-				}
-
-				const call = directCall(reference.identifier);
-				if (call === null) {
-					continue;
-				}
-
-				const test = enclosingTest(reference.identifier, tests);
-				const owner =
-					test?.callback ??
-					enclosingHelper(reference.identifier, helpers)?.node ??
-					enclosingFunction(reference.identifier);
-				const helperCall = { call, helper, owner };
-				helper.calls.push(helperCall);
-				if (test !== null) {
-					test.helperCalls.push(helperCall);
-				}
+				addHelperCall(helper, reference, tests, helpers);
 			}
+		}
+	}
+
+	function addHelperCall(
+		helper: Helper,
+		reference: Reference,
+		tests: ReadonlyMap<FunctionNode, TestCase>,
+		helpers: ReadonlyMap<ScopeVariable, Helper>,
+	): void {
+		if (!reference.isRead()) {
+			return;
+		}
+
+		if (reference.identifier.type !== AST_NODE_TYPES.Identifier) {
+			return;
+		}
+
+		const call = directCall(reference.identifier);
+		if (call === null) {
+			return;
+		}
+
+		const test = enclosingTest(reference.identifier, tests);
+		const owner =
+			test?.callback ??
+			enclosingHelper(reference.identifier, helpers)?.node ??
+			enclosingFunction(reference.identifier);
+		const helperCall = { call, helper, owner };
+		helper.calls.push(helperCall);
+		if (test !== null) {
+			test.helperCalls.push(helperCall);
 		}
 	}
 
@@ -936,22 +996,35 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		while (changed) {
 			changed = false;
 			for (const helper of helpers.values()) {
-				if (helper.contextName !== null) {
-					continue;
-				}
-
-				for (const call of helper.calls) {
-					if (call.owner === null || tests.has(call.owner)) {
-						continue;
-					}
-
-					const caller = helperOf(call.owner, helpers);
-					if (caller !== undefined && addAll(caller.fixtures, helper.fixtures)) {
-						changed = true;
-					}
+				if (propagateToCallers(helper, tests, helpers)) {
+					changed = true;
 				}
 			}
 		}
+	}
+
+	function propagateToCallers(
+		helper: Helper,
+		tests: ReadonlyMap<FunctionNode, TestCase>,
+		helpers: ReadonlyMap<ScopeVariable, Helper>,
+	): boolean {
+		if (helper.contextName !== null) {
+			return false;
+		}
+
+		let changed = false;
+		for (const call of helper.calls) {
+			if (call.owner === null || tests.has(call.owner)) {
+				continue;
+			}
+
+			const caller = helperOf(call.owner, helpers);
+			if (caller !== undefined && addAll(caller.fixtures, helper.fixtures)) {
+				changed = true;
+			}
+		}
+
+		return changed;
 	}
 
 	function helpersAreFixable(
@@ -960,9 +1033,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		activeHelpers: ReadonlySet<Helper>,
 		maxParameters: number,
 	): boolean {
-		for (const helper of activeHelpers) {
+		function isFixable(helper: Helper): boolean {
 			if (helper.contextName !== null) {
-				continue;
+				return true;
 			}
 
 			if (helper.node.params.length + 1 > maxParameters) {
@@ -1021,6 +1094,14 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 					return false;
 				}
 			}
+
+			return true;
+		}
+
+		for (const helper of activeHelpers) {
+			if (!isFixable(helper)) {
+				return false;
+			}
 		}
 
 		return true;
@@ -1049,17 +1130,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		while (changed) {
 			changed = false;
 			for (const helper of helpers.values()) {
-				if (helper.fixtures.size === 0 || reachable.has(helper)) {
-					continue;
-				}
-
-				if (
-					helper.calls.some(
-						({ owner }) =>
-							owner !== null && [...reachable].some(({ node }) => node === owner),
-					)
-				) {
-					reachable.add(helper);
+				if (markReachable(helper, reachable)) {
 					changed = true;
 				}
 			}
@@ -1086,7 +1157,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		edits: Array<Edit>,
 	): Map<FixtureName, string> | null {
 		const variable = context.sourceCode.getScope(callback).set.get(parameter.name);
-		if (parameter.optional || variable === undefined) {
+		if (variable === undefined || parameter.optional) {
 			return null;
 		}
 
@@ -1128,7 +1199,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			edits.push({ range: node.range, text: key });
 		}
 
-		return new Map([...fixtures].map((fixture) => [fixture, fixture]));
+		return new Map(Array.from(fixtures, (fixture) => [fixture, fixture]));
 	}
 
 	/**
@@ -1177,7 +1248,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			const { name } = parameter;
 			return (
 				destructureContext(callback, parameter, fixtures, edits) ??
-				new Map([...fixtures].map((fixture) => [fixture, `${name}.${fixture}`]))
+				new Map(Array.from(fixtures, (fixture) => [fixture, `${name}.${fixture}`]))
 			);
 		}
 
@@ -1211,6 +1282,34 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		}
 
 		return bindings;
+	}
+
+	/**
+	 * Builds the edit that passes a helper's fixtures at one of its calls.
+	 *
+	 * @param helper - The helper being called.
+	 * @param helperCall - The call to rewrite.
+	 * @param callerBindings - Local names by fixture in the caller.
+	 * @param maxParameters - The parameter limit for the helper.
+	 * @returns The edit, or `null` when the call cannot be rewritten.
+	 */
+	function helperCallEdit(
+		helper: Helper,
+		helperCall: HelperCall,
+		callerBindings: ReadonlyMap<FixtureName, string> | undefined,
+		maxParameters: number,
+	): Edit | null {
+		const text = argumentText(helper, helperShape(helper, maxParameters), callerBindings);
+		if (text === null) {
+			return null;
+		}
+
+		return insertArgumentEdit(
+			helperCall.call,
+			helper.node.params.length,
+			text,
+			context.sourceCode,
+		);
 	}
 
 	function argumentText(
@@ -1309,30 +1408,17 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 			for (const helperCall of helper.calls) {
 				const caller = [...activeHelpers].find(({ node }) => node === helperCall.owner);
-				if (caller === undefined) {
-					continue;
-				}
-
-				const text = argumentText(
-					helper,
-					helperShape(helper, maxParameters),
-					bindings.get(caller),
-				);
-				if (text === null) {
-					return null;
-				}
-
-				const edit = insertArgumentEdit(
-					helperCall.call,
-					helper.node.params.length,
-					text,
-					context.sourceCode,
-				);
+				const edit =
+					caller === undefined
+						? undefined
+						: helperCallEdit(helper, helperCall, bindings.get(caller), maxParameters);
 				if (edit === null) {
 					return null;
 				}
 
-				edits.push(edit);
+				if (edit !== undefined) {
+					edits.push(edit);
+				}
 			}
 		}
 
@@ -1389,16 +1475,19 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		const removable = new Map<TSESTree.ImportDeclaration, Set<TSESTree.ImportSpecifier>>();
 		for (const fixture of fixtureImports) {
 			if (
-				fixture.variable.references.length > 0 &&
-				fixture.variable.references.every(
-					({ identifier }) =>
-						identifier.type === AST_NODE_TYPES.Identifier && replaced.has(identifier),
-				)
+				fixture.variable.references.length <= 0 ||
+				fixture.variable.references.some(({ identifier }) => {
+					return (
+						identifier.type !== AST_NODE_TYPES.Identifier || !replaced.has(identifier)
+					);
+				})
 			) {
-				const specifiers = removable.get(fixture.declaration) ?? new Set();
-				specifiers.add(fixture.specifier);
-				removable.set(fixture.declaration, specifiers);
+				continue;
 			}
+
+			const specifiers = removable.get(fixture.declaration) ?? new Set();
+			specifiers.add(fixture.specifier);
+			removable.set(fixture.declaration, specifiers);
 		}
 
 		const needsTypeImport =
@@ -1406,7 +1495,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		let addedTypeImport = existingContextImport !== undefined;
 		for (const [declaration, removed] of removable) {
 			const remaining = declaration.specifiers.filter(
-				(specifier) => !removed.has(specifier as TSESTree.ImportSpecifier),
+				(specifier) => !(removed as ReadonlySet<TSESTree.ImportClause>).has(specifier),
 			);
 			const named = remaining.filter((specifier): specifier is TSESTree.ImportSpecifier => {
 				return specifier.type === AST_NODE_TYPES.ImportSpecifier;
@@ -1423,7 +1512,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				others.every(
 					(specifier) => specifier.type === AST_NODE_TYPES.ImportDefaultSpecifier,
 				) &&
-				!named.some((specifier) => importedName(specifier) === "TestContext")
+				named.every((specifier) => importedName(specifier) !== "TestContext")
 			) {
 				texts.push(declaration.importKind === "type" ? "TestContext" : "type TestContext");
 				addedTypeImport = true;
@@ -1478,7 +1567,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		const maxParameters = context.options[0]?.maxParams ?? Number.POSITIVE_INFINITY;
+		const maxParameters = context.options[0]?.maxParams ?? Infinity;
 		const tests = collectTests();
 		const helpers = collectHelpers();
 		assignFixtureUses(tests, helpers);

@@ -149,8 +149,8 @@ function getEnclosingFunction(node: TSESTree.Node): null | TSESTree.Node {
  * Flags mock functions created once outside the tests that use them, whose
  * recorded calls and configured implementations persist from one test to the
  * next. Such a mock only behaves if each test remembers to reset it by hand;
- * forget once and a test reads state left behind by an earlier one, which passes
- * in isolation and fails in a different order.
+ * forget once and a test reads state left behind by an earlier one, which
+ * passes in isolation and fails in a different order.
  *
  * A mock passed to a `jest.mock()` factory is exempt: module mock factories are
  * hoisted above the file, so they cannot close over anything but a module-scope
@@ -164,9 +164,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	let sources: ReadonlySet<string>;
 
 	/**
-	 * Determines whether a call creates a mock function: a `jest`/`vi` namespaced
-	 * `fn`/`spyOn`, or bun's imported `mock`/`spyOn`. The bare form is limited to
-	 * real imports, since those names are too common to claim as globals.
+	 * Determines whether a call creates a mock function: a `jest`/`vi`
+	 * namespaced `fn`/`spyOn`, or bun's imported `mock`/`spyOn`. The bare form
+	 * is limited to real imports, since those names are too common to claim as
+	 * globals.
 	 *
 	 * @param node - The call to inspect.
 	 * @returns `true` when the call produces a stateful mock.
@@ -267,9 +268,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 	/**
 	 * Determines whether a binding is given a fresh mock from inside a narrower
-	 * function — the `let mockFn; beforeEach(() => { mockFn = jest.fn(); })` shape
-	 * and its initialized variant. The mock is rebuilt per test, so the binding
-	 * carries nothing between them.
+	 * function — the `let mockFn; beforeEach(() => { mockFn = jest.fn(); })`
+	 * shape and its initialized variant. The mock is rebuilt per test, so the
+	 * binding carries nothing between them.
 	 *
 	 * @param variable - The binding to inspect.
 	 * @param declarations - The identifiers that declare the binding.
@@ -293,10 +294,10 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	/**
-	 * Determines whether a binding is read or written from anywhere but a module
-	 * mock factory. A binding reachable only from such a factory is plumbing
-	 * rather than shared state, and one that is never referenced is left to
-	 * `no-unused-vars`.
+	 * Determines whether a binding is read or written from anywhere but a
+	 * module mock factory. A binding reachable only from such a factory is
+	 * plumbing rather than shared state, and one that is never referenced is
+	 * left to `no-unused-vars`.
 	 *
 	 * @param variable - The binding to inspect.
 	 * @param declarations - The identifiers that declare the binding.
@@ -313,8 +314,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 	/**
 	 * Reports a declaration that creates a shared mock. The report goes on the
-	 * declarator's binding pattern rather than on each variable it declares, since
-	 * a mock nested in an opaque initializer cannot be attributed to one of them.
+	 * declarator's binding pattern rather than on each variable it declares,
+	 * since a mock nested in an opaque initializer cannot be attributed to one
+	 * of them.
 	 *
 	 * @param declarator - The declarator to judge.
 	 * @param scope - The function the declaration is evaluated in.
@@ -331,7 +333,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		if (!variables.some((variable) => isObservable(variable, declarations))) {
+		if (variables.every((variable) => !isObservable(variable, declarations))) {
 			return;
 		}
 
@@ -349,7 +351,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			({ sourceCode } = context);
 			sources = getTestGlobalSources(context.settings);
 		},
-		VariableDeclaration(node: TSESTree.VariableDeclaration): void {
+		VariableDeclaration(node): void {
 			const scope = getEnclosingFunction(node);
 			if (scope !== null && !isSuiteCallback(scope)) {
 				return;

@@ -138,8 +138,8 @@ const invalid: Array<InvalidTestCase> = [
 				doThing();
 			});
 		`,
-		errors: [{ messageId }],
 		options: [{ additionalTestBlockFunctions: ["myTest"] }],
+		errors: [{ messageId }],
 	},
 ];
 

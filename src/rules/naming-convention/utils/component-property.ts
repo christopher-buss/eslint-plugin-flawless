@@ -4,7 +4,29 @@ import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type ts from "typescript";
-import { forEachChild, SyntaxKind, TypeFlags } from "typescript";
+import {
+	forEachChild,
+	isAsExpression,
+	isCallExpression,
+	isClassDeclaration,
+	isClassExpression,
+	isExpressionWithTypeArguments,
+	isFunctionDeclaration,
+	isIdentifier,
+	isInterfaceDeclaration,
+	isIntersectionTypeNode,
+	isModuleDeclaration,
+	isParenthesizedExpression,
+	isParenthesizedTypeNode,
+	isPropertyAccessExpression,
+	isSatisfiesExpression,
+	isTypeAliasDeclaration,
+	isTypeReferenceNode,
+	isUnionTypeNode,
+	isVariableDeclaration,
+	SyntaxKind,
+	TypeFlags,
+} from "typescript";
 
 import { resolveReactPackage } from "../../../utils/react-package";
 import { resolveAliasedSymbol, symbolDeclaredIn } from "./symbol";
@@ -175,8 +197,8 @@ function getMemberContainer(
 
 /**
  * Reads the React packages: the defaults, plus the package the `react-x`
- * `importSource` setting names and its `@types` package. Shared settings are not
- * validated, so anything that is not a string is ignored.
+ * `importSource` setting names and its `@types` package. Shared settings are
+ * not validated, so anything that is not a string is ignored.
  *
  * @param context - The rule context of the file being linted.
  * @returns The module specifiers whose declarations count as React.
@@ -196,12 +218,12 @@ function getReactModules(context: Context): ReadonlyArray<string> {
 }
 
 function getRightmostName(expression: ts.Node): ts.Identifier | undefined {
-	if (expression.kind === SyntaxKind.Identifier) {
-		return expression as ts.Identifier;
+	if (isIdentifier(expression)) {
+		return expression;
 	}
 
-	if (expression.kind === SyntaxKind.PropertyAccessExpression) {
-		const { name } = expression as ts.PropertyAccessExpression;
+	if (isPropertyAccessExpression(expression)) {
+		const { name } = expression;
 		return name.kind === SyntaxKind.Identifier ? name : undefined;
 	}
 
@@ -217,8 +239,8 @@ function getRightmostName(expression: ts.Node): ts.Identifier | undefined {
  * @returns The parts, or undefined when the node is neither form.
  */
 function asTypeReference(node: ts.Node): TypeReferenceParts | undefined {
-	if (node.kind === SyntaxKind.TypeReference) {
-		const reference = node as ts.TypeReferenceNode;
+	if (isTypeReferenceNode(node)) {
+		const reference = node;
 		const nameNode =
 			reference.typeName.kind === SyntaxKind.QualifiedName
 				? reference.typeName.right
@@ -227,8 +249,8 @@ function asTypeReference(node: ts.Node): TypeReferenceParts | undefined {
 		return { nameNode, typeArguments: reference.typeArguments };
 	}
 
-	if (node.kind === SyntaxKind.ExpressionWithTypeArguments) {
-		const heritage = node as ts.ExpressionWithTypeArguments;
+	if (isExpressionWithTypeArguments(node)) {
+		const heritage = node;
 		const nameNode = getRightmostName(heritage.expression);
 
 		return nameNode === undefined
@@ -314,13 +336,9 @@ function resolveReference(
 			continue;
 		}
 
-		if (
-			declaration.kind === SyntaxKind.InterfaceDeclaration ||
-			declaration.kind === SyntaxKind.TypeAliasDeclaration
-		) {
-			const generic = declaration as ts.InterfaceDeclaration | ts.TypeAliasDeclaration;
+		if (isInterfaceDeclaration(declaration) || isTypeAliasDeclaration(declaration)) {
 			resolved.push({
-				bindings: bindTypeParameters(generic, reference.typeArguments, bindings),
+				bindings: bindTypeParameters(declaration, reference.typeArguments, bindings),
 				node: declaration,
 			});
 		}
@@ -349,51 +367,36 @@ function expandPropsType(
 		return { bindings, node: next };
 	}
 
-	// eslint-disable-next-line ts/switch-exhaustiveness-check -- We have a default case
-	switch (node.kind) {
-		case SyntaxKind.ExpressionWithTypeArguments:
-		case SyntaxKind.TypeReference: {
-			const reference = asTypeReference(node);
-			if (reference === undefined) {
-				return [];
-			}
-
-			const symbol = resolveAliasedSymbol(
-				checker.getSymbolAtLocation(reference.nameNode),
-				checker,
-			);
-			if (symbol !== undefined && PASS_THROUGH_TYPE_NAMES.has(symbol.name)) {
-				return reference.typeArguments?.slice(0, 1).map(withBindings) ?? [];
-			}
-
-			return resolveReference(reference, symbol, bindings);
-		}
-		case SyntaxKind.InterfaceDeclaration: {
-			containers.add(node);
-			return (
-				(node as ts.InterfaceDeclaration).heritageClauses?.flatMap((clause) => {
-					return clause.types.map(withBindings);
-				}) ?? []
-			);
-		}
-		case SyntaxKind.IntersectionType:
-		case SyntaxKind.UnionType: {
-			return (node as ts.UnionOrIntersectionTypeNode).types.map(withBindings);
-		}
-		case SyntaxKind.ParenthesizedType: {
-			return [withBindings((node as ts.ParenthesizedTypeNode).type)];
-		}
-		case SyntaxKind.TypeAliasDeclaration: {
-			return [withBindings((node as ts.TypeAliasDeclaration).type)];
-		}
-		case SyntaxKind.TypeLiteral: {
-			containers.add(node);
-			return [];
-		}
-		default: {
-			return [];
-		}
+	if (isInterfaceDeclaration(node)) {
+		containers.add(node);
+		return node.heritageClauses?.flatMap((clause) => clause.types.map(withBindings)) ?? [];
 	}
+
+	if (isUnionTypeNode(node) || isIntersectionTypeNode(node)) {
+		return node.types.map(withBindings);
+	}
+
+	if (isParenthesizedTypeNode(node) || isTypeAliasDeclaration(node)) {
+		return [withBindings(node.type)];
+	}
+
+	if (node.kind === SyntaxKind.TypeLiteral) {
+		containers.add(node);
+		return [];
+	}
+
+	// Only type references and `extends` clause entries remain to expand.
+	const reference = asTypeReference(node);
+	if (reference === undefined) {
+		return [];
+	}
+
+	const symbol = resolveAliasedSymbol(checker.getSymbolAtLocation(reference.nameNode), checker);
+	if (symbol !== undefined && PASS_THROUGH_TYPE_NAMES.has(symbol.name)) {
+		return reference.typeArguments?.slice(0, 1).map(withBindings) ?? [];
+	}
+
+	return resolveReference(reference, symbol, bindings);
 }
 
 function isFunctionLike(node: ts.Node): node is ts.ArrowFunction | ts.FunctionExpression {
@@ -424,12 +427,11 @@ function unwrapExpression(node: ts.Expression | undefined): ts.Expression | unde
 	let current = node;
 	while (
 		current !== undefined &&
-		(current.kind === SyntaxKind.ParenthesizedExpression ||
-			current.kind === SyntaxKind.AsExpression ||
-			current.kind === SyntaxKind.SatisfiesExpression)
+		(isParenthesizedExpression(current) ||
+			isAsExpression(current) ||
+			isSatisfiesExpression(current))
 	) {
-		current = (current as ts.AsExpression | ts.ParenthesizedExpression | ts.SatisfiesExpression)
-			.expression;
+		current = current.expression;
 	}
 
 	return current;
@@ -447,10 +449,7 @@ function isJsxElementSymbol(symbol: ts.Symbol): boolean {
 		symbol.name === "Element" &&
 		symbol.declarations?.some((declaration) => {
 			const namespace = declaration.parent.parent;
-			return (
-				namespace.kind === SyntaxKind.ModuleDeclaration &&
-				(namespace as ts.ModuleDeclaration).name.text === "JSX"
-			);
+			return isModuleDeclaration(namespace) && namespace.name.text === "JSX";
 		}) === true
 	);
 }
@@ -592,10 +591,9 @@ function collectPropsContainers(
 			checker,
 		);
 		return resolveReference(reference, symbol, bindings).some((resolved) => {
-			const target =
-				resolved.node.kind === SyntaxKind.TypeAliasDeclaration
-					? (resolved.node as ts.TypeAliasDeclaration).type
-					: resolved.node;
+			const target = isTypeAliasDeclaration(resolved.node)
+				? resolved.node.type
+				: resolved.node;
 
 			return (
 				resolved.node.kind !== SyntaxKind.InterfaceDeclaration &&
@@ -614,7 +612,7 @@ function collectPropsContainers(
 		// whole body checked: only check it when the walk finds new containers
 		const found = new Set<ts.Node>();
 		walkPropsType(props.type, NO_BINDINGS, found, new Set());
-		if (![...found].some((container) => !containers.has(container))) {
+		if ([...found].every((container) => containers.has(container))) {
 			return;
 		}
 
@@ -668,7 +666,8 @@ function collectPropsContainers(
 	}
 
 	function addClassComponent(node: ts.ClassLikeDeclaration): void {
-		for (const clause of node.heritageClauses ?? []) {
+		const heritageClauses = node.heritageClauses ?? [];
+		for (const clause of heritageClauses) {
 			if (clause.token !== SyntaxKind.ExtendsKeyword) {
 				continue;
 			}
@@ -704,34 +703,18 @@ function collectPropsContainers(
 	}
 
 	function inspect(node: ts.Node): void {
-		// eslint-disable-next-line ts/switch-exhaustiveness-check -- We have a default case
-		switch (node.kind) {
-			case SyntaxKind.CallExpression: {
-				addWrapperCall(node as ts.CallExpression);
-				break;
+		if (isCallExpression(node)) {
+			addWrapperCall(node);
+		} else if (isClassDeclaration(node) || isClassExpression(node)) {
+			addClassComponent(node);
+		} else if (isFunctionDeclaration(node)) {
+			// React treats a lowercase JSX tag as a host element, so render
+			// callbacks (`renderItem`) are not components
+			if (node.name !== undefined && core.isFunctionComponentName(node.name.text)) {
+				addFunctionComponent(node);
 			}
-			case SyntaxKind.ClassDeclaration:
-			case SyntaxKind.ClassExpression: {
-				addClassComponent(node as ts.ClassLikeDeclaration);
-				break;
-			}
-			case SyntaxKind.FunctionDeclaration: {
-				// React treats a lowercase JSX tag as a host element, so render
-				// callbacks (`renderItem`) are not components
-				const func = node as ts.FunctionDeclaration;
-				if (func.name !== undefined && core.isFunctionComponentName(func.name.text)) {
-					addFunctionComponent(func);
-				}
-
-				break;
-			}
-			case SyntaxKind.VariableDeclaration: {
-				inspectVariable(node as ts.VariableDeclaration);
-				break;
-			}
-			default: {
-				break;
-			}
+		} else if (isVariableDeclaration(node)) {
+			inspectVariable(node);
 		}
 	}
 
@@ -742,12 +725,8 @@ function collectPropsContainers(
 		}
 	}
 
-	for (const sourceFile of program.getSourceFiles()) {
-		if (sourceFile.isDeclarationFile || program.isSourceFileFromExternalLibrary(sourceFile)) {
-			continue;
-		}
-
-		stack.push(sourceFile);
+	function walk(root: ts.Node): void {
+		stack.push(root);
 		while (stack.length > 0) {
 			const node = stack.pop();
 			if (node === undefined) {
@@ -757,6 +736,14 @@ function collectPropsContainers(
 			inspect(node);
 			forEachChild(node, pushChild);
 		}
+	}
+
+	for (const sourceFile of program.getSourceFiles()) {
+		if (sourceFile.isDeclarationFile || program.isSourceFileFromExternalLibrary(sourceFile)) {
+			continue;
+		}
+
+		walk(sourceFile);
 	}
 
 	return containers;

@@ -397,7 +397,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	}
 
 	return {
-		AssignmentExpression(node: TSESTree.AssignmentExpression): void {
+		AssignmentExpression(node): void {
 			if (
 				node.operator !== "=" ||
 				node.left.type !== AST_NODE_TYPES.MemberExpression ||
@@ -434,7 +434,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			stableVariables = new Map();
 			return true;
 		},
-		CallExpression(node: TSESTree.CallExpression): void {
+		CallExpression(node): void {
 			const assertion = readExpectAssertion(node) ?? readAssertAssertion(node);
 			if (assertion !== null) {
 				check(assertion);

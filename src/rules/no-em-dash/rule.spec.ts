@@ -31,43 +31,43 @@ const invalid: Array<InvalidTestCase> = [
 			// Keep it short \u2014 really.
 			export const a = 1;
 		`,
-		errors: [{ column: 4, endColumn: 27, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 4, endColumn: 27, endLine: 1, line: 1, messageId }],
 	},
 	{
 		code: 'export const s = "left \u2014 right";',
-		errors: [{ column: 19, endColumn: 31, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 19, endColumn: 31, endLine: 1, line: 1, messageId }],
 	},
 	{
 		// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
 		code: "export const t = `a \u2014 ${b}`;",
-		errors: [{ column: 19, endColumn: 22, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 19, endColumn: 22, endLine: 1, line: 1, messageId }],
 	},
 	// The sentence stops at the `${` and `}` around an expression.
 	{
 		// eslint-disable-next-line no-template-curly-in-string -- Test input is a template literal.
 		code: "export const t = `${a} x \u2014 y ${b} z`;",
+		output: null,
 		errors: [{ column: 24, endColumn: 29, endLine: 1, line: 1, messageId }],
-		output: null,
 	},
 	{
+		filename: "file.tsx",
 		code: "export const el = <p>Wait \u2014 what? Fine.</p>;",
-		errors: [{ column: 22, endColumn: 34, endLine: 1, line: 1, messageId }],
-		filename: "file.tsx",
 		output: null,
+		errors: [{ column: 22, endColumn: 34, endLine: 1, line: 1, messageId }],
 	},
 	{
-		code: 'export const el = <p title="a \u2014 b" />;',
-		errors: [{ column: 29, endColumn: 34, endLine: 1, line: 1, messageId }],
 		filename: "file.tsx",
+		code: 'export const el = <p title="a \u2014 b" />;',
 		output: null,
+		errors: [{ column: 29, endColumn: 34, endLine: 1, line: 1, messageId }],
 	},
 	{
 		code: "/* a \u2014 b */\nexport const a = 1;",
-		errors: [{ column: 4, endColumn: 9, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 4, endColumn: 9, endLine: 1, line: 1, messageId }],
 	},
 	// The JSDoc `*` gutter stays out of the range.
 	{
@@ -78,8 +78,8 @@ const invalid: Array<InvalidTestCase> = [
 			 */
 			export function format() {}
 		`,
-		errors: [{ column: 4, endColumn: 42, endLine: 3, line: 3, messageId }],
 		output: null,
+		errors: [{ column: 4, endColumn: 42, endLine: 3, line: 3, messageId }],
 	},
 	// Several dashes in one sentence report once.
 	{
@@ -87,8 +87,8 @@ const invalid: Array<InvalidTestCase> = [
 			// One \u2014 two \u2014 three.
 			export const a = 1;
 		`,
-		errors: [{ column: 4, endColumn: 22, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 4, endColumn: 22, endLine: 1, line: 1, messageId }],
 	},
 	// Dashes in separate sentences report separately.
 	{
@@ -96,11 +96,11 @@ const invalid: Array<InvalidTestCase> = [
 			// One \u2014 two. Three \u2014 four!
 			export const a = 1;
 		`,
+		output: null,
 		errors: [
 			{ column: 4, endColumn: 14, endLine: 1, line: 1, messageId },
 			{ column: 15, endColumn: 28, endLine: 1, line: 1, messageId },
 		],
-		output: null,
 	},
 	// A line break bounds the sentence on both sides.
 	{
@@ -112,54 +112,54 @@ const invalid: Array<InvalidTestCase> = [
 			*/
 			export const a = 1;
 		`,
-		errors: [{ column: 3, endColumn: 14, endLine: 3, line: 3, messageId }],
 		output: null,
+		errors: [{ column: 3, endColumn: 14, endLine: 3, line: 3, messageId }],
 	},
 	// CRLF: the `\r` stays out of the range.
 	{
 		code: "// a \u2014 b\r\n// c \u2014 d\r\nexport const a = 1;\r\n",
+		output: null,
 		errors: [
 			{ column: 4, endColumn: 9, endLine: 1, line: 1, messageId },
 			{ column: 4, endColumn: 9, endLine: 2, line: 2, messageId },
 		],
-		output: null,
 	},
 	// CR-only line endings also bound the sentence.
 	{
 		code: "// a \u2014 b\r// c \u2014 d\rexport const a = 1;\r",
+		output: null,
 		errors: [
 			{ column: 4, endColumn: 9, endLine: 1, line: 1, messageId },
 			{ column: 4, endColumn: 9, endLine: 2, line: 2, messageId },
 		],
-		output: null,
 	},
 	// U+2028 is a line break to ESLint, so it bounds the sentence too.
 	{
 		code: `/* a \u2014 b${LINE_SEPARATOR}c \u2014 d */\nexport const a = 1;\n`,
+		output: null,
 		errors: [
 			{ column: 4, endColumn: 9, endLine: 1, line: 1, messageId },
 			{ column: 1, endColumn: 6, endLine: 2, line: 2, messageId },
 		],
-		output: null,
 	},
 	// CRLF inside a template: the content comes from source, not the
 	// normalized raw value.
 	{
 		code: "export const t = `first\r\nsecond — line`;\r\n",
-		errors: [{ column: 1, endColumn: 14, endLine: 2, line: 2, messageId }],
 		output: null,
+		errors: [{ column: 1, endColumn: 14, endLine: 2, line: 2, messageId }],
 	},
 	// A single-line JSDoc block: the extra `*` stays out of the range.
 	{
 		code: "/** a — b. */\nexport const a = 1;\n",
-		errors: [{ column: 5, endColumn: 11, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 5, endColumn: 11, endLine: 1, line: 1, messageId }],
 	},
 	// A triple-slash comment: the extra `/` stays out of the range.
 	{
 		code: "/// a — b\nexport const a = 1;\n",
-		errors: [{ column: 5, endColumn: 10, endLine: 1, line: 1, messageId }],
 		output: null,
+		errors: [{ column: 5, endColumn: 10, endLine: 1, line: 1, messageId }],
 	},
 ];
 
@@ -175,52 +175,52 @@ runMarkdown({
 	invalid: [
 		{
 			code: "Hello — world. Bye.\n",
-			errors: [{ column: 1, endColumn: 15, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 1, endColumn: 15, endLine: 1, line: 1, messageId }],
 		},
 		{
 			code: "# Title — sub\n",
-			errors: [{ column: 3, endColumn: 14, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 3, endColumn: 14, endLine: 1, line: 1, messageId }],
 		},
 		// A sentence spans emphasis and links.
 		{
 			code: "Some *bold — text* and [a link](https://example.com) here.\n",
-			errors: [{ column: 1, endColumn: 59, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 1, endColumn: 59, endLine: 1, line: 1, messageId }],
 		},
 		{
 			code: "- first item\n- item — x\n",
-			errors: [{ column: 3, endColumn: 11, endLine: 2, line: 2, messageId }],
 			output: null,
+			errors: [{ column: 3, endColumn: 11, endLine: 2, line: 2, messageId }],
 		},
 		// Blockquote markers stay out of the range.
 		{
 			code: "> first line\n> second — line.\n",
-			errors: [{ column: 3, endColumn: 17, endLine: 2, line: 2, messageId }],
 			output: null,
+			errors: [{ column: 3, endColumn: 17, endLine: 2, line: 2, messageId }],
 		},
 		// Alt text and titles are prose.
 		{
 			code: "![a — b](x.png)\n",
-			errors: [{ column: 3, endColumn: 8, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 3, endColumn: 8, endLine: 1, line: 1, messageId }],
 		},
 		{
 			code: '[t](x "c — d")\n',
-			errors: [{ column: 8, endColumn: 13, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 8, endColumn: 13, endLine: 1, line: 1, messageId }],
 		},
 		{
 			code: '[r]: https://x.test "e — f"\n',
-			errors: [{ column: 22, endColumn: 27, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 22, endColumn: 27, endLine: 1, line: 1, messageId }],
 		},
 		// An escaped `\.` is literal text, not a terminator.
 		{
 			code: "a\\. b — c. d\n",
-			errors: [{ column: 1, endColumn: 11, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 1, endColumn: 11, endLine: 1, line: 1, messageId }],
 		},
 	],
 	rule: noEmDash,
@@ -238,8 +238,8 @@ runMarkdown({
 	invalid: [
 		{
 			code: "| a — b | c |\n| - | - |\n| d | e |\n",
-			errors: [{ column: 3, endColumn: 8, endLine: 1, line: 1, messageId }],
 			output: null,
+			errors: [{ column: 3, endColumn: 8, endLine: 1, line: 1, messageId }],
 		},
 	],
 	language: "markdown/gfm",

@@ -12,32 +12,32 @@ const element = { mode: "element" } as const;
 const valid: Array<ValidTestCase> = [
 	// ── Default "syntax" mode ────────────────────────────────
 	// The shorthand is already used.
-	{ code: "const x = <>{value}</>;", filename },
+	{ filename, code: "const x = <>{value}</>;" },
 	// A regular element is untouched.
-	{ code: "const x = <div>{value}</div>;", filename },
+	{ filename, code: "const x = <div>{value}</div>;" },
 	// A named fragment carrying a `key` cannot use the shorthand.
-	{ code: 'const x = <Fragment key="a">{value}</Fragment>;', filename },
+	{ filename, code: 'const x = <Fragment key="a">{value}</Fragment>;' },
 	// A member-expression fragment with an attribute is left alone.
 	{
-		code: 'const x = <React.Fragment key="a">{value}</React.Fragment>;',
 		filename,
+		code: 'const x = <React.Fragment key="a">{value}</React.Fragment>;',
 	},
 
 	// ── "element" mode ───────────────────────────────────────
 	// A named fragment is already used.
-	{ code: "const x = <Fragment>{value}</Fragment>;", filename, options: [element] },
+	{ filename, code: "const x = <Fragment>{value}</Fragment>;", options: [element] },
 	// A regular element is untouched.
-	{ code: "const x = <div>{value}</div>;", filename, options: [element] },
+	{ filename, code: "const x = <div>{value}</div>;", options: [element] },
 	// A member-expression fragment is a named form, not the shorthand.
 	{
-		code: "const x = <React.Fragment>{value}</React.Fragment>;",
 		filename,
+		code: "const x = <React.Fragment>{value}</React.Fragment>;",
 		options: [element],
 	},
 	// A custom named fragment matching the configured option.
 	{
-		code: "const x = <Frag>{value}</Frag>;",
 		filename,
+		code: "const x = <Frag>{value}</Frag>;",
 		options: [{ fragmentName: "Frag", mode: "element" }],
 	},
 ];
@@ -46,89 +46,89 @@ const invalid: Array<InvalidTestCase> = [
 	// ── Default "syntax" mode ────────────────────────────────
 	// A named fragment is rewritten to the shorthand.
 	{
-		code: "const x = <Fragment>{value}</Fragment>;",
-		errors: [{ messageId: useShorthandFragment }],
 		filename,
+		code: "const x = <Fragment>{value}</Fragment>;",
 		output: "const x = <>{value}</>;",
+		errors: [{ messageId: useShorthandFragment }],
 	},
 	// A member-expression fragment is rewritten to the shorthand.
 	{
-		code: "const x = <React.Fragment>{value}</React.Fragment>;",
-		errors: [{ messageId: useShorthandFragment }],
 		filename,
+		code: "const x = <React.Fragment>{value}</React.Fragment>;",
 		output: "const x = <>{value}</>;",
+		errors: [{ messageId: useShorthandFragment }],
 	},
 	// Children are preserved.
 	{
-		code: "const x = <Fragment><span>a</span>{value}</Fragment>;",
-		errors: [{ messageId: useShorthandFragment }],
 		filename,
+		code: "const x = <Fragment><span>a</span>{value}</Fragment>;",
 		output: "const x = <><span>a</span>{value}</>;",
+		errors: [{ messageId: useShorthandFragment }],
 	},
 	// A childless self-closing fragment collapses to `<></>`.
 	{
-		code: "const x = <Fragment />;",
-		errors: [{ messageId: useShorthandFragment }],
 		filename,
+		code: "const x = <Fragment />;",
 		output: "const x = <></>;",
+		errors: [{ messageId: useShorthandFragment }],
 	},
 	// A configured `fragmentName` is also recognized as a named fragment.
 	{
-		code: "const x = <Frag>{value}</Frag>;",
-		errors: [{ messageId: useShorthandFragment }],
 		filename,
-		options: [{ fragmentName: "Frag" }],
+		code: "const x = <Frag>{value}</Frag>;",
 		output: "const x = <>{value}</>;",
+		options: [{ fragmentName: "Frag" }],
+		errors: [{ messageId: useShorthandFragment }],
 	},
 
 	// ── "element" mode ───────────────────────────────────────
 	// The shorthand is rewritten to the default `Fragment` name.
 	{
-		code: "const x = <>{value}</>;",
-		errors: [{ messageId: useNamedFragment }],
 		filename,
-		options: [element],
+		code: "const x = <>{value}</>;",
 		output: "const x = <Fragment>{value}</Fragment>;",
+		options: [element],
+		errors: [{ messageId: useNamedFragment }],
 	},
 	// The configured fragment name is used.
 	{
-		code: "const x = <>{value}</>;",
-		errors: [{ messageId: useNamedFragment }],
 		filename,
-		options: [{ fragmentName: "Frag", mode: "element" }],
+		code: "const x = <>{value}</>;",
 		output: "const x = <Frag>{value}</Frag>;",
+		options: [{ fragmentName: "Frag", mode: "element" }],
+		errors: [{ messageId: useNamedFragment }],
 	},
 	// Children (text and elements) are preserved.
 	{
-		code: "const x = <><span>a</span>{value}</>;",
-		errors: [{ messageId: useNamedFragment }],
 		filename,
-		options: [element],
+		code: "const x = <><span>a</span>{value}</>;",
 		output: "const x = <Fragment><span>a</span>{value}</Fragment>;",
+		options: [element],
+		errors: [{ messageId: useNamedFragment }],
 	},
 	// Nested shorthand fragments each report; the outer fix runs first.
 	{
-		code: "const x = <><>{value}</></>;",
-		errors: [{ messageId: useNamedFragment }, { messageId: useNamedFragment }],
 		filename,
-		options: [element],
+		code: "const x = <><>{value}</></>;",
 		output: "const x = <Fragment><Fragment>{value}</Fragment></Fragment>;",
+		options: [element],
+		errors: [{ messageId: useNamedFragment }, { messageId: useNamedFragment }],
 	},
 	// An empty shorthand fragment is rewritten.
 	{
-		code: "const x = <></>;",
-		errors: [{ messageId: useNamedFragment }],
 		filename,
-		options: [element],
+		code: "const x = <></>;",
 		output: "const x = <Fragment></Fragment>;",
+		options: [element],
+		errors: [{ messageId: useNamedFragment }],
 	},
 	// A member-expression name option produces a valid named fragment.
 	{
-		code: "const x = <>{value}</>;",
-		errors: [{ messageId: useNamedFragment }],
 		filename,
-		options: [{ fragmentName: "React.Fragment", mode: "element" }],
+		code: "const x = <>{value}</>;",
 		output: "const x = <React.Fragment>{value}</React.Fragment>;",
+		options: [{ fragmentName: "React.Fragment", mode: "element" }],
+		errors: [{ messageId: useNamedFragment }],
 	},
 ];
 

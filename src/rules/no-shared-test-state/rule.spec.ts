@@ -650,8 +650,8 @@ const invalid: Array<InvalidTestCase> = [
 				queue.enqueue(1);
 			});
 		`,
-		errors: [{ data: { name: "queue" }, messageId }],
 		options: [{ additionalMutatingMethods: ["enqueue"] }],
+		errors: [{ data: { name: "queue" }, messageId }],
 	},
 	// A mock rebuilt in \`beforeEach\` is shared state here, even though
 	// no-shared-mocks allows it.

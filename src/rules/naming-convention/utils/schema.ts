@@ -305,6 +305,7 @@ export const SCHEMA: JSONSchema.JSONSchema4 = {
 	items: {
 		oneOf: [
 			selectorsSchema(),
+			// eslint-disable-next-line ts/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
 			...selectorSchema("default", false, Object.keys(Modifier) as Array<ModifierString>),
 
 			...selectorSchema("variableLike", false, ["unused", "async"]),
