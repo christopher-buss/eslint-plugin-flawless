@@ -1090,15 +1090,13 @@ const invalid: Array<InvalidTestCase> = [
 	// one does not give it the type parameter `S`.
 	{
 		code: unindent`
-			interface Item { ok: boolean }
-			declare const items: Array<Item>;
-			const first = items.find((item: Item) => item.ok);
+			declare const items: Array<string>;
+			const first = items.find((item: string) => item.length > 0);
 		`,
 		errors: [{ messageId: parameterMessageId }],
 		output: unindent`
-			interface Item { ok: boolean }
-			declare const items: Array<Item>;
-			const first = items.find((item) => item.ok);
+			declare const items: Array<string>;
+			const first = items.find((item) => item.length > 0);
 		`,
 	},
 	{
@@ -1123,21 +1121,19 @@ const invalid: Array<InvalidTestCase> = [
 			const allStrings = values.every((value) => typeof value === "string");
 		`,
 	},
-	// Both overloads give `value` the type `Item`, but `index` gets a different
-	// type from each, so only `value` is reported.
+	// Both overloads give `value` the type `string`, but `index` gets a
+	// different type from each, so only `value` is reported.
 	{
 		code: unindent`
-			interface Item { ok: boolean }
-			declare function pick<S extends Item>(predicate: (value: Item, index: number) => value is S): S;
-			declare function pick(predicate: (value: Item, index: string) => unknown): Item;
-			pick((value: Item, index: string) => value.ok);
+			declare function pick<S extends string>(predicate: (value: string, index: number) => value is S): S;
+			declare function pick(predicate: (value: string, index: string) => unknown): string;
+			pick((value: string, index: string) => value.length > 0);
 		`,
 		errors: [{ column: 12, messageId: parameterMessageId }],
 		output: unindent`
-			interface Item { ok: boolean }
-			declare function pick<S extends Item>(predicate: (value: Item, index: number) => value is S): S;
-			declare function pick(predicate: (value: Item, index: string) => unknown): Item;
-			pick((value, index: string) => value.ok);
+			declare function pick<S extends string>(predicate: (value: string, index: number) => value is S): S;
+			declare function pick(predicate: (value: string, index: string) => unknown): string;
+			pick((value, index: string) => value.length > 0);
 		`,
 	},
 	// Past the work limit, a parameter of a generic overload pick is not
