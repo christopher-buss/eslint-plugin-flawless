@@ -184,13 +184,14 @@ export function verifyAnnotations<C extends Candidate>(
 		function check(group: ReadonlyArray<C>): Map<C, string> {
 			const ranges = group.map(({ range }) => range).sort((a, b) => a[0] - b[0]);
 			const modified = speculate(removeRanges(source.text, ranges));
-			const after = modified.getSourceFile(source.fileName);
-			if (after === undefined) {
+			const edited = modified.getSourceFile(source.fileName);
+			if (edited === undefined) {
 				throw new Error("The speculative program lost the source file");
 			}
 
+			const after = edited;
+
 			const fresh = modified.getTypeChecker();
-			const index = indexNodes(after);
 			/**
 			 * Keys declarations in the edited file by their original position,
 			 * so a shadowing declaration never matches the one it shadows.
@@ -204,12 +205,11 @@ export function verifyAnnotations<C extends Candidate>(
 			}
 
 			function mapped(node: ts.Node): ts.Node | undefined {
-				return index.get(
-					nodeKey(
-						node.kind,
-						mapPosition(node.getStart(source), ranges),
-						mapPosition(node.end, ranges),
-					),
+				return findNode(
+					after,
+					node.kind,
+					mapPosition(node.getStart(source), ranges),
+					mapPosition(node.end, ranges),
 				);
 			}
 
@@ -776,19 +776,37 @@ function declarationKey(
 	return `${fileKey(file.fileName)}:${translate(declaration.getStart(file), file)}`;
 }
 
-function nodeKey(kind: ts.SyntaxKind, start: number, end: number): string {
-	return `${kind}:${start}:${end}`;
-}
-
-function indexNodes(source: ts.SourceFile): Map<string, ts.Node> {
-	const index = new Map<string, ts.Node>();
+/**
+ * Finds the node of a kind at a range. When nodes share the kind and range,
+ * the last in pre-order matches. Only nodes whose full span holds the range
+ * can match, so the search visits one path and not the whole file.
+ * @param source - The edited file.
+ * @param kind - The syntax kind to match.
+ * @param start - The start position without leading trivia.
+ * @param end - The position after the last character of the node.
+ * @returns The matching node, if any.
+ */
+function findNode(
+	source: ts.SourceFile,
+	kind: ts.SyntaxKind,
+	start: number,
+	end: number,
+): ts.Node | undefined {
+	let found: ts.Node | undefined;
 	function visit(node: ts.Node): void {
-		index.set(nodeKey(node.kind, node.getStart(source), node.end), node);
-		ts.forEachChild(node, visit);
+		if (node.kind === kind && node.end === end && node.getStart(source) === start) {
+			found = node;
+		}
+
+		ts.forEachChild(node, (child) => {
+			if (child.pos <= start && end <= child.end) {
+				visit(child);
+			}
+		});
 	}
 
 	visit(source);
-	return index;
+	return found;
 }
 
 function insideLoop(node: ts.Node): boolean {

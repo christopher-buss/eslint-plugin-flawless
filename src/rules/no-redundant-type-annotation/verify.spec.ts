@@ -231,6 +231,21 @@ describe("annotation verification", () => {
 		);
 	});
 
+	it("finds a nested use after an earlier removal moves it", () => {
+		const code = `declare function read(): string;
+const value: string = read();
+function outer(): void {
+	if (value) {
+		const inner = (): number => [value].map((item) => item.length)[0]!;
+		void inner;
+	}
+}`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(rejected).toStrictEqual([]);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
+	});
+
 	it("distinguishes types that print the same name", () => {
 		const code = `
 interface Options { a: string }
