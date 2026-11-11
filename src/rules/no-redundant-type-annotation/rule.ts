@@ -1529,7 +1529,7 @@ function create(
 	 * @returns True when every overload gives the position the same type.
 	 */
 	function isSharedByOverloads(
-		{ call, index, resolved, signatures }: CallbackCall,
+		{ call, index, location, resolved, signatures }: CallbackCall,
 		position: number,
 	): boolean {
 		if (!signatures.some(isGeneric)) {
@@ -1558,7 +1558,7 @@ function create(
 			}
 
 			const parameter = callbackSignature.parameters[position];
-			return parameter && checker.getTypeOfSymbol(parameter);
+			return parameter && checker.getTypeOfSymbolAtLocation(parameter, location);
 		}
 
 		const resolvedType = getTypeAt(resolved);
@@ -2979,7 +2979,7 @@ function create(
 			collect({
 				annotation,
 				messageId: PARAMETER_MESSAGE_ID,
-				requiresProof: anchor.overloadedCall !== undefined,
+				requiresProof: overloadedCall !== undefined,
 				type: annotationType,
 			});
 		}
