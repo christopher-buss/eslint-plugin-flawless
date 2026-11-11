@@ -1,5 +1,5 @@
 import type { TSESTree } from "@typescript-eslint/utils";
-import { AST_NODE_TYPES, TSESLint } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, AST_TOKEN_TYPES, TSESLint } from "@typescript-eslint/utils";
 import { getParserServices } from "@typescript-eslint/utils/eslint-utils";
 
 import type {
@@ -85,6 +85,16 @@ type ReturnTypedFunction =
 
 /** A function whose parameters can take their types from a context. */
 type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
+
+/** A redundant annotation, with what its report shows. */
+interface Removal {
+	/** The annotation to remove. */
+	readonly annotation: TSESTree.TSTypeAnnotation;
+	/** The report's message identifier. */
+	readonly messageId: MessageIds;
+	/** The annotated type to show in the report. */
+	readonly type: Type;
+}
 
 const messages = {
 	[CATCH_MESSAGE_ID]:
@@ -300,6 +310,16 @@ function someDescendant(
 	}
 
 	return false;
+}
+
+/**
+ * Lists the members of a union, or the type itself.
+ *
+ * @param type - The type to split.
+ * @returns The union's members, or the type alone.
+ */
+function unionMembers(type: Type): ReadonlyArray<Type> {
+	return type.isUnion() ? type.types : [type];
 }
 
 /**
@@ -656,25 +676,14 @@ function create(
 	const allowExpressions = options.allowExpressions ?? DEFAULT_OPTIONS.allowExpressions;
 	let exportedNames: Set<string> | undefined;
 	const anchors = new Map<FunctionExpressionNode, TSESTree.Node | undefined>();
-	const candidates: Array<
-		Candidate & {
-			readonly annotation: TSESTree.TSTypeAnnotation;
-			readonly messageId: MessageIds;
-			readonly type: Type;
-		}
-	> = [];
+	const candidates: Array<Candidate & Removal> = [];
 
 	/**
 	 * Save a potential removal for verification after visiting the file.
-	 * @param annotation - The annotation to remove if verification succeeds.
-	 * @param messageId - The report's message identifier.
-	 * @param type - The annotated type to show in the report.
+	 * @param removal - The removal to verify.
 	 */
-	function collect(
-		annotation: TSESTree.TSTypeAnnotation,
-		messageId: MessageIds,
-		type: Type,
-	): void {
+	function collect(removal: Removal): void {
+		const { annotation } = removal;
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (
 			isVariableDeclaration(owner) ||
@@ -684,34 +693,80 @@ function create(
 			isArrowFunction(owner) ||
 			isMethodDeclaration(owner)
 		) {
-			candidates.push({ annotation, messageId, owner, range: annotation.range, type });
+			candidates.push({ ...removal, owner, range: annotation.range });
 			return;
 		}
 
 		// The verifier cannot model this owner. Report without a fix rather
 		// than dropping the report.
-		report(annotation, messageId, type, false);
+		report(removal, false);
 	}
 
 	/**
 	 * Reports a redundant annotation.
-	 * @param annotation - The annotation to report.
-	 * @param messageId - The report's message identifier.
-	 * @param type - The annotated type to show in the report.
+	 * @param removal - The removal to report.
 	 * @param fixable - Whether the removal was verified and may be autofixed.
 	 */
-	function report(
-		annotation: TSESTree.TSTypeAnnotation,
-		messageId: MessageIds,
-		type: Type,
-		fixable: boolean,
-	): void {
+	function report({ annotation, messageId, type }: Removal, fixable: boolean): void {
 		context.report({
 			data: { typeName: display(type) },
-			fix: fixable ? (fixer) => fixer.remove(annotation) : null,
+			fix: fixable ? (fixer) => removeAnnotation(fixer, annotation) : null,
 			messageId,
 			node: annotation,
 		});
+	}
+
+	/**
+	 * Removes an annotation but keeps the comments inside it.
+	 *
+	 * @param fixer - The fixer of the report.
+	 * @param annotation - The annotation to remove.
+	 * @returns The fix.
+	 */
+	function removeAnnotation(
+		fixer: TSESLint.RuleFixer,
+		annotation: TSESTree.TSTypeAnnotation,
+	): Array<TSESLint.RuleFix> | TSESLint.RuleFix {
+		const { sourceCode } = context;
+		const comments = sourceCode.getCommentsInside(annotation);
+		if (comments.length === 0) {
+			return fixer.remove(annotation);
+		}
+
+		// A line comment ends at the line break, so the code after it must
+		// start on a new line. Use the line break of the source.
+		const kept = comments
+			.map((comment) => {
+				const text = sourceCode.getText(comment);
+				if (comment.type !== AST_TOKEN_TYPES.Line) {
+					return text;
+				}
+
+				const lineBreak = /^\r?\n|^\r/.exec(sourceCode.text.slice(comment.range[1]));
+				return `${text}${lineBreak?.[0] ?? "\n"}`;
+			})
+			.join(" ");
+
+		// A line break between `)` and `=>` is a syntax error, so comments
+		// that span a line break move after the arrow.
+		const arrow = annotation.parent;
+		if (
+			arrow.type === AST_NODE_TYPES.ArrowFunctionExpression &&
+			arrow.returnType === annotation &&
+			comments.some((comment) => {
+				return (
+					comment.loc.start.line !== comment.loc.end.line ||
+					comment.type === AST_TOKEN_TYPES.Line
+				);
+			})
+		) {
+			const arrowToken = sourceCode.getTokenAfter(annotation);
+			if (arrowToken !== null) {
+				return [fixer.remove(annotation), fixer.insertTextAfter(arrowToken, ` ${kept}`)];
+			}
+		}
+
+		return fixer.replaceText(annotation, ` ${kept}`);
 	}
 
 	/**
@@ -1927,10 +1982,6 @@ function create(
 		return { bareReturn, fallsThrough, values };
 	}
 
-	function unionMembers(type: Type): ReadonlyArray<Type> {
-		return type.isUnion() ? type.types : [type];
-	}
-
 	/**
 	 * Predicts whether the returned types, as inference would combine them,
 	 * are the annotated type.
@@ -2116,7 +2167,7 @@ function create(
 			return;
 		}
 
-		collect(returnType, RETURN_MESSAGE_ID, annotationType);
+		collect({ annotation: returnType, messageId: RETURN_MESSAGE_ID, type: annotationType });
 	}
 
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
@@ -2209,7 +2260,7 @@ function create(
 				continue;
 			}
 
-			collect(annotation, PARAMETER_MESSAGE_ID, annotationType);
+			collect({ annotation, messageId: PARAMETER_MESSAGE_ID, type: annotationType });
 		}
 	}
 
@@ -2245,7 +2296,7 @@ function create(
 
 			context.report({
 				data: { typeName: display(annotationType) },
-				fix: (fixer) => fixer.remove(annotation),
+				fix: (fixer) => removeAnnotation(fixer, annotation),
 				messageId: CATCH_MESSAGE_ID,
 				node: annotation,
 			});
@@ -2262,16 +2313,14 @@ function create(
 				source,
 				candidates,
 			);
-			for (const { annotation, messageId, type } of accepted) {
-				report(annotation, messageId, type, true);
+			for (const candidate of accepted) {
+				report(candidate, true);
 			}
 
 			// Unverified is not proven unsafe. Keep the report visible, but
 			// never autofix it.
-			for (const {
-				candidate: { annotation, messageId, type },
-			} of unverified) {
-				report(annotation, messageId, type, false);
+			for (const { candidate } of unverified) {
+				report(candidate, false);
 			}
 		},
 		"VariableDeclarator": function (node: TSESTree.VariableDeclarator): void {
@@ -2370,7 +2419,7 @@ function create(
 				return;
 			}
 
-			collect(annotation, MESSAGE_ID, annotationType);
+			collect({ annotation, messageId: MESSAGE_ID, type: annotationType });
 		},
 	};
 }

@@ -1423,6 +1423,72 @@ const invalid: Array<InvalidTestCase> = [
 			}
 		`,
 	},
+	// The fix keeps a comment inside the annotation.
+	{
+		code: unindent`
+			declare function getS(): string;
+			const x: /* keep me */ string = getS();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getS(): string;
+			const x /* keep me */ = getS();
+		`,
+	},
+	// A line comment still ends before the code after it.
+	{
+		code: unindent`
+			declare function getS(): string;
+			const x: // keep me
+				string = getS();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getS(): string;
+			const x // keep me
+			 = getS();
+		`,
+	},
+	// The line comment keeps the line break of the source.
+	{
+		code: "declare function getS(): string;\r\nconst x: // keep me\r\n\tstring = getS();\r\n",
+		errors: [{ messageId }],
+		output: "declare function getS(): string;\r\nconst x // keep me\r\n = getS();\r\n",
+	},
+	// A comment in the type itself is kept too.
+	{
+		code: unindent`
+			declare function getS(): Array<string>;
+			const x: Array</* keep me */ string> = getS();
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare function getS(): Array<string>;
+			const x /* keep me */ = getS();
+		`,
+	},
+	{
+		code: unindent`
+			declare function attempt<R>(onError: (reason: unknown) => R): R;
+			const result = attempt((reason: /* keep me */ unknown) => String(reason));
+		`,
+		errors: [{ messageId: parameterMessageId }],
+		output: unindent`
+			declare function attempt<R>(onError: (reason: unknown) => R): R;
+			const result = attempt((reason /* keep me */) => String(reason));
+		`,
+	},
+	{
+		code: unindent`
+			try {
+			} catch (error: /* keep me */ unknown) {}
+		`,
+		errors: [{ messageId: catchMessageId }],
+		output: unindent`
+			try {
+			} catch (error /* keep me */) {}
+		`,
+	},
 ];
 
 run({
@@ -1991,6 +2057,57 @@ const returnInvalid: Array<InvalidTestCase> = [
 			const kinds = new Set<string>();
 			const store = { read: () => kinds };
 		`,
+	},
+	// The fix keeps a comment inside the annotation.
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): /* keep me */ Set<string> => kinds;
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			const getKinds = () /* keep me */ => kinds;
+		`,
+	},
+	// A line break before `=>` is a syntax error, so a line comment moves
+	// after the arrow.
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): // keep me
+				Set<string> => kinds;
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			const getKinds = () => // keep me
+			 kinds;
+		`,
+	},
+	// A block comment with a line break moves after the arrow too.
+	{
+		code: unindent`
+			const kinds = new Set<string>();
+			const getKinds = (): /* keep
+				me */ Set<string> => kinds;
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			const kinds = new Set<string>();
+			const getKinds = () => /* keep
+				me */ kinds;
+		`,
+	},
+	// A kept line comment ends with the line break of the source.
+	{
+		code: "const kinds = new Set<string>();\r\nconst getKinds = (): // keep me\r\n\tSet<string> => kinds;\r\n",
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: "const kinds = new Set<string>();\r\nconst getKinds = () => // keep me\r\n kinds;\r\n",
 	},
 ];
 
