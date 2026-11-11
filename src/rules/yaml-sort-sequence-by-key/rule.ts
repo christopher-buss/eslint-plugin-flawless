@@ -71,6 +71,7 @@ const schema: JSONSchema.JSONSchema4 = {
 		required: ["key", "pathPattern"],
 		type: "object",
 	},
+	minItems: 1,
 	type: "array",
 };
 
@@ -96,14 +97,30 @@ function makeIsValidOrder({
 		}
 
 		if (typeof first === "number" && typeof second === "number") {
-			return first <= second;
+			// `.nan` never compares, so count it as in order or the sort loops.
+			return Number.isNaN(first) || Number.isNaN(second) || first <= second;
 		}
 
 		return true;
 	};
 }
 
-function orderText({ caseSensitive, natural, type }: ResolvedOrder): string {
+/**
+ * Describes the order for the report message. Like yml, `natural` and
+ * `caseSensitive` only apply to strings, so numbers show only the direction.
+ *
+ * @param order - The resolved order.
+ * @param value - The reported entry's key value.
+ * @returns Text such as `natural insensitive ascending`.
+ */
+function orderText(
+	{ caseSensitive, natural, type }: ResolvedOrder,
+	value: number | string,
+): string {
+	if (typeof value === "number") {
+		return `${type}ending`;
+	}
+
 	return `${natural ? "natural " : ""}${caseSensitive ? "" : "insensitive "}${type}ending`;
 }
 
@@ -221,7 +238,7 @@ function bubbleSort(
 function keptIndices(values: ReadonlyArray<number>): Set<number> {
 	const lengths = values.map(() => 1);
 	const previous = values.map(() => -1);
-	let best = -1;
+	let best = 0;
 	for (let index = 0; index < values.length; index += 1) {
 		for (let before = 0; before < index; before += 1) {
 			if (
@@ -233,7 +250,7 @@ function keptIndices(values: ReadonlyArray<number>): Set<number> {
 			}
 		}
 
-		if (best === -1 || (lengths[index] ?? 0) > (lengths[best] ?? 0)) {
+		if ((lengths[index] ?? 0) > (lengths[best] ?? 0)) {
 			best = index;
 		}
 	}
@@ -352,31 +369,28 @@ function create(context: Context): TSESLint.RuleListener {
 		// No `u` flag, matching yml: patterns such as `^a\-b$` stay valid.
 		return { ...spec, order, pattern: new RegExp(spec.pathPattern) };
 	});
-	if (specs.length === 0) {
-		return {};
-	}
 
 	/**
 	 * Own-line comments directly above a block entry (no blank line between)
-	 * travel with it.
+	 * and in the same column as its `-` travel with it. A comment in another
+	 * column stays in the gap, so the sequence is reported without a fix.
 	 *
 	 * @param node - The entry.
 	 * @returns The start offset of the entry's block.
 	 */
 	function leadingStart(node: AST.YAMLNode): number {
-		const dash = sourceCode.getTokenBefore(node);
-		const head = dash?.value === "-" ? dash : node;
+		// A block entry always follows its `-`; `?? node` only satisfies the
+		// types.
+		const head = sourceCode.getTokenBefore(node) ?? node;
 		let start = head.range[0];
 		let boundaryLine = head.loc.start.line;
 		const comments = sourceCode.getCommentsBefore(head);
 		for (let index = comments.length - 1; index >= 0; index -= 1) {
 			const comment = comments[index];
-			if (comment?.loc.end.line !== boundaryLine - 1) {
-				break;
-			}
-
-			const before = sourceCode.getTokenBefore(comment, { includeComments: true });
-			if (before !== null && before.loc.end.line === comment.loc.start.line) {
+			if (
+				comment?.loc.end.line !== boundaryLine - 1 ||
+				comment.loc.start.column !== head.loc.start.column
+			) {
 				break;
 			}
 
@@ -406,11 +420,12 @@ function create(context: Context): TSESLint.RuleListener {
 		});
 
 		// A comment left in a gap belongs to no entry; moving entries around it
-		// would re-attach it, so report without a fix.
+		// would re-attach it, so report without a fix. A gap holds only
+		// whitespace, commas and comments.
 		const gaps: Array<string> = [];
 		for (let index = 1; index < blocks.length; index += 1) {
 			const gap = text.slice(blocks[index - 1]?.end ?? 0, blocks[index]?.start ?? 0);
-			if (isBlock ? /\S/u.test(gap) : gap.includes("#")) {
+			if (gap.includes("#")) {
 				return undefined;
 			}
 
@@ -475,7 +490,7 @@ function create(context: Context): TSESLint.RuleListener {
 				context.report({
 					data: {
 						key: spec.key,
-						orderText: orderText(spec.order),
+						orderText: orderText(spec.order, item.value),
 						targetValue: String(target.entry.value),
 						thisValue: String(item.value),
 					},

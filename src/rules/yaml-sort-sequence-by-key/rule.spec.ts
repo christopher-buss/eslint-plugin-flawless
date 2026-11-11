@@ -1,4 +1,5 @@
 import { Linter } from "eslint";
+import yml from "eslint-plugin-yml";
 import { type InvalidTestCase, unindent, type ValidTestCase } from "eslint-vitest-rule-tester";
 import { describe, expect, it } from "vitest";
 import * as yamlParser from "yaml-eslint-parser";
@@ -18,11 +19,6 @@ const valid: Array<ValidTestCase> = [
 		`,
 		options: root,
 	},
-	// No options: the rule does nothing.
-	unindent`
-		- name: b
-		- name: a
-	`,
 	// Path does not match.
 	{
 		code: unindent`
@@ -85,6 +81,95 @@ const valid: Array<ValidTestCase> = [
 		`,
 		options: [{ key: "name", order: { type: "desc" }, pathPattern: "^$" }],
 	},
+	// natural is off by default: code-unit order puts item10 first.
+	{
+		code: unindent`
+			- name: item10
+			- name: item2
+		`,
+		options: root,
+	},
+	// An entry that redefines an anchor used by an earlier alias keeps order.
+	{
+		code: unindent`
+			base: &x 0
+			list:
+			  - name: b
+			    v: *x
+			  - name: a
+			    v: &x 1
+		`,
+		options: [{ key: "name", pathPattern: "^list$" }],
+	},
+	// A boolean key value skips the sequence.
+	{
+		code: unindent`
+			- name: b
+			- name: a
+			- name: true
+		`,
+		options: root,
+	},
+	// An empty entry skips the sequence.
+	{
+		code: unindent`
+			- name: b
+			-
+			- name: a
+		`,
+		options: root,
+	},
+	// An anchor on a key, or inside a nested sequence, and an alias inside a
+	// tagged node all count for keeping order.
+	{
+		code: unindent`
+			- name: b
+			  &k extra: 1
+			- name: a
+			  *k : 2
+		`,
+		options: root,
+	},
+	{
+		code: unindent`
+			- name: b
+			  tags: [&t x]
+			- name: a
+			  refs: !!seq [*t]
+		`,
+		options: root,
+	},
+	// A string and a number are never compared.
+	{
+		code: unindent`
+			- name: b
+			- name: 1
+			- name: a
+		`,
+		options: root,
+	},
+	// .nan never counts as out of order (and must not loop).
+	{
+		code: unindent`
+			- id: .nan
+			- id: 1
+		`,
+		options: [{ key: "id", pathPattern: "^$" }],
+	},
+	{
+		code: unindent`
+			- id: 1
+			- id: .nan
+		`,
+		options: [{ key: "id", pathPattern: "^$" }],
+	},
+	{
+		code: unindent`
+			- id: .nan
+			- id: .nan
+		`,
+		options: [{ key: "id", pathPattern: "^$" }],
+	},
 ];
 
 const labels = unindent`
@@ -141,7 +226,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			- name: b
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 3,
+				data: { key: "name", orderText: "descending", targetValue: "a", thisValue: "b" },
+				line: 2,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: [{ key: "name", order: { type: "desc" }, pathPattern: "^$" }],
 		output: unindent`
 			- name: b
@@ -154,7 +246,19 @@ const invalid: Array<InvalidTestCase> = [
 			- name: item10
 			- name: item2
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 3,
+				data: {
+					key: "name",
+					orderText: "natural ascending",
+					targetValue: "item10",
+					thisValue: "item2",
+				},
+				line: 2,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: [{ key: "name", order: { natural: true }, pathPattern: "^$" }],
 		output: unindent`
 			- name: item2
@@ -232,7 +336,19 @@ const invalid: Array<InvalidTestCase> = [
 			- name: B
 			- name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 3,
+				data: {
+					key: "name",
+					orderText: "insensitive ascending",
+					targetValue: "B",
+					thisValue: "a",
+				},
+				line: 2,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: [{ key: "name", order: { caseSensitive: false }, pathPattern: "^$" }],
 		output: unindent`
 			- name: a
@@ -246,7 +362,14 @@ const invalid: Array<InvalidTestCase> = [
 			  - name: b
 			  - name: a
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 5,
+				data: { key: "name", orderText: "ascending", targetValue: "b", thisValue: "a" },
+				line: 3,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: [
 			{ key: "name", pathPattern: "^updates$" },
 			{ key: "name", order: { type: "desc" }, pathPattern: ".*" },
@@ -337,7 +460,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			  id: 2
 		`,
-		errors: [{ messageId: "shouldBeAfter" }],
+		errors: [
+			{
+				column: 3,
+				data: { key: "name", orderText: "ascending", targetValue: "a", thisValue: "b" },
+				line: 1,
+				messageId: "shouldBeAfter",
+			},
+		],
 		options: root,
 		output: unindent`
 			- name: a
@@ -356,7 +486,14 @@ const invalid: Array<InvalidTestCase> = [
 			- name: a
 			  base: *base
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 3,
+				data: { key: "name", orderText: "ascending", targetValue: "c", thisValue: "b" },
+				line: 3,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: root,
 		output: unindent`
 			- name: b
@@ -372,11 +509,237 @@ const invalid: Array<InvalidTestCase> = [
 			- id: 10
 			- id: 9
 		`,
-		errors: [{ messageId: "shouldBeBefore" }],
+		errors: [
+			{
+				column: 3,
+				data: { key: "id", orderText: "ascending", targetValue: "10", thisValue: "9" },
+				line: 2,
+				messageId: "shouldBeBefore",
+			},
+		],
 		options: [{ key: "id", pathPattern: "^$" }],
 		output: unindent`
 			- id: 9
 			- id: 10
+		`,
+	},
+	// An alias to an anchor outside the sequence does not block sorting.
+	{
+		code: unindent`
+			base: &x 0
+			list:
+			  - name: b
+			  - name: a
+			    v: *x
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: "^list$" }],
+		output: unindent`
+			base: &x 0
+			list:
+			  - name: a
+			    v: *x
+			  - name: b
+		`,
+	},
+	// A null value inside an entry is fine; explicit asc works.
+	{
+		code: unindent`
+			- name: b
+			  v:
+			- name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", order: { type: "asc" }, pathPattern: "^$" }],
+		output: unindent`
+			- name: a
+			- name: b
+			  v:
+		`,
+	},
+	// Report targets: the first earlier entry that should follow.
+	{
+		code: unindent`
+			- name: a
+			- name: c
+			- name: d
+			- name: b
+		`,
+		errors: [
+			{
+				data: { key: "name", orderText: "ascending", targetValue: "c", thisValue: "b" },
+				line: 4,
+				messageId: "shouldBeBefore",
+			},
+		],
+		options: root,
+		output: unindent`
+			- name: a
+			- name: b
+			- name: c
+			- name: d
+		`,
+	},
+	// Report targets: else the last later entry that should precede.
+	{
+		code: unindent`
+			- name: c
+			- name: a
+			- name: b
+			- name: d
+		`,
+		errors: [
+			{
+				data: { key: "name", orderText: "ascending", targetValue: "b", thisValue: "c" },
+				line: 1,
+				messageId: "shouldBeAfter",
+			},
+		],
+		options: root,
+		output: unindent`
+			- name: a
+			- name: b
+			- name: c
+			- name: d
+		`,
+	},
+	// Path names: a number key uses its source text, a quoted key its value.
+	{
+		code: unindent`
+			1:
+			  - name: b
+			  - name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: String.raw`^\["1"\]$` }],
+		output: unindent`
+			1:
+			  - name: a
+			  - name: b
+		`,
+	},
+	{
+		code: unindent`
+			"my list":
+			  - name: b
+			  - name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: String.raw`^\["my list"\]$` }],
+		output: unindent`
+			"my list":
+			  - name: a
+			  - name: b
+		`,
+	},
+	// Numbers show only the direction, even with string-only options.
+	{
+		code: unindent`
+			- id: 2
+			- id: 1
+		`,
+		errors: [
+			{
+				data: { key: "id", orderText: "ascending", targetValue: "2", thisValue: "1" },
+				messageId: "shouldBeBefore",
+			},
+		],
+		options: [{ key: "id", order: { caseSensitive: false, natural: true }, pathPattern: "^$" }],
+		output: unindent`
+			- id: 1
+			- id: 2
+		`,
+	},
+	// An anchored entry still sorts.
+	{
+		code: unindent`
+			- &x
+			  name: b
+			- name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: root,
+		output: unindent`
+			- name: a
+			- &x
+			  name: b
+		`,
+	},
+	// A tagged entry still sorts.
+	{
+		code: unindent`
+			- !!map
+			  name: b
+			- name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: root,
+		output: unindent`
+			- name: a
+			- !!map
+			  name: b
+		`,
+	},
+	// A comment in another column than the dash is loose: no fix.
+	{
+		code: unindent`
+			- name: b
+			  color: x
+			  # about b color
+			- name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: root,
+		output: null,
+	},
+	{
+		code: unindent`
+			labels:
+			  - name: b
+			# about a
+			  - name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: "^labels$" }],
+		output: null,
+	},
+	// A nested comment in the dash's column moves with its entry.
+	{
+		code: unindent`
+			labels:
+			  - name: b
+			  # about a
+			  - name: a
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: "^labels$" }],
+		output: unindent`
+			labels:
+			  # about a
+			  - name: a
+			  - name: b
+		`,
+	},
+	// Pins current behaviour, same as yml/sort-sequence-values: entries that
+	// define the same anchor still swap, so the outer alias changes target.
+	{
+		code: unindent`
+			list:
+			  - name: b
+			    v: &x 2
+			  - name: a
+			    v: &x 1
+			ref: *x
+		`,
+		errors: [{ messageId: "shouldBeBefore" }],
+		options: [{ key: "name", pathPattern: "^list$" }],
+		output: unindent`
+			list:
+			  - name: a
+			    v: &x 1
+			  - name: b
+			    v: &x 2
+			ref: *x
 		`,
 	},
 ];
@@ -404,5 +767,43 @@ describe("idempotent fix", () => {
 		expect(output).toBe(labelsFixed);
 		expect(messages).toHaveLength(0);
 		expect(linter.verify(labelsFixed, config, { filename: "labels.yaml" })).toHaveLength(0);
+	});
+});
+
+describe("yaml language mode (Languages API)", () => {
+	// The plugin objects mix `@eslint/core` type versions (TSESLint vs
+	// eslint-plugin-yml), so the flat-config `plugins` map is cast to bridge
+	// them.
+	const config: Linter.Config = {
+		files: ["**/*.yaml"],
+		language: "yaml/yaml",
+		plugins: {
+			flawless: plugin,
+			yaml: yml,
+		} as unknown as NonNullable<Linter.Config["plugins"]>,
+		rules: { "flawless/yaml-sort-sequence-by-key": ["error", ...root] },
+	};
+
+	const code = unindent`
+		- name: b
+		- name: a
+	`;
+
+	it("reports under the language provider", () => {
+		const linter = new Linter();
+		const messages = linter.verify(code, config, { filename: "file.yaml" });
+		expect(messages).toHaveLength(1);
+		expect(messages[0]?.messageId).toBe("shouldBeBefore");
+	});
+
+	it("fixes identically to parser mode", () => {
+		const linter = new Linter();
+		const { output } = linter.verifyAndFix(code, config, { filename: "file.yaml" });
+		expect(output).toBe(
+			unindent`
+				- name: a
+				- name: b
+			`,
+		);
 	});
 });

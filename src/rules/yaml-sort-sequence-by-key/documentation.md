@@ -16,7 +16,10 @@ compares scalar entries, so it cannot sort a list of mappings.
 
 A sequence is checked when its path matches a configured `pathPattern`. Every
 entry must be a mapping with a string or number value at `key`; if one entry
-does not, the rule skips the whole sequence.
+does not, the rule skips the whole sequence. A string and a number never count
+as out of order (as in `yaml/sort-sequence-values`), so `b, 1, a` gives no
+report; quote values such as `2024` in a list of string names. `.nan` never
+counts as out of order either.
 
 The rule works under both YAML entry points: the ESLint Languages API
 (`language: "yaml/yaml"`) and the classic `yaml-eslint-parser`.
@@ -26,22 +29,27 @@ The rule works under both YAML entry points: the ESLint Languages API
 The fix rewrites the whole sequence at once, so one `--fix` pass is enough.
 
 - Block sequences: each entry moves together with the comment lines directly
-  above it (no blank line between the comment and the `-`) and with a comment at
-  the end of its last line. The separators between entries stay in their
-  positions, so blank lines between entries are kept. A comment followed by a
-  blank line before the first entry (a file header) stays in place.
+  above it (no blank line between the comment and the `-`, and the comment in
+  the same column as the `-`) and with a comment at the end of its last line.
+  The separators between entries stay in their positions, so blank lines between
+  entries are kept. A comment followed by a blank line before the first entry (a
+  file header) stays in place.
 - Flow sequences (`[{ name: b }, { name: a }]`) are fixed the same way, unless
   they contain comments.
 - If a comment sits between two entries and belongs to neither (it has a blank
-  line below it), the rule reports without a fix.
+  line below it, or it is in another column than the `-`), the rule reports
+  without a fix.
 - Sorting is stable: entries with equal keys keep their order.
 - Anchors and aliases: as in `yaml/sort-sequence-values`, two entries never swap
   when one uses an anchor that the other defines. Other entries still sort and
-  are fixed.
+  are fixed. Only aliases inside the sequence are checked: if two entries define
+  the same anchor name, the fix can change what a later alias outside the
+  sequence resolves to.
 
 ## Options
 
-An array of objects. The first object whose `pathPattern` matches wins.
+An array of at least one object. The first object whose `pathPattern` matches
+wins.
 
 - `pathPattern` (`string`, required): a regular expression for the sequence
   path, in the syntax of `yaml/sort-keys`. `^$` matches the root sequence;
