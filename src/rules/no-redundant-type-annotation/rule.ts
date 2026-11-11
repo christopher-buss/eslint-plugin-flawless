@@ -83,7 +83,7 @@ type ReturnTypedFunction =
 	| TSESTree.FunctionDeclaration
 	| TSESTree.FunctionExpression;
 
-/** A function whose parameters can take their types from a context. */
+/** An arrow or function expression, also one that is a class method. */
 type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression;
 
 /** A redundant annotation, with what its report shows. */
@@ -95,6 +95,15 @@ interface Removal {
 	/** The annotated type to show in the report. */
 	readonly type: Type;
 }
+
+/**
+ * A parameter of a function outside a class body. Only a constructor can
+ * declare a parameter property, and the parser rejects one anywhere else.
+ */
+type ContextualParameter = Exclude<TSESTree.Parameter, TSESTree.TSParameterProperty>;
+
+/** A function whose parameters can take their types from a context. */
+type ContextualFunction = FunctionExpressionNode & { params: Array<ContextualParameter> };
 
 const messages = {
 	[CATCH_MESSAGE_ID]:
@@ -117,11 +126,7 @@ const messages = {
  * @param parameter - The parameter to inspect.
  * @returns True when the parameter has no annotation.
  */
-function isUntypedParameter(parameter: TSESTree.Parameter): boolean {
-	if (parameter.type === AST_NODE_TYPES.TSParameterProperty) {
-		return isUntypedParameter(parameter.parameter);
-	}
-
+function isUntypedParameter(parameter: ContextualParameter): boolean {
 	// A default value nests the binding, and the annotation may sit on either
 	// half depending on how the parameter was written.
 	if (parameter.type === AST_NODE_TYPES.AssignmentPattern) {
@@ -139,12 +144,8 @@ function isUntypedParameter(parameter: TSESTree.Parameter): boolean {
  * @returns The annotation, or undefined when the parameter has none.
  */
 function getParameterAnnotation(
-	parameter: TSESTree.Parameter,
+	parameter: ContextualParameter,
 ): TSESTree.TSTypeAnnotation | undefined {
-	if (parameter.type === AST_NODE_TYPES.TSParameterProperty) {
-		return getParameterAnnotation(parameter.parameter);
-	}
-
 	if (parameter.type === AST_NODE_TYPES.AssignmentPattern) {
 		return parameter.typeAnnotation ?? getParameterAnnotation(parameter.left);
 	}
@@ -181,12 +182,11 @@ function isRestParameter(signature: Signature, index: number): boolean {
  * @param parameters - The parameters, after any `this` parameter.
  * @returns How many leading parameters are required.
  */
-function countLeadingRequired(parameters: ReadonlyArray<TSESTree.Parameter>): number {
+function countLeadingRequired(parameters: ReadonlyArray<ContextualParameter>): number {
 	const index = parameters.findIndex((parameter) => {
 		return (
 			parameter.type === AST_NODE_TYPES.AssignmentPattern ||
 			parameter.type === AST_NODE_TYPES.RestElement ||
-			parameter.type === AST_NODE_TYPES.TSParameterProperty ||
 			parameter.optional
 		);
 	});
@@ -342,16 +342,22 @@ function isFunctionNode(
 }
 
 /**
- * Reports whether a node is a function expression, the only kind of function
- * whose parameters can take their types from a context.
+ * Reports whether a node is a function whose parameters can take their types
+ * from a context: an arrow or function expression outside a class body.
+ *
+ * A class member never takes its parameter types from a context, not even
+ * from an interface the class implements. A constructor is a class member, so
+ * no parameter property gets through.
  *
  * @param node - The node to inspect.
- * @returns True for an arrow or function expression.
+ * @returns True for an arrow, or a function expression that is not a class
+ *   member.
  */
-function isFunctionExpressionNode(node: TSESTree.Node): node is FunctionExpressionNode {
+function isContextualFunction(node: TSESTree.Node): node is ContextualFunction {
 	return (
 		node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-		node.type === AST_NODE_TYPES.FunctionExpression
+		(node.type === AST_NODE_TYPES.FunctionExpression &&
+			node.parent.type !== AST_NODE_TYPES.MethodDefinition)
 	);
 }
 
@@ -619,9 +625,22 @@ function getSignatureKinds(call: CallLike): Array<ts.SignatureKind> {
  * @param node - The function to inspect.
  * @returns True when the first parameter is `this`.
  */
-function hasThisParameter(node: FunctionExpressionNode): boolean {
+function hasThisParameter(node: { readonly params: ReadonlyArray<TSESTree.Parameter> }): boolean {
 	const [first] = node.params;
 	return first?.type === AST_NODE_TYPES.Identifier && first.name === "this";
+}
+
+/**
+ * Finds the parameters that match the positions of a signature. A `this`
+ * parameter has no position there.
+ *
+ * @param node - The function to inspect.
+ * @returns The parameters after a `this` parameter.
+ */
+function getPositionalParameters(node: {
+	readonly params: ReadonlyArray<ContextualParameter>;
+}): ReadonlyArray<ContextualParameter> {
+	return hasThisParameter(node) ? node.params.slice(1) : node.params;
 }
 
 /**
@@ -1007,7 +1026,7 @@ function create(
 		// argument, so the argument's context would come from itself.
 		if (
 			call.type === AST_NODE_TYPES.CallExpression &&
-			isFunctionExpressionNode(call.callee) &&
+			isContextualFunction(call.callee) &&
 			call.callee.params.some(isUntypedParameter)
 		) {
 			return false;
@@ -1204,7 +1223,7 @@ function create(
 	function anchorsAnnotatedParameter(anchor: TSESTree.Node, root: TSESTree.Node): boolean {
 		function test(child: TSESTree.Node): boolean {
 			return (
-				isFunctionExpressionNode(child) &&
+				isContextualFunction(child) &&
 				!child.params.every(isUntypedParameter) &&
 				resolveContextAnchor(child) === anchor
 			);
@@ -1355,10 +1374,7 @@ function create(
 	 * @returns True when the annotation shapes the expression's type.
 	 */
 	function receivesAnnotationContext(node: TSESTree.Node): boolean {
-		if (
-			node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-			node.type === AST_NODE_TYPES.FunctionExpression
-		) {
+		if (isContextualFunction(node)) {
 			return (
 				node.params.some(isUntypedParameter) ||
 				usesContextualThis(node) ||
@@ -1420,10 +1436,7 @@ function create(
 	 * @returns True when the expression depends on its context.
 	 */
 	function isContextDependent(node: TSESTree.Node): boolean {
-		if (
-			node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
-			node.type === AST_NODE_TYPES.FunctionExpression
-		) {
+		if (isContextualFunction(node)) {
 			return node.params.some(isUntypedParameter);
 		}
 
@@ -2171,7 +2184,7 @@ function create(
 	}
 
 	function checkFunctionParameters(node: FunctionExpressionNode): void {
-		if (node.params.every((parameter) => isUntypedParameter(parameter))) {
+		if (!isContextualFunction(node) || node.params.every(isUntypedParameter)) {
 			return;
 		}
 
@@ -2203,7 +2216,7 @@ function create(
 
 		// A `this` parameter has no counterpart in the contextual signature's
 		// positional list, so the positions start after it.
-		const parameters = hasThisParameter(node) ? node.params.slice(1) : node.params;
+		const parameters = getPositionalParameters(node);
 
 		// A function that needs more arguments than the signature passes gets no
 		// contextual signature at all.
