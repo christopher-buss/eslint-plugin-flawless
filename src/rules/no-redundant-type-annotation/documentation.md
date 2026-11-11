@@ -593,27 +593,30 @@ parameter annotations. TypeScript requires explicitly typed call targets even
 when the inferred callable type would otherwise be identical.
 
 Verification creates at most twelve speculative programs per lint of a file,
-plus one for each candidate that needs proof and whose removal is checked alone.
-A candidate needs proof when it is a variable whose callback argument needs the
-verifier, or a parameter of a callback that an overloaded callee types (see
-above). There is at most one check alone per candidate and at most ten combined
-checks, so never more than twenty. At most ten candidate annotations are
-verified in that pass. Candidates that need proof are selected first. Each one
-is reported only when its removal alone is safe. A coupled one gets that check
-before the combined check. An uncoupled one gets it when a combined check finds
-a problem with it, because the coupling does not follow all data flow. So
-candidates of other kinds do not change whether it is reported, unless the
-compiler fails during a check, which leaves every annotation alone. It carries a
-fix only when the combined fix is verified too. A report without a fix then
-means that this removal alone is safe. The removal of a coupled annotation can
-make it unsafe, and the next lint then withdraws the report. Candidates past the
-limit of ten are still reported but carry no fix, except a candidate that needs
-proof, which is not reported; `eslint --fix` repeats its fix passes, and each
-pass verifies further candidates after earlier fixes have been applied. If the
-compiler fails during verification, the annotations are left alone and not
-reported. Files with no candidates create no speculative program. Speculative
-programs reuse the parser program's resolved project references, module
-resolution cache, and file system lookups.
+plus one for each candidate that needs proof and whose removal is checked alone,
+plus one shared check alone in which all candidates have a problem. A candidate
+needs proof when it is a variable whose callback argument needs the verifier, or
+a parameter of a callback that an overloaded callee types (see above). Coupled
+candidates that do not affect one another share a check alone. A candidate with
+a problem in that check gets a check of its own. There is at most one check
+alone per candidate, one more shared check, and at most ten combined checks, so
+never more than twenty-one. At most ten candidate annotations are verified in
+that pass. Candidates that need proof are selected first. Each one is reported
+only when its removal alone is safe. A coupled one gets that check before the
+combined check. An uncoupled one gets it when a combined check finds a problem
+with it, because the coupling does not follow all data flow. So candidates of
+other kinds do not change whether it is reported, unless the compiler fails
+during a check, which leaves every annotation alone. It carries a fix only when
+the combined fix is verified too. A report without a fix then means that this
+removal alone is safe. The removal of a coupled annotation can make it unsafe,
+and the next lint then withdraws the report. Candidates past the limit of ten
+are still reported but carry no fix, except a candidate that needs proof, which
+is not reported; `eslint --fix` repeats its fix passes, and each pass verifies
+further candidates after earlier fixes have been applied. If the compiler fails
+during verification, the annotations are left alone and not reported. Files with
+no candidates create no speculative program. Speculative programs reuse the
+parser program's resolved project references, module resolution cache, and file
+system lookups.
 
 Verification needs the parser and this plugin to load the same copy of
 `typescript`. TypeScript numbers nodes and symbols with module-level counters,

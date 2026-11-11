@@ -65,13 +65,15 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 // Individual editor fixes and a combined ESLint fix both need checking. Leave
 // two programs for the combined fix and a retry after rejecting a dependency.
 // The check alone of a removal that requires proof is not in this budget.
-// Each selected removal gets at most one check alone, and each combined check
-// restores at least one removal, so one lint creates at most
-// 2 * (MAX_PROGRAMS - 2) programs.
+// Each selected removal gets at most one check alone, plus one shared check
+// in which all removals fail, and each combined check restores at least one
+// removal, so one lint creates at most 2 * (MAX_PROGRAMS - 2) + 1 programs.
 const MAX_PROGRAMS = 12;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
 const LOOP_REPLAY_VERSIONS = new Set(["5.9", "6.0"]);
+// Compiler hosts can resolve module name literals from TypeScript 5.0.
+const RESOLVES_LITERALS = Number(ts.versionMajorMinor.split(".")[0]) >= 5;
 const EMIT_FLAGS =
 	ts.NodeBuilderFlags.MultilineObjectLiterals |
 	ts.NodeBuilderFlags.WriteClassExpressionAsTypeLiteral |
@@ -182,13 +184,14 @@ export function verifyAnnotations<C extends Candidate>(
 		function check(group: ReadonlyArray<C>): Map<C, string> {
 			const ranges = group.map(({ range }) => range).sort((a, b) => a[0] - b[0]);
 			const modified = speculate(removeRanges(source.text, ranges));
-			const after = modified.getSourceFile(source.fileName);
-			if (after === undefined) {
+			const edited = modified.getSourceFile(source.fileName);
+			if (edited === undefined) {
 				throw new Error("The speculative program lost the source file");
 			}
 
+			const after = edited;
+
 			const fresh = modified.getTypeChecker();
-			const index = indexNodes(after);
 			/**
 			 * Keys declarations in the edited file by their original position,
 			 * so a shadowing declaration never matches the one it shadows.
@@ -202,12 +205,11 @@ export function verifyAnnotations<C extends Candidate>(
 			}
 
 			function mapped(node: ts.Node): ts.Node | undefined {
-				return index.get(
-					nodeKey(
-						node.kind,
-						mapPosition(node.getStart(source), ranges),
-						mapPosition(node.end, ranges),
-					),
+				return findNode(
+					after,
+					node.kind,
+					mapPosition(node.getStart(source), ranges),
+					mapPosition(node.end, ranges),
 				);
 			}
 
@@ -264,6 +266,54 @@ export function verifyAnnotations<C extends Candidate>(
 			return problems;
 		}
 
+		/**
+		 * Finds the problem of each coupled removal when it is the only
+		 * removal. Removals that are not coupled with one another share one
+		 * program, as uncoupled removals do in the combined check. A removal
+		 * with a problem there gets a program of its own, so another removal
+		 * never causes its rejection. After a shared program in which all
+		 * removals have a problem, each removal gets a program of its own.
+		 * Thus at most one program more than the number of removals is used.
+		 * @param partners - The removals coupled with each coupled removal.
+		 * @returns The problem of each coupled removal alone, if any.
+		 */
+		function checkAlone(partners: ReadonlyMap<C, ReadonlySet<C>>): Map<C, string | undefined> {
+			const groups: Array<Array<C>> = [];
+			for (const [candidate, coupledWith] of partners) {
+				const group = groups.find((members) => {
+					return members.every((member) => !coupledWith.has(member));
+				});
+				if (group === undefined) {
+					groups.push([candidate]);
+				} else {
+					group.push(candidate);
+				}
+			}
+
+			const problems = new Map<C, string | undefined>();
+			let batching = true;
+			for (const group of groups) {
+				if (!batching || group.length === 1) {
+					for (const candidate of group) {
+						problems.set(candidate, check([candidate]).get(candidate));
+					}
+
+					continue;
+				}
+
+				const shared = check(group);
+				batching = group.some((candidate) => !shared.has(candidate));
+				for (const candidate of group) {
+					problems.set(
+						candidate,
+						shared.has(candidate) ? check([candidate]).get(candidate) : undefined,
+					);
+				}
+			}
+
+			return problems;
+		}
+
 		// Bound speculative work independently of the number of annotations in
 		// the file. Additional candidates are reported without a fix; a later
 		// fix pass verifies them once earlier fixes are applied.
@@ -273,12 +323,13 @@ export function verifyAnnotations<C extends Candidate>(
 
 		// An editor applies one fix at a time. Removals that cannot influence
 		// one another are safe alone when they are safe together, so only
-		// coupled removals need a program of their own. A removal that
-		// requires proof is reported only when it is safe alone. Its program
-		// is not in the budget, so other removals cannot use up its check.
+		// coupled removals need a check alone. A removal that requires proof
+		// is reported only when it is safe alone. Its check is not in the
+		// budget, so other removals cannot use up its check.
 		let programs = 0;
 		const safeAlone = new Set<C>();
 		const coupled = coupledCandidates(selected, references, narrowed);
+		const aloneProblems = checkAlone(coupled);
 		let accepted = selected.filter((candidate) => {
 			if (!coupled.has(candidate)) {
 				return true;
@@ -289,7 +340,7 @@ export function verifyAnnotations<C extends Candidate>(
 				programs += 1;
 			}
 
-			const reason = check([candidate]).get(candidate);
+			const reason = aloneProblems.get(candidate);
 			if (reason !== undefined) {
 				recordRejection(candidate, reason);
 				return false;
@@ -319,7 +370,7 @@ export function verifyAnnotations<C extends Candidate>(
 				return { accepted, acceptedAlone, rejected, unverified };
 			}
 
-			// The coupled removals use at most ten programs above, so this
+			// The coupled removals use at most ten of the budget above, so this
 			// check runs at least once. An uncoupled removal without a problem
 			// here is safe alone.
 			for (const candidate of accepted) {
@@ -589,11 +640,27 @@ function sharedHost(old: ts.Program): SharedHost {
 		),
 		fileExists: memoize((name) => base.fileExists(name)),
 		files: new Map(old.getSourceFiles().map((file) => [fileKey(file.fileName), file])),
-		moduleResolution: ts.createModuleResolutionCache(
-			old.getCurrentDirectory(),
-			(name) => base.getCanonicalFileName(name),
-			options,
-		),
+		moduleResolution: RESOLVES_LITERALS
+			? ts.createModuleResolutionCache(
+					old.getCurrentDirectory(),
+					(name) => base.getCanonicalFileName(name),
+					options,
+					// The parser program read the package.json scope of each of
+					// its files already. Its cache is internal, so it can be
+					// absent. TypeScript 5.0 ignores this argument.
+					(
+						old as {
+							getModuleResolutionCache?: () => ts.ModuleResolutionCache | undefined;
+						}
+					)
+						.getModuleResolutionCache?.()
+						?.getPackageJsonInfoCache(),
+				)
+			: ts.createModuleResolutionCache(
+					old.getCurrentDirectory(),
+					(name) => base.getCanonicalFileName(name),
+					options,
+				),
 		parsedReferences,
 	};
 	sharedHosts.set(old, host);
@@ -655,6 +722,40 @@ function speculativeProgramFactory(
 	};
 	if (projectReferences !== undefined) {
 		programOptions.projectReferences = projectReferences;
+	}
+
+	// createProgram uses the host's resolution cache only when the host also
+	// resolves modules. Otherwise each program makes a new cache and reads
+	// each package.json again to find the module format of each file. This is
+	// the default resolution of the compiler, with the shared cache. The cache
+	// belongs to one parser program, so it holds at most the resolutions of
+	// that program's files.
+	if (RESOLVES_LITERALS) {
+		host.resolveModuleNameLiterals = (
+			...[literals, containingFile, redirectedReference, options, containingSourceFile]
+		) => {
+			const modeOptions = redirectedReference?.commandLine.options ?? options;
+			const resolved = new Map<string, ts.ResolvedModuleWithFailedLookupLocations>();
+			return literals.map((literal) => {
+				const mode = ts.getModeForUsageLocation(containingSourceFile, literal, modeOptions);
+				const key = `${mode ?? ""}|${literal.text}`;
+				let resolution = resolved.get(key);
+				if (resolution === undefined) {
+					resolution = ts.resolveModuleName(
+						literal.text,
+						containingFile,
+						options,
+						host,
+						moduleResolution,
+						redirectedReference,
+						mode,
+					);
+					resolved.set(key, resolution);
+				}
+
+				return resolution;
+			});
+		};
 	}
 
 	return (replacement) => {
@@ -724,19 +825,37 @@ function declarationKey(
 	return `${fileKey(file.fileName)}:${translate(declaration.getStart(file), file)}`;
 }
 
-function nodeKey(kind: ts.SyntaxKind, start: number, end: number): string {
-	return `${kind}:${start}:${end}`;
-}
-
-function indexNodes(source: ts.SourceFile): Map<string, ts.Node> {
-	const index = new Map<string, ts.Node>();
+/**
+ * Finds the node of a kind at a range. When nodes share the kind and range,
+ * the last in pre-order matches. Only nodes whose full span holds the range
+ * can match, so the search visits one path and not the whole file.
+ * @param source - The edited file.
+ * @param kind - The syntax kind to match.
+ * @param start - The start position without leading trivia.
+ * @param end - The position after the last character of the node.
+ * @returns The matching node, if any.
+ */
+function findNode(
+	source: ts.SourceFile,
+	kind: ts.SyntaxKind,
+	start: number,
+	end: number,
+): ts.Node | undefined {
+	let found: ts.Node | undefined;
 	function visit(node: ts.Node): void {
-		index.set(nodeKey(node.kind, node.getStart(source), node.end), node);
-		ts.forEachChild(node, visit);
+		if (node.kind === kind && node.end === end && node.getStart(source) === start) {
+			found = node;
+		}
+
+		ts.forEachChild(node, (child) => {
+			if (child.pos <= start && end <= child.end) {
+				visit(child);
+			}
+		});
 	}
 
 	visit(source);
-	return index;
+	return found;
 }
 
 function insideLoop(node: ts.Node): boolean {
@@ -934,13 +1053,13 @@ function contains(outer: ts.Node, inner: ts.Node): boolean {
  * @param references - The referencing identifiers of each candidate owner.
  * @param narrowed - The uses each candidate can narrow as an aliased
  *   condition.
- * @returns The candidates that need an individual check.
+ * @returns The removals coupled with each coupled candidate.
  */
 function coupledCandidates<C extends Candidate>(
 	candidates: ReadonlyArray<C>,
 	references: ReadonlyMap<ts.Node, ReadonlyArray<ts.Identifier>>,
 	narrowed: ReadonlyMap<C, ReadonlyArray<ts.Node>>,
-): Set<C> {
+): Map<C, Set<C>> {
 	const scoped = candidates.map((candidate) => {
 		return {
 			candidate,
@@ -951,7 +1070,13 @@ function coupledCandidates<C extends Candidate>(
 			],
 		};
 	});
-	const coupled = new Set<C>();
+	const coupled = new Map<C, Set<C>>();
+	function link(from: C, to: C): void {
+		const partners = coupled.get(from) ?? new Set<C>();
+		partners.add(to);
+		coupled.set(from, partners);
+	}
+
 	for (const [index, first] of scoped.entries()) {
 		for (const second of scoped.slice(index + 1)) {
 			const overlaps = first.scopes.some((outer) => {
@@ -960,8 +1085,8 @@ function coupledCandidates<C extends Candidate>(
 				);
 			});
 			if (overlaps) {
-				coupled.add(first.candidate);
-				coupled.add(second.candidate);
+				link(first.candidate, second.candidate);
+				link(second.candidate, first.candidate);
 			}
 		}
 	}
