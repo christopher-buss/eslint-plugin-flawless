@@ -2255,12 +2255,7 @@ const returnValid: Array<ValidTestCase> = [
 				read(): Set<string> {
 					return kinds;
 				}
-				field = (): Set<string> => kinds;
 			}
-		`,
-		unindent`
-			const kinds = new Set<string>();
-			export default (): Set<string> => kinds;
 		`,
 	].map((code) => ({ code, options: checkExpressions })),
 ];
@@ -2270,6 +2265,63 @@ run({
 	invalid: returnInvalid,
 	rule: noRedundantTypeAnnotation,
 	valid: returnValid,
+});
+
+// Under `isolatedDeclarations` the emit guards keep a class field's and an
+// export default's return types before `allowExpressions` is read. The
+// `loose-null` fixture turns it off, so these cases test the option alone.
+const fieldReturn = unindent`
+	const kinds = new Set<string>();
+	export class Store {
+		field = (): Set<string> => kinds;
+	}
+`;
+const exportDefaultReturn = unindent`
+	const kinds = new Set<string>();
+	export default (): Set<string> => kinds;
+`;
+
+const looseNullReturnInvalid: Array<InvalidTestCase> = [
+	{
+		code: fieldReturn,
+		errors: [{ messageId: returnMessageId }],
+		filename: path.join(looseNullDirectory, "case.ts"),
+		options: checkAll,
+		output: fieldReturn.replace("(): Set<string>", "()"),
+	},
+	{
+		code: exportDefaultReturn,
+		errors: [{ messageId: returnMessageId }],
+		filename: path.join(looseNullDirectory, "case.ts"),
+		options: checkAll,
+		output: exportDefaultReturn.replace("(): Set<string>", "()"),
+	},
+];
+
+run({
+	name: `${RULE_NAME}/loose-null-return-types`,
+	invalid: looseNullReturnInvalid,
+	parserOptions: {
+		ecmaVersion: "latest",
+		project: path.join(looseNullDirectory, "tsconfig.json"),
+		sourceType: "module",
+		tsconfigRootDir: looseNullDirectory,
+	},
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			// A class field declares the function, so it keeps its return type.
+			code: fieldReturn,
+			filename: path.join(looseNullDirectory, "case.ts"),
+			options: checkExpressions,
+		},
+		{
+			// An export default declares the function too.
+			code: exportDefaultReturn,
+			filename: path.join(looseNullDirectory, "case.ts"),
+			options: checkExpressions,
+		},
+	],
 });
 
 // The fix-safety oracle checks what every report above promises: type-check
@@ -2364,6 +2416,7 @@ describe(`${RULE_NAME}/fix-safety`, () => {
 			...toFixedSnippets(invalid, "file.ts"),
 			...toFixedSnippets(jsxInvalid, jsxFilename),
 			...toFixedSnippets(looseNullInvalid, "file.ts"),
+			...toFixedSnippets(looseNullReturnInvalid, "file.ts"),
 			...toFixedSnippets(isolatedDeclarationsInvalid, "file.ts"),
 			...toFixedSnippets(returnInvalid, "file.ts"),
 		]);
