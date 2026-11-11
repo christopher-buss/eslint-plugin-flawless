@@ -1,4 +1,7 @@
-/** Compiler failures caused by removing annotations in issue #70. */
+/**
+ * Removals that changed types: compiler failures from issue #70, and
+ * narrowing through a `const` condition alias from issue #109.
+ */
 export const regressions = [
 	{
 		name: "assertion callback parameter",
@@ -88,6 +91,113 @@ export function load(
 	read: <T>(path: string) => T = <T>(path: string) => readFile<T>(path),
 ): void {
 	void read;
+}`,
+	},
+	{
+		name: "aliased condition in a logical expression",
+		code: `
+declare const v: string | number;
+export function f(): boolean {
+	const isText: boolean = typeof v === "string";
+	return isText && v === 5;
+}`,
+	},
+	{
+		name: "aliased condition in an if statement",
+		code: `
+declare const v: string | number;
+export function g(): void {
+	const ok: boolean = typeof v === "string";
+	if (ok) {
+		if (typeof v === "number") {
+			v.toFixed();
+		}
+	}
+}`,
+	},
+	{
+		name: "aliased condition of a property",
+		code: `
+declare const box: { readonly value: string | number };
+export function h(): void {
+	const ok: boolean = typeof box.value === "string";
+	if (ok) {
+		if (typeof box.value === "number") {
+			box.value.toFixed();
+		}
+	}
+}`,
+	},
+	{
+		name: "aliased condition of an element access",
+		code: `
+declare const box: { readonly value: string | number };
+export function m(): void {
+	const ok: boolean = typeof box["value"] === "string";
+	if (ok) {
+		if (typeof box["value"] === "number") {
+			box["value"].toFixed();
+		}
+	}
+}`,
+	},
+	{
+		name: "aliased condition of this",
+		code: `
+export class Animal {
+	speak(): void {
+		const isDog: boolean = this instanceof Dog;
+		if (isDog) {
+			if (!(this instanceof Dog)) {
+				this.speak();
+			}
+		}
+	}
+}
+export class Dog extends Animal {
+	bark(): void {}
+}`,
+	},
+	{
+		name: "copied value as a condition",
+		code: `
+declare const v: string | undefined;
+declare function use(value: string | undefined): void;
+export function k(): void {
+	const copy: string | undefined = v;
+	if (copy) use(v);
+}`,
+	},
+	{
+		name: "aliased condition through another alias",
+		code: `
+export function g(v: string | number) {
+	const ok: boolean = typeof v === "string";
+	const same = ok;
+	if (!same) return "none";
+	return v;
+}`,
+	},
+	{
+		name: "aliased condition after its block",
+		code: `
+export function g(v: string | number) {
+	{
+		const ok: boolean = typeof v === "string";
+		if (!ok) return "none";
+	}
+	return v;
+}`,
+	},
+	{
+		name: "aliased condition after its for statement",
+		code: `
+export function g(v: string | number) {
+	for (const ok: boolean = typeof v === "string"; ; ) {
+		if (!ok) return "none";
+		break;
+	}
+	return v;
 }`,
 	},
 ] as const;

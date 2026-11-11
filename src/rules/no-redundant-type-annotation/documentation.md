@@ -397,10 +397,11 @@ editors that apply a single fix. Two removals are coupled when their regions
 overlap or one statement uses both bindings. A variable's region is its
 statement. A parameter's region is its function, or the call or JSX element that
 receives the function, because that call can infer its type arguments from the
-parameter. If combined removals fail, every failing removal that is not coupled
-is restored at once. Among coupled removals, one annotation is restored first,
-since restoring a context provider can make the others safe; the remaining
-removals are then checked again.
+parameter. A `const` that aliases a condition also uses each later reference
+that it can narrow (see below). If combined removals fail, every failing removal
+that is not coupled is restored at once. Among coupled removals, one annotation
+is restored first, since restoring a context provider can make the others safe;
+the remaining removals are then checked again.
 
 Arbitrary subsets of several fixes are not exhaustively checked.
 
@@ -412,6 +413,14 @@ validated. Under `declaration` or `composite`, serialized inferred types outside
 function bodies are checked for references to inaccessible or shadowed names.
 These targeted checks supplement the existing conservative guards; they do not
 run complete compiler diagnostics or declaration emit.
+
+TypeScript narrows through a `const` used as a condition only when the `const`
+has no annotation, as in `const ok = typeof v === "string"; if (ok) v.length`.
+For a `const` candidate, the verifier also compares the types of the
+identifiers, `this`, and property and element accesses that its initializer
+reads, at each later use to the end of the enclosing function or file, also
+after the block or `for` statement of the `const`. A removal that changes how
+such a use narrows is not reported. A `let` does not narrow this way.
 
 Assertion functions and receivers used by assertion calls keep their variable or
 parameter annotations. TypeScript requires explicitly typed call targets even

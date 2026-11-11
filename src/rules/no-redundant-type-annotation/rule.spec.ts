@@ -772,6 +772,46 @@ const invalid: Array<InvalidTestCase> = [
 			const record = getRecord();
 		`,
 	},
+	// Only a `const` aliases a condition, so a `let` narrows nothing.
+	{
+		code: unindent`
+			declare const v: string | number;
+			export function f(): boolean {
+				let isText: boolean = typeof v === "string";
+				return isText && v === 5;
+			}
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const v: string | number;
+			export function f(): boolean {
+				let isText = typeof v === "string";
+				return isText && v === 5;
+			}
+		`,
+	},
+	// A `const` that no condition reads narrows nothing.
+	{
+		code: unindent`
+			declare const v: string | number;
+			declare function log(value: boolean): void;
+			export function f(): void {
+				const isText: boolean = typeof v === "string";
+				log(isText);
+				v.toString();
+			}
+		`,
+		errors: [{ messageId }],
+		output: unindent`
+			declare const v: string | number;
+			declare function log(value: boolean): void;
+			export function f(): void {
+				const isText = typeof v === "string";
+				log(isText);
+				v.toString();
+			}
+		`,
+	},
 	// An argument infers `T` before the context is consulted.
 	{
 		code: unindent`

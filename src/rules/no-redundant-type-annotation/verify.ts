@@ -126,15 +126,21 @@ export function verifyAnnotations<C extends Candidate>(
 		});
 		const selected = eligible.slice(0, MAX_PROGRAMS - 2);
 		const references = referencesByOwner(checker, source, selected);
+		// The uses each candidate can narrow as an aliased condition. They are
+		// observed, and they couple the candidate with other removals.
+		const narrowed = new Map<C, ReadonlyArray<ts.Node>>();
 		// Original types are printed on first comparison. A rejected removal
 		// usually differs at its declaration, so its other uses are never
 		// printed.
 		const snapshots = new Map(
 			selected.map((candidate) => {
 				const thisFree = thisFreeCall(candidate.owner);
+				const ownerReferences = references.get(candidate.owner) ?? [];
+				const aliasNodes = aliasNarrowedNodes(checker, candidate.owner, ownerReferences);
+				narrowed.set(candidate, aliasNodes);
 				return [
 					candidate,
-					observedNodes(candidate, references.get(candidate.owner) ?? [], thisFree).map(
+					[...observedNodes(candidate, ownerReferences, thisFree), ...aliasNodes].map(
 						(node) => {
 							let type: string | undefined;
 							const omitThis = thisFree?.arrows.has(node) === true;
@@ -249,7 +255,7 @@ export function verifyAnnotations<C extends Candidate>(
 		// An editor applies one fix at a time. Removals that cannot influence
 		// one another are safe alone when they are safe together, so only
 		// coupled removals need a program of their own.
-		const coupled = coupledCandidates(selected, references);
+		const coupled = coupledCandidates(selected, references, narrowed);
 		if (coupled.size > 0) {
 			accepted = accepted.filter((candidate) => {
 				if (!coupled.has(candidate)) {
@@ -823,15 +829,19 @@ function contains(outer: ts.Node, inner: ts.Node): boolean {
 
 /**
  * Finds candidates whose removal may change another candidate's types: their
- * influence scopes overlap, or one statement uses both bindings.
+ * influence scopes overlap, or one statement uses both bindings. A use that
+ * a `const` can narrow through its initializer counts as a use of it.
  * @template C - The rule's candidate, including its report metadata.
  * @param candidates - The candidates selected for verification.
  * @param references - The referencing identifiers of each candidate owner.
+ * @param narrowed - The uses each candidate can narrow as an aliased
+ *   condition.
  * @returns The candidates that need an individual check.
  */
 function coupledCandidates<C extends Candidate>(
 	candidates: ReadonlyArray<C>,
 	references: ReadonlyMap<ts.Node, ReadonlyArray<ts.Identifier>>,
+	narrowed: ReadonlyMap<C, ReadonlyArray<ts.Node>>,
 ): Set<C> {
 	const scoped = candidates.map((candidate) => {
 		return {
@@ -839,6 +849,7 @@ function coupledCandidates<C extends Candidate>(
 			scopes: [
 				influenceScope(candidate.owner),
 				...(references.get(candidate.owner) ?? []).map(enclosingStatement),
+				...(narrowed.get(candidate) ?? []).map(enclosingStatement),
 			],
 		};
 	});
@@ -1004,6 +1015,187 @@ function observedNodes(
 		visit(root);
 	}
 
+	return nodes;
+}
+
+const EQUALITY_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+	ts.SyntaxKind.EqualsEqualsEqualsToken,
+	ts.SyntaxKind.EqualsEqualsToken,
+	ts.SyntaxKind.ExclamationEqualsEqualsToken,
+	ts.SyntaxKind.ExclamationEqualsToken,
+]);
+
+const LOGICAL_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+	ts.SyntaxKind.AmpersandAmpersandToken,
+	ts.SyntaxKind.BarBarToken,
+	ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+/**
+ * Reports whether a reference can be a condition that TypeScript narrows
+ * by: a test of a statement or a conditional, an operand of a logical
+ * expression, a `switch` or `case` expression, a call argument (an
+ * assertion), the initializer of another alias, or a returned value (an
+ * inferred type predicate). The check looks through parentheses, type
+ * assertions, `!`, and equality operators.
+ * @param reference - A reference to the `const`.
+ * @returns False only when the reference cannot narrow.
+ */
+function canActAsCondition(reference: ts.Node): boolean {
+	let node = reference;
+	let { parent } = node;
+	while (
+		ts.isParenthesizedExpression(parent) ||
+		ts.isAssertionExpression(parent) ||
+		// TypeScript 4.8 has no `isSatisfiesExpression`.
+		parent.kind === ts.SyntaxKind.SatisfiesExpression ||
+		ts.isNonNullExpression(parent) ||
+		(ts.isPrefixUnaryExpression(parent) &&
+			parent.operator === ts.SyntaxKind.ExclamationToken) ||
+		(ts.isBinaryExpression(parent) && EQUALITY_OPERATORS.has(parent.operatorToken.kind))
+	) {
+		node = parent;
+		({ parent } = node);
+	}
+
+	if (ts.isBinaryExpression(parent)) {
+		return LOGICAL_OPERATORS.has(parent.operatorToken.kind);
+	}
+
+	if (
+		ts.isIfStatement(parent) ||
+		ts.isWhileStatement(parent) ||
+		ts.isDoStatement(parent) ||
+		ts.isSwitchStatement(parent) ||
+		ts.isCaseClause(parent)
+	) {
+		return parent.expression === node;
+	}
+
+	if (ts.isForStatement(parent) || ts.isConditionalExpression(parent)) {
+		return parent.condition === node;
+	}
+
+	// A `const` initialized with the reference aliases it in turn.
+	return (
+		ts.isCallExpression(parent) ||
+		ts.isVariableDeclaration(parent) ||
+		ts.isReturnStatement(parent) ||
+		(ts.isArrowFunction(parent) && parent.body === node)
+	);
+}
+
+/**
+ * Finds the uses a `const` can narrow through its initializer. TypeScript
+ * narrows an aliased condition, as in `const ok = typeof v === "string";
+ * if (ok) v.length`, only when the `const` has no annotation. Removing the
+ * annotation therefore changes the types of `v`, `this`, and property
+ * accesses on them after the declaration, to the end of the enclosing
+ * function or file.
+ * @param checker - The original checker.
+ * @param owner - The candidate's declaration.
+ * @param references - The referencing identifiers of the owner.
+ * @returns The narrowable references after the declaration, with their
+ * property and element accesses.
+ */
+function aliasNarrowedNodes(
+	checker: ts.TypeChecker,
+	owner: Candidate["owner"],
+	references: ReadonlyArray<ts.Identifier>,
+): Array<ts.Node> {
+	if (
+		!ts.isVariableDeclaration(owner) ||
+		owner.initializer === undefined ||
+		(ts.getCombinedNodeFlags(owner) & (ts.NodeFlags.Const | ts.NodeFlags.Using)) === 0 ||
+		!references.some(canActAsCondition)
+	) {
+		return [];
+	}
+
+	const symbols = new Set<ts.Symbol>();
+	const names = new Set<string>();
+	const thisReads: Array<ts.Node> = [];
+	function collect(node: ts.Node): void {
+		// A narrowing inside a nested function is not an alias.
+		if (ts.isTypeNode(node) || ts.isFunctionLike(node)) {
+			return;
+		}
+
+		if (node.kind === ts.SyntaxKind.ThisKeyword) {
+			thisReads.push(node);
+		} else if (
+			ts.isIdentifier(node) &&
+			(!ts.isPropertyAccessExpression(node.parent) || node.parent.name !== node)
+		) {
+			// Only a variable, a parameter, or an import is a narrowable
+			// reference. A property access narrows through its object.
+			const symbol = checker.getSymbolAtLocation(node);
+			if (
+				symbol !== undefined &&
+				(symbol.flags & (ts.SymbolFlags.Variable | ts.SymbolFlags.Alias)) !== 0
+			) {
+				symbols.add(symbol);
+				names.add(node.text);
+			}
+		}
+
+		ts.forEachChild(node, collect);
+	}
+
+	collect(owner.initializer);
+	const readsThis = thisReads.length > 0;
+	if (symbols.size === 0 && !readsThis) {
+		return [];
+	}
+
+	// The narrowing continues to the end of the flow container, also after
+	// the block or `for` statement that scopes the `const`.
+	const scope =
+		ts.findAncestor(owner.parent, (node) => {
+			return (
+				ts.isFunctionLike(node) ||
+				ts.isClassStaticBlockDeclaration(node) ||
+				ts.isSourceFile(node)
+			);
+		}) ?? owner.getSourceFile();
+	const nodes: Array<ts.Node> = [];
+	function observe(node: ts.Node): void {
+		let current = node;
+		nodes.push(current);
+		while (
+			(ts.isPropertyAccessExpression(current.parent) ||
+				ts.isElementAccessExpression(current.parent)) &&
+			current.parent.expression === current
+		) {
+			current = current.parent;
+			nodes.push(current);
+		}
+	}
+
+	function visit(node: ts.Node): void {
+		if (ts.isTypeNode(node) || node.end <= owner.end) {
+			return;
+		}
+
+		if (node.pos >= owner.end) {
+			if (node.kind === ts.SyntaxKind.ThisKeyword && readsThis) {
+				observe(node);
+			} else if (ts.isIdentifier(node) && names.has(node.text)) {
+				const symbol = checker.getSymbolAtLocation(node);
+				if (symbol !== undefined && symbols.has(symbol)) {
+					observe(
+						ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+							? node.parent
+							: node,
+					);
+				}
+			}
+		}
+
+		ts.forEachChild(node, visit);
+	}
+
+	visit(scope);
 	return nodes;
 }
 

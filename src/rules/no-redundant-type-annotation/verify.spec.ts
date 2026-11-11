@@ -19,6 +19,13 @@ const directory = path.resolve(__dirname, "../../../fixtures");
 const [major = 0, minor = 0] = ts.versionMajorMinor.split(".").map(Number);
 const projectServiceSharesCompiler = major > 5 || (major === 5 && minor >= 3);
 
+// Before TypeScript 5.2, a condition alias does not narrow `this`, so that
+// annotation is not needed there.
+const aliasesThis = major > 5 || (major === 5 && minor >= 2);
+const verifiedRegressions = regressions.filter(
+	({ name }) => aliasesThis || name !== "aliased condition of this",
+);
+
 /**
  * A real checker over an editor buffer, without writing the source to disk.
  * @param code - The unsaved source text.
@@ -104,7 +111,7 @@ function compilerProblems(code: string, removals: ReadonlyArray<Candidate>): Rea
 }
 
 describe("annotation verification", () => {
-	it.each(regressions)("keeps annotations needed by $name", ({ code }) => {
+	it.each(verifiedRegressions)("keeps annotations needed by $name", ({ code }) => {
 		const { candidates, program, source } = project(code);
 		const verification = verifyAnnotations(program, source, candidates);
 		expect(verification.rejected.length).toBeGreaterThan(0);
@@ -283,6 +290,22 @@ const second: string = json();`;
 			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
 		).toStrictEqual(["first", "second"]);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
+	});
+
+	it("couples a const with the uses that its condition narrows", () => {
+		// Only the removal of isNum narrows v in the second block. The
+		// narrowing of ok observes that use too, so the two are coupled.
+		const code = `declare const v: string | number;
+const ok: boolean = typeof v === "string";
+if (ok) {}
+const isNum: boolean = typeof v === "number";
+if (isNum) { console.log(v); }`;
+		const { candidates, program, source } = project(code);
+		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
+		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["ok"]);
+		expect(
+			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
+		).toStrictEqual(["isNum"]);
 	});
 
 	it("checks parameters that share generic inference one at a time", () => {
