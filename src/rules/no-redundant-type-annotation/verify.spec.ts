@@ -12,6 +12,16 @@ import type { Candidate } from "./verify.ts";
 
 const directory = path.resolve(__dirname, "../../../fixtures");
 
+// With `CI=true`, typescript-eslint infers a single run, and a single run
+// reports tsconfig errors as a parse error. The fixtures tsconfig uses compiler
+// options that the older TypeScript versions in CI do not know, so keep the
+// same mode as a local run.
+const projectServiceOptions = {
+	disallowAutomaticSingleRunInference: true,
+	projectService: true,
+	tsconfigRootDir: directory,
+};
+
 // cspell:ignore tsserverlibrary
 
 // Before TypeScript 5.3, the parser's project service loads
@@ -192,7 +202,7 @@ describe("annotation verification", () => {
 				files: ["**/*.ts"],
 				languageOptions: {
 					parser,
-					parserOptions: { projectService: true, tsconfigRootDir: directory },
+					parserOptions: projectServiceOptions,
 				},
 
 				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
@@ -219,7 +229,7 @@ describe("annotation verification", () => {
 				files: ["**/*.ts"],
 				languageOptions: {
 					parser,
-					parserOptions: { projectService: true, tsconfigRootDir: directory },
+					parserOptions: projectServiceOptions,
 				},
 
 				plugins: { flawless: { rules: { redundant: noRedundantTypeAnnotation } } },
