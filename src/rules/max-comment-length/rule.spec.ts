@@ -1,7 +1,13 @@
+import { TSESLint } from "@typescript-eslint/utils";
+
+import toml from "eslint-plugin-toml";
+import yml from "eslint-plugin-yml";
 import { unindent } from "eslint-vitest-rule-tester";
 import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
+import { describe, expect, it } from "vitest";
 
-import { run } from "../test.ts";
+import plugin from "../../index.ts";
+import { run, runMarkdown, runToml, runYaml } from "../test.ts";
 import { maxCommentLength, RULE_NAME } from "./rule.ts";
 
 const messageId = "tooLong";
@@ -37,6 +43,11 @@ const valid: Array<ValidTestCase> = [
 	// A shebang does not take the header slot.
 	{
 		code: "#!/usr/bin/env node\n// one two three four five\nexport const a = 1;\n",
+		options: [{ maximumWords: 3 }],
+	},
+	// The comment after a shebang and a blank line is the header.
+	{
+		code: "#!/usr/bin/env node\n\n// one two three four\nexport const a = 1;\n",
 		options: [{ maximumWords: 3 }],
 	},
 	// JSDoc is exempt by default.
@@ -209,6 +220,12 @@ const invalid: Array<InvalidTestCase> = [
 		options: [{ maximumWords: 2 }],
 		errors: [{ data: { count: 3, maximum: 2 }, line: 2, messageId }],
 	},
+	// `//region` without `#` is prose.
+	{
+		code: "export const a = 1;\n//region one two three four\n",
+		options: [{ maximumWords: 3 }],
+		errors: [{ data: { count: 5, maximum: 3 }, line: 2, messageId }],
+	},
 	// Over the default limit of 50.
 	{
 		code: `export const a = 1;\n// ${"word ".repeat(51)}\n`,
@@ -221,4 +238,148 @@ run({
 	invalid,
 	rule: maxCommentLength,
 	valid,
+});
+
+const yamlValid: Array<ValidTestCase> = [
+	// The `#` marker and extra `#` are not words.
+	{
+		code: "a: 1\n## one two three\n",
+		options: [{ maximumWords: 3 }],
+	},
+	// The first group before any key is the file header.
+	{
+		code: "# one two three four\n# five six\na: 1\n",
+		options: [{ maximumWords: 3 }],
+	},
+	// Directives are not prose.
+	{
+		code: unindent`
+			# yaml-language-server: $schema=https://example.com/one/two/three.json
+			a: 1
+			# cspell:words one two three four
+			b: 2
+			#region one two three four
+			c: 3
+		`,
+		options: [{ maximumWords: 3 }],
+	},
+	// A trailing comment does not join the comment on the next line.
+	{
+		code: "a: 1 # one two\n# three four\nb: 2\n",
+		options: [{ maximumWords: 2 }],
+	},
+];
+
+const yamlInvalid: Array<InvalidTestCase> = [
+	// Adjacent `#` comments form one group.
+	{
+		code: "a: 1\n# one two three\n# four five six\nb: 2\n",
+		errors: [
+			{
+				column: 1,
+				data: { count: 6, maximum: 5 },
+				endColumn: 16,
+				endLine: 3,
+				line: 2,
+				messageId,
+			},
+		],
+		options: [{ maximumWords: 5 }],
+	},
+	// A `#!` comment in YAML is prose, not a shebang.
+	{
+		code: "a: 1\n#!one two three four\n",
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
+	},
+	// A space after `#` makes `region` prose.
+	{
+		code: "a: 1\n# region one two three\n",
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
+	},
+	// A `# *` bullet is not JSDoc.
+	{
+		code: "a: 1\n# * one two three four\n",
+		errors: [{ data: { count: 5, maximum: 3 }, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
+	},
+	// A one-character word directly after `#` counts.
+	{
+		code: "a: 1\n#a b c d\n",
+		errors: [{ data: { count: 4, maximum: 3 }, line: 2, messageId }],
+		options: [{ maximumWords: 3 }],
+	},
+];
+
+runYaml({
+	name: `${RULE_NAME} (yaml)`,
+	invalid: yamlInvalid,
+	rule: maxCommentLength,
+	valid: yamlValid,
+});
+
+runToml({
+	name: `${RULE_NAME} (toml)`,
+	invalid: [
+		{
+			code: "a = 1\n# one two three\n# four five six\n",
+			options: [{ maximumWords: 5 }],
+			errors: [{ data: { count: 6, maximum: 5 }, endLine: 3, line: 2, messageId }],
+		},
+	],
+	rule: maxCommentLength,
+	valid: [
+		// The `#:schema` comment is a directive.
+		{
+			code: "#:schema ./one/two/three/four.json\na = 1\n# one two three\n",
+			options: [{ maximumWords: 3 }],
+		},
+	],
+});
+
+// A language with no `Program` node does not make the config throw.
+runMarkdown({
+	name: `${RULE_NAME} (markdown)`,
+	invalid: [],
+	rule: maxCommentLength,
+	valid: ["# Title\n"],
+});
+
+describe("language mode (Languages API)", () => {
+	const options = { maximumWords: 3 };
+
+	it("reports under the yaml language", () => {
+		const linter = new TSESLint.Linter();
+		const messages = linter.verify(
+			"a: 1\n# one two three four\n",
+			{
+				files: ["**/*.yaml"],
+				language: "yaml/yaml",
+				plugins: { flawless: plugin, yaml: yml },
+				rules: { "flawless/max-comment-length": ["error", options] },
+			},
+			{ filename: "file.yaml" },
+		);
+		expect(messages.map(({ line, messageId: id }) => ({ id, line }))).toStrictEqual([
+			{ id: messageId, line: 2 },
+		]);
+	});
+
+	it("reports under the toml language", () => {
+		const linter = new TSESLint.Linter();
+		const messages = linter.verify(
+			"a = 1\n# one two three four\n",
+			{
+				files: ["**/*.toml"],
+				language: "toml/toml",
+				plugins: { flawless: plugin, toml },
+				rules: { "flawless/max-comment-length": ["error", options] },
+			},
+			{ filename: "file.toml" },
+		);
+		expect(messages.map(({ line, messageId: id }) => ({ id, line }))).toStrictEqual([
+			{ id: messageId, line: 2 },
+		]);
+	});
 });
