@@ -1,197 +1,109 @@
-# eslint-plugin-template
+# eslint-plugin-flawless
 
-> A modern, TypeScript-first template for building ESLint plugins (Flat Config
-> ready)
+> My personal, opinionated set of ESLint rules.
 
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 [![License][license-src]][license-href]
 
-This repository is a starter template for creating your own ESLint plugin with:
+## Why this plugin exists
 
-- ESLint 9 Flat Config support out of the box
-- TypeScript with strong typing for rules and options
-- Vitest-based rule tests via eslint-vitest-rule-tester
-- Rule scaffolding script to generate rule code, tests, and docs
-- Auto-generated README rules section via eslint-doc-generator
+I write these rules for my own projects. Some are rules I wanted and could not
+find. Others are ports of rules from other plugins, rewritten because the
+original was slow or had bugs.
 
-Use it as a “Use this template” on GitHub or fork and rename.
+The plugin has no single theme, and it does not try to be a complete rule set.
+It is the set of checks I want in my own code. The rules are public, so you can
+use any of them in your projects.
 
-## Quick start
+Today the rules cover these areas:
 
-1. Create your repo from this template
+- **TypeScript types**: redundant annotations, `unknown` parameters and returns,
+  unsafe dictionary types, and value widening.
+- **React**: unnecessary `useMemo` and `useCallback`, read-only props, prop
+  destructuring, render purity, and JSX shorthand.
+- **Tests**: shared mocks and state, conditional logic, assertion counts, and
+  Vitest local context.
+- **Config files**: key order in TOML and YAML, and redundant `tsconfig.json`
+  options.
+- **Style**: arrow return style, comment length, naming conventions, and em
+  dashes.
 
-- Click “Use this template” on GitHub, or
-- Degit locally: `degit christopher-buss/eslint-plugin-template my-plugin`
+Each rule has its own page with examples and options. See the
+[rules reference](#rules-reference).
 
-2. Install dependencies
+## Install
 
-```pwsh
-pnpm i
+```sh
+pnpm add -D eslint-plugin-flawless
 ```
 
-3. Rename the package and plugin
+Requirements:
 
-Update these fields to your plugin name (e.g., `eslint-plugin-awesome`):
+- Node.js 24.12.0 or later
+- ESLint 9.15.0 or later
+- TypeScript 4.8.4 or later, below 6.1.0
 
-- `package.json` → `name`, `description`, `repository`, `author`, `license`
-- README title and badges
+## Use with ESLint
 
-The runtime plugin name (used in config) is derived from the package name by
-removing the `eslint-plugin-` prefix. For `eslint-plugin-awesome` the plugin key
-becomes `awesome`.
+Register the plugin in your flat config, then turn on the rules you want. The
+plugin key is `flawless`.
 
-4. Scaffold your first rule
-
-```pwsh
-pnpm create-rule my-new-rule
-```
-
-This generates:
-
-- `src/rules/my-new-rule/rule.ts` – rule implementation
-- `src/rules/my-new-rule/rule.spec.ts` – tests
-- `src/rules/my-new-rule/documentation.md` – rule docs
-
-5. Run tests and docs
-
-```pwsh
-pnpm test
-pnpm eslint-docs
-```
-
-The docs command updates the auto-generated rules list in this README.
-
-## Using your plugin
-
-Once published to npm as `eslint-plugin-awesome`, you can enable it in a
-project.
-
-### Flat Config (ESLint 9+)
-
-```js
-// eslint.config.js / eslint.config.mjs / eslint.config.ts
-import yourPlugin from "eslint-plugin-awesome";
+```ts
+// eslint.config.ts
+import flawless from "eslint-plugin-flawless";
 
 export default [
-	// Enable all recommended rules from your plugin
-	yourPlugin.configs.recommended,
-
-	// Or wire it manually
 	{
 		plugins: {
-			awesome: yourPlugin,
+			flawless,
 		},
 		rules: {
-			"awesome/my-new-rule": "error",
+			"flawless/no-shared-mocks": "error",
+			"flawless/no-unnecessary-use-memo": "error",
+			"flawless/prefer-mock-throw": "error",
 		},
 	},
 ];
 ```
 
-### Legacy Config (.eslintrc)
+Rules marked 💭 in the reference need
+[typed linting](https://typescript-eslint.io/getting-started/typed-linting). The
+TOML, YAML, and `tsconfig.json` rules need the matching parser or language for
+those files. Each rule page gives the setup.
 
-```json
-{
-	"extends": ["plugin:yourname/recommended"]
-}
-```
+## Use with oxlint
 
-### oxlint (via jsPlugins)
-
-The non-type-aware rules are also published as an
+The plugin also ships an
 [oxlint JS plugin](https://oxc.rs/docs/guide/usage/linter/writing-js-plugins) at
-the `eslint-plugin-awesome/oxlint` entry point, so the same rules run under
-oxlint without any code duplication. Add `@oxlint/plugins` and the plugin as
-runtime dependencies, then reference it from your oxlint config:
+`eslint-plugin-flawless/oxlint`. It needs oxlint 1.78.0 or later.
 
 ```jsonc
 // .oxlintrc.json
 {
-	"jsPlugins": ["eslint-plugin-awesome/oxlint"],
+	"jsPlugins": ["eslint-plugin-flawless/oxlint"],
 	"rules": {
-		"awesome/my-new-rule": "error",
+		"flawless/no-unnecessary-use-memo": "error",
 	},
 }
 ```
 
-The plugin key stays the same as under ESLint (`awesome`). oxlint `>=1.78.0` is
-an optional peer dependency: only oxlint users need it installed, and the rules
-are verified against that version. Rules that require TypeScript type
-information or a custom parser are ESLint-only, since oxlint's JS plugin API
-supports neither.
+The rule names are the same as in ESLint. The oxlint JS plugin API does not
+support type information or custom parsers, so these rules run in ESLint only:
 
-## Development
+- `naming-convention`
+- `no-redundant-tsconfig-options`
+- `no-redundant-type-annotation`
+- `no-unknown-returns`
+- `prefer-read-only-props`
+- `toml-sort-keys`
+- `yaml-block-key-blank-lines`
+- `yaml-sort-sequence-by-key`
 
-Scripts you’ll use during development:
-
-- `pnpm dev` – fast stub build for local iteration
-- `pnpm build` – type-safe build with d.ts via tsdown
-- `pnpm test` – run Vitest tests
-- `pnpm lint` – run ESLint on this repo
-- `pnpm typecheck` – run `tsc --noEmit`
-- `pnpm eslint-docs` – regenerate README rules list
-- `pnpm release` – bump version via bumpp
-
-Requirements:
-
-- Node.js >= 20
-- pnpm >= 10
-- ESLint >= 9.15.0 (peer dep for consumers)
-
-## Project structure
-
-```text
-src/
-	configs/            # Flat config presets (e.g., recommended)
-	rules/              # Your rules (each in its own folder)
-	plugin.ts           # Plugin host (name, version, rules)
-	util.ts             # Rule creator with docs links
-	index.ts            # Entry combining plugin + configs (default export)
-scripts/
-	create-rule.ts      # Scaffolds a new rule (code, tests, docs)
-	template/           # Rule templates used by the script
-```
-
-{ "extends": ["plugin:awesome/recommended"] }
-
-- The plugin key is computed from your package name (see `src/plugin.ts`).
-- `src/configs/recommended` is provided for convenience; add your rules there
-  when ready.
-
-## Scaffolding a rule
-
-```pwsh
-pnpm create-rule my-new-rule
-```
-
-What happens:
-
-1. Creates `src/rules/my-new-rule/` with `rule.ts`, `rule.spec.ts`,
-   `documentation.md`.
-2. Attempts to register the rule. If automatic edit cannot be applied, the
-   script prints the exact import and entry you can paste into your plugin/index
-   file.
-3. Run `pnpm test` to validate, then `pnpm eslint-docs` to refresh this README.
-
-## Publishing
-
-Typical flow:
-
-```pwsh
-pnpm test
-pnpm build
-pnpm release   # chooses the next semver and commits tags
-# CI publishes to npm
-```
+Other rules marked 💭 also run in oxlint, but they find fewer problems without
+type information. Each rule page gives the details.
 
 ## Rules reference
-
-Generate this section with:
-
-```pwsh
-pnpm eslint-docs
-```
 
 <!-- begin auto-generated rules list -->
 
@@ -252,11 +164,6 @@ Requires [type information](https://typescript-eslint.io/linting/typed-linting).
 
 <!-- end auto-generated rules list -->
 
-## Contributing
-
-PRs and issues welcome. If you’re using this as a template, adapt the sections
-to your needs and replace the badges and links.
-
 ## License
 
 [MIT](./LICENSE) © 2025 [Christopher Buss](https://github.com/christopher-buss)
@@ -267,6 +174,5 @@ to your needs and replace the badges and links.
 [npm-version-href]: https://npmjs.com/package/eslint-plugin-flawless
 [npm-downloads-src]: https://img.shields.io/npm/dm/eslint-plugin-flawless
 [npm-downloads-href]: https://npmjs.com/package/eslint-plugin-flawless
-[license-src]:
-	https://img.shields.io/github/license/christopher-buss/eslint-plugin-template.svg
+[license-src]: https://img.shields.io/npm/l/eslint-plugin-flawless
 [license-href]: ./LICENSE
