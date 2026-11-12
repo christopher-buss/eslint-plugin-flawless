@@ -13,6 +13,11 @@ import { RULE_NAME, yamlSortSequenceByKey } from "./rule.ts";
 const root = [{ key: "name", pathPattern: "^$" }];
 
 const valid: Array<ValidTestCase> = [
+	// No options: nothing to sort.
+	unindent`
+		- name: b
+		- name: a
+	`,
 	// Already sorted.
 	{
 		code: unindent`

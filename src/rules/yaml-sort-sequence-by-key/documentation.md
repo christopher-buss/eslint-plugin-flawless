@@ -48,8 +48,8 @@ The fix rewrites the whole sequence at once, so one `--fix` pass is enough.
 
 ## Options
 
-An array of at least one object. The first object whose `pathPattern` matches
-wins.
+An array of objects. The first object whose `pathPattern` matches wins. With no
+objects, the rule does nothing.
 
 - `pathPattern` (`string`, required): a regular expression for the sequence
   path, in the syntax of `yaml/sort-keys`. `^$` matches the root sequence;
