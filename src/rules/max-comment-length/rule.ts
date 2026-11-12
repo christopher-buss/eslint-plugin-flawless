@@ -54,15 +54,20 @@ const CHAR_LF = 0x0a;
 const CHAR_CR = 0x0d;
 const CHAR_HASH = 0x23;
 const CHAR_STAR = 0x2a;
-const CHAR_SLASH = 0x2f;
 
 /**
  * A tool directive, matched (sticky) at the start of a comment body, after the
- * `//` or `/*` marker. Directives are not prose: they are never counted and
- * they split groups.
+ * `//`, `/*`, or `#` marker. Directives are not prose: they are never counted
+ * and they split groups.
  */
 const DIRECTIVE =
-	/\s*(?:(?:eslint|oxlint)(?:-disable|-enable|-env)?\b|globals?\s|exported\s|@ts-|prettier-ignore|(?:istanbul|c8|v8)\s+ignore|cspell:|#(?:end)?region\b|@(?:vitest|jest)-environment|@flow\b|@jsx|\/\s*<(?:reference|amd-))/uy;
+	/\s*(?:(?:eslint|oxlint)(?:-disable|-enable|-env)?\b|globals?\s|exported\s|@ts-|prettier-ignore|(?:istanbul|c8|v8)\s+ignore|cspell:|#(?:end)?region\b|@(?:vitest|jest)-environment|@flow\b|@jsx|\/\s*<(?:reference|amd-)|yaml-language-server:)/uy;
+
+/**
+ * A directive that touches the `#` marker of a YAML or TOML comment, such as
+ * `#region` or the TOML `#:schema` directive. A space after `#` makes it prose.
+ */
+const HASH_DIRECTIVE = /(?:(?:end)?region\b|:schema\s)/uy;
 
 /**
  * Whether `text[start, end)` is whitespace that holds exactly one line break
@@ -135,6 +140,34 @@ function isTrailing(text: string, start: number): boolean {
 }
 
 /**
+ * Whether a comment is a YAML or TOML `#` comment. Their parsers give these the
+ * `Block` type, so the one-character marker identifies them. A `#!` shebang
+ * has a two-character marker.
+ *
+ * @param text - The source text.
+ * @param comment - The comment to test.
+ * @returns True for a `#` comment.
+ */
+function isHashComment(text: string, comment: TSESTree.Comment): boolean {
+	return (
+		text.charCodeAt(comment.range[0]) === CHAR_HASH &&
+		comment.range[1] - comment.range[0] - comment.value.length === 1
+	);
+}
+
+/**
+ * Whether a comment ends at the end of its line, so the comment on the next
+ * line may join it.
+ *
+ * @param text - The source text.
+ * @param comment - The comment to test.
+ * @returns True for `//` and `#` comments.
+ */
+function isLineComment(text: string, comment: TSESTree.Comment): boolean {
+	return comment.type === AST_TOKEN_TYPES.Line || isHashComment(text, comment);
+}
+
+/**
  * Whether a comment is a tool directive rather than prose.
  *
  * @param text - The source text.
@@ -142,22 +175,32 @@ function isTrailing(text: string, start: number): boolean {
  * @returns True for directives such as `eslint-disable` or `@ts-expect-error`.
  */
 function isDirective(text: string, comment: TSESTree.Comment): boolean {
-	DIRECTIVE.lastIndex = comment.range[0] + 2;
+	const isHash = isHashComment(text, comment);
+	const bodyStart = comment.range[0] + (isHash ? 1 : 2);
+	if (isHash) {
+		HASH_DIRECTIVE.lastIndex = bodyStart;
+		if (HASH_DIRECTIVE.test(text)) {
+			return true;
+		}
+	}
+
+	DIRECTIVE.lastIndex = bodyStart;
 	return DIRECTIVE.test(text);
 }
 
 /**
  * Counts whitespace-separated words in a comment body. Extra `/` after `//`,
- * `*` runs next to the block markers, and one `*` gutter at the start of each
- * later block line are not words.
+ * extra `#` after `#`, `*` runs next to the block markers, and one `*` gutter
+ * at the start of each later block line are not words.
  *
  * @param text - The source text.
  * @param comment - The comment to count.
  * @returns The number of words.
  */
 function countWords(text: string, comment: TSESTree.Comment): number {
-	const isBlock = comment.type === AST_TOKEN_TYPES.Block;
-	let start = comment.range[0] + 2;
+	const isHash = isHashComment(text, comment);
+	const isBlock = !isHash && comment.type === AST_TOKEN_TYPES.Block;
+	let start = comment.range[0] + (isHash ? 1 : 2);
 	let end = comment.range[1];
 	if (isBlock) {
 		end -= 2;
@@ -169,7 +212,8 @@ function countWords(text: string, comment: TSESTree.Comment): number {
 			start += 1;
 		}
 	} else {
-		while (start < end && text.charCodeAt(start) === CHAR_SLASH) {
+		const marker = text.charCodeAt(comment.range[0]);
+		while (start < end && text.charCodeAt(start) === marker) {
 			start += 1;
 		}
 	}
@@ -239,7 +283,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		// not JSDoc.
 		if (
 			ignoreJSDoc &&
-			firstComment.type === AST_TOKEN_TYPES.Block &&
+			!isLineComment(text, firstComment) &&
 			text.charCodeAt(start + 2) === CHAR_STAR &&
 			text.charCodeAt(start + 3) !== CHAR_STAR
 		) {
@@ -258,10 +302,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			return;
 		}
 
-		const { sourceCode } = context;
 		context.report({
 			data: { count, maximum: maximumWords },
-			loc: { end: sourceCode.getLocFromIndex(end), start: sourceCode.getLocFromIndex(start) },
+			loc: { end: lastComment.loc.end, start: firstComment.loc.start },
 			messageId: MESSAGE_ID,
 		});
 	}
@@ -299,7 +342,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 				}
 
 				const [start, end] = comment.range;
-				const isLine = comment.type === AST_TOKEN_TYPES.Line;
+				const isLine = isLineComment(text, comment);
 				if (
 					canJoin &&
 					isLine &&
@@ -320,7 +363,9 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 
 				previousEnd = end;
 				// ESLint lists a shebang as a comment; it is not prose.
-				if (text.charCodeAt(start) === CHAR_HASH || isDirective(text, comment)) {
+				const isShebang =
+					text.charCodeAt(start) === CHAR_HASH && !isHashComment(text, comment);
+				if (isShebang || isDirective(text, comment)) {
 					first = -1;
 					canJoin = false;
 					continue;

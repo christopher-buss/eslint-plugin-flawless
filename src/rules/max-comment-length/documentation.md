@@ -19,8 +19,13 @@ A trailing comment (after code on the same line) does not join the comment on
 the next line.
 
 A word is a run of non-whitespace characters. These are not words: extra `/`
-after `//`, `*` runs next to the block markers, and one `*` gutter at the start
-of each later block line.
+after `//`, extra `#` after `#`, `*` runs next to the block markers, and one `*`
+gutter at the start of each later block line.
+
+The rule also checks `#` comments in YAML and TOML files. It works with the
+ESLint Languages API (`language: "yaml/yaml"` or `language: "toml/toml"`) and
+with the `yaml-eslint-parser` or `toml-eslint-parser` parser. A `#` comment
+follows the same group rules as a `//` comment.
 
 These comments are not checked:
 
@@ -29,8 +34,9 @@ These comments are not checked:
 - A `/** ... */` block, when `ignoreJSDoc` is on (the default). A banner that
   opens with `/***` is not JSDoc.
 - Tool directives, such as `eslint-disable`, `oxlint-disable`,
-  `@ts-expect-error`, `global`, `prettier-ignore`, `istanbul ignore`, and
-  `/// <reference>`. A directive also splits groups.
+  `@ts-expect-error`, `global`, `prettier-ignore`, `istanbul ignore`,
+  `/// <reference>`, `# yaml-language-server:`, `#region`, and `#:schema`. A
+  directive also splits groups.
 
 ## Examples
 
