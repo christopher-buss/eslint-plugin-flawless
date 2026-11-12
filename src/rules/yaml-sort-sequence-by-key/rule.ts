@@ -71,7 +71,6 @@ const schema: JSONSchema.JSONSchema4 = {
 		required: ["key", "pathPattern"],
 		type: "object",
 	},
-	minItems: 1,
 	type: "array",
 };
 
@@ -381,7 +380,8 @@ function toItem(entry: EntryNode | null, key: string): SortableEntry | undefined
 
 function create(context: Context): TSESLint.RuleListener {
 	const { options, sourceCode } = context;
-	if (sourceCode.parserServices.isYAML !== true) {
+	// No options means nothing to sort, so the rule does nothing.
+	if (options.length === 0 || sourceCode.parserServices.isYAML !== true) {
 		return {};
 	}
 
