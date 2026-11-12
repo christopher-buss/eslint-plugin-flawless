@@ -2632,6 +2632,7 @@ function create(
 		const [start, end] = range;
 		const bindings: Array<TSESLint.Scope.Variable> = [];
 		const memberNames = new Set<string>();
+		const members: Array<ts.Node> = [];
 		// An annotated return type or variable fixes the type above it, which
 		// ends the cycle.
 		for (
@@ -2646,7 +2647,8 @@ function create(
 
 				bindings.push(...context.sourceCode.getDeclaredVariables(current));
 				const { parent } = current;
-				// A method reaches itself through `this` or its object.
+				// A method reaches itself through `this`, its class, or its
+				// object.
 				if (
 					(parent.type === AST_NODE_TYPES.MethodDefinition ||
 						parent.type === AST_NODE_TYPES.Property ||
@@ -2655,6 +2657,7 @@ function create(
 					parent.key.type === AST_NODE_TYPES.Identifier
 				) {
 					memberNames.add(parent.key.name);
+					members.push(services.esTreeNodeToTSNodeMap.get(parent));
 				}
 			} else if (current.type === AST_NODE_TYPES.VariableDeclarator) {
 				if (current.id.typeAnnotation !== undefined) {
@@ -2685,11 +2688,23 @@ function create(
 					body,
 					() => false,
 					(child) => {
+						if (
+							child.type !== AST_NODE_TYPES.MemberExpression ||
+							child.computed ||
+							child.property.type !== AST_NODE_TYPES.Identifier ||
+							!memberNames.has(child.property.name)
+						) {
+							return false;
+						}
+
+						// The name alone also matches an unrelated `items.map`.
+						const symbol = checker.getSymbolAtLocation(
+							services.esTreeNodeToTSNodeMap.get(child.property),
+						);
 						return (
-							child.type === AST_NODE_TYPES.MemberExpression &&
-							!child.computed &&
-							child.property.type === AST_NODE_TYPES.Identifier &&
-							memberNames.has(child.property.name)
+							symbol?.declarations?.some((declaration) => {
+								return members.includes(declaration);
+							}) ?? false
 						);
 					},
 				))

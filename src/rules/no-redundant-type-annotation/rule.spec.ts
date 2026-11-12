@@ -3078,6 +3078,38 @@ const returnInvalid: Array<InvalidTestCase> = [
 					build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
 		`,
 	},
+	// `items.map` is not the outer `map`.
+	{
+		code: unindent`
+			class Lists {
+				map(items: Array<number>) {
+					return (offset: number): number => items.map(String).length + offset;
+				}
+			}
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			class Lists {
+				map(items: Array<number>) {
+					return (offset: number) => items.map(String).length + offset;
+				}
+			}
+		`,
+	},
+	// So does the annotation of the variable.
+	{
+		code: unindent`
+			declare function later<R>(make: () => R): R;
+			const add: (a: number) => (b: number) => number = (a) => (b): number => later(() => add(a)(b));
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			declare function later<R>(make: () => R): R;
+			const add: (a: number) => (b: number) => number = (a) => (b) => later(() => add(a)(b));
+		`,
+	},
 	{
 		code: unindent`
 			declare const cond: boolean;
