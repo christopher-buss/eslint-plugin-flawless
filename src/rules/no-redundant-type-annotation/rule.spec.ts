@@ -3056,6 +3056,28 @@ const checkAll = [{ checkReturnTypes: true }];
 const checkExpressions = [{ allowExpressions: true }];
 
 const returnInvalid: Array<InvalidTestCase> = [
+	// The outer return type fixes the type of `mapTree`, so no cycle runs
+	// through the inner one.
+	{
+		code: unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			const mapTree =
+				<T, U>(fn: (value: T) => U): ((tree: Tree<T>) => Tree<U>) =>
+				(tree): Tree<U> =>
+					build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
+		`,
+		errors: [{ messageId: returnMessageId }],
+		options: checkAll,
+		output: unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			const mapTree =
+				<T, U>(fn: (value: T) => U): ((tree: Tree<T>) => Tree<U>) =>
+				(tree) =>
+					build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
+		`,
+	},
 	{
 		code: unindent`
 			declare const cond: boolean;
@@ -3388,6 +3410,54 @@ const returnValid: Array<ValidTestCase> = [
 				count(n: number): number {
 					return n > 0 ? this.count(n - 1) : 0;
 				}
+			}
+		`,
+		// The inner function reaches itself through the outer binding. Another
+		// file that is checked first can see `any` without the annotation
+		// (TS7024).
+		unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			export const mapTree =
+				<T, U>(fn: (value: T) => U) =>
+				(tree: Tree<T>): Tree<U> =>
+					build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
+		`,
+		unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			function mapTree<T, U>(fn: (value: T) => U) {
+				return function (tree: Tree<T>): Tree<U> {
+					return build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
+				};
+			}
+		`,
+		unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			const mapTree = function <T, U>(fn: (value: T) => U) {
+				return (tree: Tree<T>): Tree<U> =>
+					build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(mapTree(fn)) }));
+			};
+		`,
+		unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			const trees = {
+				map:
+					<T, U>(fn: (value: T) => U) =>
+					(tree: Tree<T>): Tree<U> =>
+						build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(trees.map(fn)) })),
+			};
+		`,
+		unindent`
+			type Tree<T> = { value: T; children: Tree<T>[] };
+			declare function build<R>(make: () => R): R;
+			class Trees {
+				map =
+					<T, U>(fn: (value: T) => U) =>
+					(tree: Tree<T>): Tree<U> =>
+						build<Tree<U>>(() => ({ value: fn(tree.value), children: tree.children.map(this.map(fn)) }));
 			}
 		`,
 	].map((code) => ({ code, options: checkAll })),
