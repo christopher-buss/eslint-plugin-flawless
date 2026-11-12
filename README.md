@@ -16,6 +16,10 @@ The plugin has no single theme, and it does not try to be a complete rule set.
 It is the set of checks I want in my own code. The rules are public, so you can
 use any of them in your projects.
 
+I enable these rules through my shared config,
+[`@isentinel/eslint-config`](https://github.com/christopher-buss/eslint-config).
+That config is the only place where I use this plugin directly.
+
 Today the rules cover these areas:
 
 - **TypeScript types**: redundant annotations, `unknown` parameters and returns,
