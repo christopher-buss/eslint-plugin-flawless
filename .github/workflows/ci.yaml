@@ -43,8 +43,24 @@ jobs:
       - name: Set node ${{ matrix.node }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          cache: pnpm
           node-version: ${{ matrix.node }}
+
+      # The global virtual store keeps symlinks in the store's `links`
+      # directory. The cache extracts with `tar -P`, which on Windows creates
+      # a link before its target and so makes a file symlink to a directory
+      # that cannot be read (os error 5). Cache only the package files and
+      # their index; the install creates `links` again.
+      - id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          path: |
+            ${{ steps.pnpm-store.outputs.path }}/files
+            ${{ steps.pnpm-store.outputs.path }}/index.db
+          restore-keys: ${{ runner.os }}-pnpm-store-
 
       - run: pnpm i -g @antfu/ni
       - run: nci
