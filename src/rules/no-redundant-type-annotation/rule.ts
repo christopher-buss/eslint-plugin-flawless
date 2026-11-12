@@ -2616,21 +2616,58 @@ function create(
 	}
 
 	/**
-	 * Reports whether a function refers to itself. Without its return type
-	 * such a function has no type to start from, and becomes implicitly `any`.
+	 * Reports whether a function refers to itself, or to a binding whose
+	 * inferred type contains it, such as the outer function of a curried
+	 * function. Without its return type such a function can have no type to
+	 * start from, and becomes implicitly `any`. Whether TypeScript sees the
+	 * cycle depends on which file it checks first, so a clean check of this
+	 * file does not prove the annotation is redundant.
 	 *
 	 * @param node - The function to inspect.
-	 * @returns True when the body refers to the function.
+	 * @returns True when the body refers to the function or a binding that
+	 *   holds it.
 	 */
 	function isSelfReferencing(node: ReturnTypedFunction): boolean {
-		const { body, parent, range } = node;
+		const { body, range } = node;
 		const [start, end] = range;
-		const bindings = [
-			...context.sourceCode.getDeclaredVariables(node),
-			...(parent.type === AST_NODE_TYPES.VariableDeclarator && parent.init === node
-				? context.sourceCode.getDeclaredVariables(parent)
-				: []),
-		];
+		const bindings: Array<TSESLint.Scope.Variable> = [];
+		const memberNames = new Set<string>();
+		const members: Array<ts.Node> = [];
+		// An annotated return type or variable fixes the type above it, which
+		// ends the cycle.
+		for (
+			let current: TSESTree.Node = node;
+			current.type !== AST_NODE_TYPES.Program;
+			current = current.parent
+		) {
+			if (isFunctionNode(current)) {
+				if (current !== node && current.returnType !== undefined) {
+					break;
+				}
+
+				bindings.push(...context.sourceCode.getDeclaredVariables(current));
+				const { parent } = current;
+				// A method reaches itself through `this`, its class, or its
+				// object.
+				if (
+					(parent.type === AST_NODE_TYPES.MethodDefinition ||
+						parent.type === AST_NODE_TYPES.Property ||
+						parent.type === AST_NODE_TYPES.PropertyDefinition) &&
+					!parent.computed &&
+					parent.key.type === AST_NODE_TYPES.Identifier
+				) {
+					memberNames.add(parent.key.name);
+					members.push(services.esTreeNodeToTSNodeMap.get(parent));
+				}
+			} else if (current.type === AST_NODE_TYPES.VariableDeclarator) {
+				if (current.id.typeAnnotation !== undefined) {
+					break;
+				}
+
+				bindings.push(...context.sourceCode.getDeclaredVariables(current));
+			}
+		}
+
 		const readsBinding = bindings.some((variable) => {
 			return (
 				variable.defs.some(({ type }) => {
@@ -2644,34 +2681,34 @@ function create(
 				})
 			);
 		});
-		if (readsBinding) {
-			return true;
-		}
+		return (
+			readsBinding ||
+			(memberNames.size > 0 &&
+				someDescendant(
+					body,
+					() => false,
+					(child) => {
+						if (
+							child.type !== AST_NODE_TYPES.MemberExpression ||
+							child.computed ||
+							child.property.type !== AST_NODE_TYPES.Identifier ||
+							!memberNames.has(child.property.name)
+						) {
+							return false;
+						}
 
-		// A method reaches itself through `this` or its object.
-		if (
-			(parent.type === AST_NODE_TYPES.MethodDefinition ||
-				parent.type === AST_NODE_TYPES.Property ||
-				parent.type === AST_NODE_TYPES.PropertyDefinition) &&
-			!parent.computed &&
-			parent.key.type === AST_NODE_TYPES.Identifier
-		) {
-			const { name } = parent.key;
-			return someDescendant(
-				body,
-				() => false,
-				(child) => {
-					return (
-						child.type === AST_NODE_TYPES.MemberExpression &&
-						!child.computed &&
-						child.property.type === AST_NODE_TYPES.Identifier &&
-						child.property.name === name
-					);
-				},
-			);
-		}
-
-		return false;
+						// The name alone also matches an unrelated `items.map`.
+						const symbol = checker.getSymbolAtLocation(
+							services.esTreeNodeToTSNodeMap.get(child.property),
+						);
+						return (
+							symbol?.declarations?.some((declaration) => {
+								return members.includes(declaration);
+							}) ?? false
+						);
+					},
+				))
+		);
 	}
 
 	/**

@@ -450,6 +450,10 @@ A return type is left alone when it is doing work:
 | is `any` or `never`                    | `function fail(): never { throw error; }`    |
 | names an alias TypeScript erases       | `function getId(): UserId { return text; }`  |
 
+A recursion can also go through a function that holds this one, such as the
+outer function of a curried function. An annotated return type or variable
+between them stops it.
+
 Overloads, generators, getters and setters, and a body whose end may be reached
 after a returned value are also left alone. A body that returns no value infers
 `void`, so `function run(): void { log(); }` is reported. An `async` function's
