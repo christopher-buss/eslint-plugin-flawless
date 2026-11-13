@@ -21,6 +21,10 @@ The rule checks prose only:
   cells, plus image alt text and link, image, and definition titles. Code
   blocks, inline code, HTML, and autolinks are not reported. An alt text or
   title whose source holds escapes or entities is skipped.
+- **YAML and TOML** (ESLint only, with the `yaml/yaml` or `toml/toml` language,
+  or the `yaml-eslint-parser` or `toml-eslint-parser` parser): `#` comments and
+  string values and keys. Quotes and a YAML block scalar header (`|` or `>`)
+  stay out of the range.
 
 A sentence runs back from the dash to the previous line break or `.`, `!`, `?`,
 and forward to the next line break or terminator. It never leaves the comment,

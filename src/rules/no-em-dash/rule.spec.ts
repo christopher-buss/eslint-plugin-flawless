@@ -1,7 +1,13 @@
+import { TSESLint } from "@typescript-eslint/utils";
+
+import toml from "eslint-plugin-toml";
+import yml from "eslint-plugin-yml";
 import { unindent } from "eslint-vitest-rule-tester";
 import type { InvalidTestCase, ValidTestCase } from "eslint-vitest-rule-tester";
+import { describe, expect, it } from "vitest";
 
-import { run, runMarkdown } from "../test.ts";
+import plugin from "../../index.ts";
+import { run, runMarkdown, runToml, runYaml } from "../test.ts";
 import { noEmDash, RULE_NAME } from "./rule.ts";
 
 const messageId = "emDash";
@@ -249,4 +255,147 @@ runMarkdown({
 		// A GFM literal autolink is a URL, not prose.
 		"See https://x.test/a—b now.\n",
 	],
+});
+
+runYaml({
+	name: `${RULE_NAME} (yaml)`,
+	invalid: [
+		{
+			code: "# Keep it short — really.\na: 1\n",
+			output: null,
+			errors: [{ column: 3, endColumn: 26, endLine: 1, line: 1, messageId }],
+		},
+		// Extra `#` after the marker stays out of the range.
+		{
+			code: "a: 1\n## a — b\n",
+			output: null,
+			errors: [{ column: 4, endColumn: 9, endLine: 2, line: 2, messageId }],
+		},
+		{
+			code: "a: left — right\n",
+			output: null,
+			errors: [{ column: 4, endColumn: 16, endLine: 1, line: 1, messageId }],
+		},
+		// Quotes stay out of the range.
+		{
+			code: 'a: "left — right"\n',
+			output: null,
+			errors: [{ column: 5, endColumn: 17, endLine: 1, line: 1, messageId }],
+		},
+		{
+			code: "a: 'x — y'\n",
+			output: null,
+			errors: [{ column: 5, endColumn: 10, endLine: 1, line: 1, messageId }],
+		},
+		// A key is a string too.
+		{
+			code: "a — b: 1\n",
+			output: null,
+			errors: [{ column: 1, endColumn: 6, endLine: 1, line: 1, messageId }],
+		},
+		// A comment on a block scalar header reports once, apart from the body.
+		{
+			code: "a: | # c — x\n  one — two\n",
+			output: null,
+			errors: [
+				{ column: 8, endColumn: 13, endLine: 1, line: 1, messageId },
+				{ column: 3, endColumn: 12, endLine: 2, line: 2, messageId },
+			],
+		},
+		{
+			code: "a: >-\n  First line.\n  Then — this.\n",
+			output: null,
+			errors: [{ column: 3, endColumn: 15, endLine: 3, line: 3, messageId }],
+		},
+	],
+	rule: noEmDash,
+	valid: [
+		"# Plain prose - with a hyphen.\na: one - two\n",
+		// An escape in source holds no raw dash.
+		'a: "\\u2014"\n',
+		// En dash (U+2013) is not an em dash.
+		"a: 1\u20135\n",
+	],
+});
+
+runToml({
+	name: `${RULE_NAME} (toml)`,
+	invalid: [
+		{
+			code: "# c — d\na = 1\n",
+			output: null,
+			errors: [{ column: 3, endColumn: 8, endLine: 1, line: 1, messageId }],
+		},
+		{
+			code: 'a = "x — y"\n',
+			output: null,
+			errors: [{ column: 6, endColumn: 11, endLine: 1, line: 1, messageId }],
+		},
+		{
+			code: "a = 'x — y'\n",
+			output: null,
+			errors: [{ column: 6, endColumn: 11, endLine: 1, line: 1, messageId }],
+		},
+		// Triple quotes stay out of the range.
+		{
+			code: 'a = """x — y"""\n',
+			output: null,
+			errors: [{ column: 8, endColumn: 13, endLine: 1, line: 1, messageId }],
+		},
+		{
+			code: 'a = """\nFirst. x — y."""\n',
+			output: null,
+			errors: [{ column: 8, endColumn: 14, endLine: 2, line: 2, messageId }],
+		},
+		// A quoted key is a string too.
+		{
+			code: '"k — 1" = 1\n',
+			output: null,
+			errors: [{ column: 2, endColumn: 7, endLine: 1, line: 1, messageId }],
+		},
+	],
+	rule: noEmDash,
+	valid: [
+		'# Plain prose - with a hyphen.\na = "one - two"\n',
+		// An escape in source holds no raw dash.
+		'a = "\\u2014"\n',
+	],
+});
+
+describe("language mode (Languages API)", () => {
+	it("reports under the yaml language", () => {
+		const linter = new TSESLint.Linter();
+		const messages = linter.verify(
+			"# a — b\nc: d — e\n",
+			{
+				files: ["**/*.yaml"],
+				language: "yaml/yaml",
+				plugins: { flawless: plugin, yaml: yml },
+				rules: { "flawless/no-em-dash": "error" },
+			},
+			{ filename: "file.yaml" },
+		);
+		expect(messages.map(({ line, messageId: id }) => ({ id, line }))).toStrictEqual([
+			{ id: messageId, line: 1 },
+			{ id: messageId, line: 2 },
+		]);
+	});
+
+	it("reports under the toml language", () => {
+		const linter = new TSESLint.Linter();
+		const messages = linter.verify(
+			'# a — b\nc = "d — e"\n',
+			{
+				files: ["**/*.toml"],
+				language: "toml/toml",
+				plugins: { flawless: plugin, toml },
+				rules: { "flawless/no-em-dash": "error" },
+			},
+			{ filename: "file.toml" },
+		);
+		expect(messages.map(({ line, messageId: id }) => ({ id, line }))).toStrictEqual([
+			{ id: messageId, line: 1 },
+			{ id: messageId, line: 2 },
+		]);
+	});
 });
