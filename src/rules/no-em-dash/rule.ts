@@ -69,6 +69,23 @@ interface MarkdownNode {
 	type: string;
 }
 
+/** Minimal shape of a node from the YAML or TOML parsers. */
+interface RangedNode {
+	range: [number, number];
+}
+
+/** Minimal `TOMLValue` shape; only the fields this rule reads. */
+interface TomlValue extends RangedNode {
+	kind: string;
+	multiline?: boolean;
+}
+
+/** Minimal `YAMLScalar` shape; only the fields this rule reads. */
+interface YamlScalar extends RangedNode {
+	style: string;
+	value: unknown;
+}
+
 /** Mdast blocks whose children are phrasing content (one prose span each). */
 const MARKDOWN_PROSE_BLOCKS = new Set(["heading", "paragraph", "tableCell"]);
 
@@ -292,9 +309,24 @@ function getTemplateContent(text: string, node: TSESTree.TemplateElement): Segme
 }
 
 /**
- * Finds the prose of a comment: past the opener and any extra `/` or `*`
- * (`///`, `/**`), before a block comment's `*\/`. A line comment's content is
- * read back from its end by `value.length`, so `#` comments work too.
+ * Whether a comment is a `/* ... *\/` block. YAML and TOML parsers give their
+ * `#` comments the `Block` type too, so the opener settles it.
+ *
+ * @param text - The full source text.
+ * @param comment - The comment token.
+ * @returns True for a `/*` block comment.
+ */
+function isBlockComment(text: string, comment: TSESTree.Comment): boolean {
+	return (
+		comment.type === AST_TOKEN_TYPES.Block && text.charCodeAt(comment.range[0]) === CHAR_SLASH
+	);
+}
+
+/**
+ * Finds the prose of a comment: past the opener and any extra `/`, `#`, or `*`
+ * (`///`, `##`, `/**`), before a block comment's `*\/`. A line comment's
+ * content is read back from its end by `value.length`, so `#` comments and
+ * shebangs work too.
  *
  * @param text - The full source text.
  * @param comment - The comment token.
@@ -302,10 +334,10 @@ function getTemplateContent(text: string, node: TSESTree.TemplateElement): Segme
  */
 function getCommentContent(text: string, comment: TSESTree.Comment): Segment {
 	const [start, end] = comment.range;
-	const isBlock = comment.type === AST_TOKEN_TYPES.Block;
+	const isBlock = isBlockComment(text, comment);
 	let low = isBlock ? start + 2 : end - comment.value.length;
 	const high = isBlock ? end - 2 : end;
-	const extra = isBlock ? CHAR_STAR : CHAR_SLASH;
+	const extra = isBlock ? CHAR_STAR : text.charCodeAt(start);
 	while (low < high && text.charCodeAt(low) === extra) {
 		low += 1;
 	}
@@ -497,7 +529,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		Program(): void {
 			for (const comment of context.sourceCode.getAllComments()) {
 				checkSpan(getCommentContent(text, comment), {
-					gutter: comment.type === AST_TOKEN_TYPES.Block,
+					gutter: isBlockComment(text, comment),
 				});
 			}
 		},
@@ -512,6 +544,52 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 		},
 		TemplateElement(node): void {
 			checkSpan(getTemplateContent(text, node));
+		},
+		/**
+		 * Checks a quoted TOML key, inside its quotes.
+		 *
+		 * @param node - A key in `"` or `'` quotes.
+		 */
+		TOMLQuoted(node: RangedNode): void {
+			checkSpan([node.range[0] + 1, node.range[1] - 1]);
+		},
+		/**
+		 * Checks a TOML string, inside its `"`, `'`, `"""`, or `'''` quotes.
+		 *
+		 * @param node - A value of any kind; only strings are checked.
+		 */
+		TOMLValue(node: TomlValue): void {
+			if (node.kind !== "string") {
+				return;
+			}
+
+			const quote = node.multiline === true ? 3 : 1;
+			checkSpan([node.range[0] + quote, node.range[1] - quote]);
+		},
+		/**
+		 * Checks a YAML string scalar. Quoted scalars lose their quotes. A
+		 * block scalar (`|` or `>`) starts on the line after its header, since
+		 * the header line may hold a comment that `Program` already checks.
+		 *
+		 * @param node - A scalar of any type; only strings are checked.
+		 */
+		YAMLScalar(node: YamlScalar): void {
+			if (typeof node.value !== "string") {
+				return;
+			}
+
+			const [start, end] = node.range;
+			if (node.style === "literal" || node.style === "folded") {
+				const lineEnd = text.indexOf("\n", start);
+				if (lineEnd !== -1 && lineEnd < end) {
+					checkSpan([lineEnd + 1, end]);
+				}
+
+				return;
+			}
+
+			const quote = node.style === "plain" ? 0 : 1;
+			checkSpan([start + quote, end - quote]);
 		},
 	};
 }
