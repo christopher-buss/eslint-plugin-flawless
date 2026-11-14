@@ -30,7 +30,7 @@ import {
 } from "./shared.ts";
 import { symbolDeclaredIn } from "./symbol.ts";
 import { isInMatchingTypeArgument } from "./type-argument.ts";
-import type { Context, NormalizedSelector, TypeReference } from "./types.ts";
+import type { Context, NormalizedSelector, TypeReference, ValidatorExtras } from "./types.ts";
 
 // Flag tests avoid `checker.typeToString`, which prints the full structure of
 // object types only to compare the text against a primitive name.
@@ -102,12 +102,32 @@ export function createValidator(
 			return b.selector - a.selector;
 		});
 
+	// The exemption of the name under validation. A validator call is
+	// synchronous, so one slot serves every report site below.
+	let exemption: (() => boolean) | undefined;
+
+	/**
+	 * Reports a violation, unless the name is exempt. The exemption runs only
+	 * here, so a name that passes never pays for it.
+	 *
+	 * @param descriptor - The violation to report.
+	 */
+	function report(descriptor: Parameters<Context["report"]>[0]): void {
+		if (exemption?.() === true) {
+			return;
+		}
+
+		context.report(descriptor);
+	}
+
 	return (
 		node,
 		modifiers: Set<ModifierType> = new Set<ModifierType>(),
 		showForeignContractHint = false,
-		typeNode: TSESTree.Node = node,
+		{ isExempt, typeNode = node }: ValidatorExtras = {},
 	): void => {
+		exemption = isExempt;
+
 		const originalName =
 			node.type === AST_NODE_TYPES.Identifier ||
 			node.type === AST_NODE_TYPES.PrivateIdentifier
@@ -335,7 +355,7 @@ export function createValidator(
 			// FORBID
 			case UnderscoreOption.forbid: {
 				if (hasSingleUnderscore()) {
-					context.report({
+					report({
 						data: formatReportData({
 							count: "one",
 							originalName,
@@ -352,7 +372,7 @@ export function createValidator(
 			// REQUIRE
 			case UnderscoreOption.require: {
 				if (!hasSingleUnderscore()) {
-					context.report({
+					report({
 						data: formatReportData({
 							count: "one",
 							originalName,
@@ -368,7 +388,7 @@ export function createValidator(
 			}
 			case UnderscoreOption.requireDouble: {
 				if (!hasDoubleUnderscore()) {
-					context.report({
+					report({
 						data: formatReportData({
 							count: "two",
 							originalName,
@@ -418,7 +438,7 @@ export function createValidator(
 			}
 		}
 
-		context.report({
+		report({
 			data: formatReportData({
 				affixes,
 				originalName,
@@ -458,7 +478,7 @@ export function createValidator(
 			return true;
 		}
 
-		context.report({
+		report({
 			data: formatReportData({
 				custom,
 				originalName,
@@ -514,7 +534,7 @@ export function createValidator(
 			}
 		}
 
-		context.report({
+		report({
 			data: formatReportData({
 				formats,
 				originalName,

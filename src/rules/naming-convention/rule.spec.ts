@@ -1157,6 +1157,28 @@ const valid: Array<ValidTestCase> = [
 			{ format: ["strictCamelCase"], selector: "objectLiteralProperty" },
 		],
 	},
+	// objectStyleEnumMember: a key dictated by the binding's type annotation
+	// is exempt, even though the object is still an objectStyleEnum
+	{
+		code: "interface BasePart { CanCollide: boolean } const PART: BasePart = { CanCollide: false } as const;",
+		options: [
+			{ format: ["UPPER_CASE"], selector: "objectStyleEnum" },
+			{ format: ["strictCamelCase"], selector: "objectStyleEnumMember" },
+		],
+	},
+	// objectLiteralProperty: a dictated name is exempt from every check, not
+	// only the format - here a `types`-scoped underscore rule
+	{
+		code: "interface Config { _Flag: boolean } const config: Config = { _Flag: true };",
+		options: [
+			{
+				format: null,
+				leadingUnderscore: "forbid",
+				selector: "objectLiteralProperty",
+				types: ["boolean"],
+			},
+		],
+	},
 	// @external: skips validation for every typeProperty/typeMethod of the
 	// tagged declaration; the declaration's own name is still validated
 	{

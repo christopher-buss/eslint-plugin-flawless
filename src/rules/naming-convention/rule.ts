@@ -98,6 +98,13 @@ const camelCaseNamingConfig: Options = [
 	},
 ];
 
+interface MemberOptions {
+	/** Tells if the name is exempt; runs only before a report. */
+	isExempt?: (() => boolean) | undefined;
+	/** True when a violation message should point at `satisfies`. */
+	showForeignContractHint?: boolean;
+}
+
 function create(
 	context: Readonly<TSESLint.RuleContext<MessageIds, Options>>,
 ): TSESLint.RuleListener {
@@ -121,13 +128,13 @@ function create(
 			| TSESTree.TSMethodSignatureNonComputedName
 			| TSESTree.TSPropertySignatureNonComputedName,
 		modifiers: Set<ModifierType>,
-		showForeignContractHint = false,
+		{ isExempt, showForeignContractHint = false }: MemberOptions = {},
 	): void {
 		if (requiresQuoting(key, compilerOptions.target)) {
 			modifiers.add(Modifier.requiresQuotes);
 		}
 
-		validator(key, modifiers, showForeignContractHint);
+		validator(key, modifiers, showForeignContractHint, { isExempt });
 	}
 
 	/**
@@ -165,7 +172,7 @@ function create(
 				modifiers.add(Modifier.requiresQuotes);
 			}
 
-			validator(literal, modifiers, false, valueType);
+			validator(literal, modifiers, false, { typeNode: valueType });
 		}
 	}
 
@@ -272,10 +279,16 @@ function create(
 		':not(ObjectPattern) > Property[computed = false][kind = "init"][value.type != "ArrowFunctionExpression"][value.type != "FunctionExpression"][value.type != "TSEmptyBodyFunctionExpression"]':
 			{
 				handler: (node: TSESTree.PropertyNonComputedName, validator): void => {
-					// Skip naming validation if the name is dictated by the
-					// contextual type of the enclosing object literal
-					if (isDictatedByContextualType(node, services, contextualTypeCache)) {
-						return;
+					/**
+					 * A name dictated by the contextual type of the enclosing
+					 * object literal is exempt. The contextual type is costly
+					 * to resolve, so the validator calls this only for a name
+					 * that it would otherwise report.
+					 *
+					 * @returns True if a contextual type requires the name.
+					 */
+					function isExempt(): boolean {
+						return isDictatedByContextualType(node, services, contextualTypeCache);
 					}
 
 					// The keys of an object-style enum (`const X = {...} as
@@ -291,12 +304,17 @@ function create(
 							enumModifiers.add(Modifier.requiresQuotes);
 						}
 
-						validators.objectStyleEnumMember(node.key, enumModifiers, true);
+						validators.objectStyleEnumMember(node.key, enumModifiers, true, {
+							isExempt,
+						});
 						return;
 					}
 
 					const modifiers = new Set<ModifierType>([Modifier.public]);
-					handleMember(validator, node, modifiers, canSuggestSatisfies(node));
+					handleMember(validator, node, modifiers, {
+						isExempt,
+						showForeignContractHint: canSuggestSatisfies(node),
+					});
 				},
 				validator: validators.objectLiteralProperty,
 			},
@@ -388,13 +406,18 @@ function create(
 				node: TSESTree.PropertyNonComputedName | TSESTree.TSMethodSignatureNonComputedName,
 				validator,
 			): void => {
-				// Skip naming validation if the name is dictated by the
-				// contextual type of the enclosing object literal
-				if (
-					node.type === AST_NODE_TYPES.Property &&
-					isDictatedByContextualType(node, services, contextualTypeCache)
-				) {
-					return;
+				/**
+				 * A name dictated by the contextual type of the enclosing
+				 * object literal is exempt; the validator calls this only for
+				 * a name that it would otherwise report.
+				 *
+				 * @returns True if a contextual type requires the name.
+				 */
+				function isExempt(): boolean {
+					return (
+						node.type === AST_NODE_TYPES.Property &&
+						isDictatedByContextualType(node, services, contextualTypeCache)
+					);
 				}
 
 				const modifiers = new Set<ModifierType>([Modifier.public]);
@@ -403,12 +426,11 @@ function create(
 					modifiers.add(Modifier.async);
 				}
 
-				handleMember(
-					validator,
-					node,
-					modifiers,
-					node.type === AST_NODE_TYPES.Property && canSuggestSatisfies(node),
-				);
+				handleMember(validator, node, modifiers, {
+					isExempt,
+					showForeignContractHint:
+						node.type === AST_NODE_TYPES.Property && canSuggestSatisfies(node),
+				});
 			},
 			validator: validators.objectLiteralMethod,
 		},
