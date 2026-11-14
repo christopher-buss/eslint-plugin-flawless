@@ -22,22 +22,38 @@ import type {
 	ParsedOptions,
 	TypeReference,
 } from "./types.ts";
-import { createValidator } from "./validator.ts";
+import { createValidator, sortConfigs } from "./validator.ts";
+
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
+const SELECTOR_KEYS = Object.keys(Selector) as Array<SelectorString>;
+
+type SortedConfigs = Readonly<Record<SelectorString, ReadonlyArray<NormalizedSelector>>>;
+
+interface SortedConfigsEntry {
+	readonly options: ReadonlyArray<NamingSelector>;
+	/**
+	 * Held weakly: the entry of the default options has a key that lives as
+	 * long as the plugin, so a strong reference would keep the word list of
+	 * every reloaded config alive.
+	 */
+	readonly settingsAllowedWords: undefined | WeakRef<ReadonlyArray<unknown>>;
+	readonly sorted: SortedConfigs;
+}
+
+/**
+ * The sorted configs of each options list seen so far, keyed by its first
+ * option. ESLint hands every file a fresh options array, but its elements are
+ * the same objects for every file that one config covers, so the elements -
+ * not the array - identify the options.
+ */
+const sortedConfigsCache = new WeakMap<NamingSelector, Array<SortedConfigsEntry>>();
 
 export function parseOptions(context: Context, options: Context["options"]): ParsedOptions {
-	const settingsAllowedWords = getSettingsAllowedWords(context);
-	const normalizedOptions = options.flatMap((option) => {
-		return normalizeOption(option, settingsAllowedWords);
-	});
+	const sorted = getSortedConfigs(context, options);
 
 	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.fromEntries` widens keys to `string`; the keys come from the typed const object.
 	return Object.fromEntries(
-		Object.keys(Selector).map((key) => [
-			key,
-
-			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `Object.keys` widens keys to `string`; the keys come from the typed const object.
-			createValidator(key as SelectorString, context, normalizedOptions),
-		]),
+		SELECTOR_KEYS.map((key) => [key, createValidator(key, context, sorted[key])]),
 	) as ParsedOptions;
 }
 
@@ -67,9 +83,9 @@ function normalizeAllowedWords(allowedWords: ReadonlyArray<string>): AllowedWord
  * take the whole rule down.
  *
  * @param context - The rule context of the file being linted.
- * @returns The normalized shared word list, or undefined when unset.
+ * @returns The configured array as is, or undefined when unset.
  */
-function getSettingsAllowedWords(context: Context): AllowedWordIndex | undefined {
+function getRawSettingsAllowedWords(context: Context): ReadonlyArray<unknown> | undefined {
 	const { flawless } = context.settings;
 	if (typeof flawless !== "object" || flawless === null) {
 		return undefined;
@@ -81,11 +97,7 @@ function getSettingsAllowedWords(context: Context): AllowedWordIndex | undefined
 	}
 
 	const { allowedWords } = namingConvention as { allowedWords?: unknown };
-	if (!Array.isArray(allowedWords)) {
-		return undefined;
-	}
-
-	return normalizeAllowedWords(allowedWords.filter((word) => typeof word === "string"));
+	return Array.isArray(allowedWords) ? allowedWords : undefined;
 }
 
 /**
@@ -204,4 +216,67 @@ function normalizeOption(
 			...normalizedOption,
 		};
 	});
+}
+
+/**
+ * Normalizes the options and sorts them for each selector, or reuses the
+ * result of an earlier file with the same options and shared word list.
+ *
+ * @param context - The rule context of the file being linted.
+ * @param options - The options of the file being linted.
+ * @returns The applicable configs of each selector, highest priority first.
+ */
+function getSortedConfigs(context: Context, options: Context["options"]): SortedConfigs {
+	const settingsAllowedWords = getRawSettingsAllowedWords(context);
+	const [first] = options;
+	const entries = first === undefined ? undefined : sortedConfigsCache.get(first);
+	const cached = entries?.find((entry) => {
+		return (
+			// a dead reference gives undefined, which must not match the
+			// "no word list" case
+			(entry.settingsAllowedWords === undefined
+				? settingsAllowedWords === undefined
+				: settingsAllowedWords !== undefined &&
+					entry.settingsAllowedWords.deref() === settingsAllowedWords) &&
+			entry.options.length === options.length &&
+			entry.options.every((option, index) => option === options[index])
+		);
+	});
+	if (cached !== undefined) {
+		return cached.sorted;
+	}
+
+	const allowedWordIndex = Array.isArray(settingsAllowedWords)
+		? normalizeAllowedWords(settingsAllowedWords.filter((word) => typeof word === "string"))
+		: undefined;
+	const normalizedOptions = options.flatMap((option) => {
+		return normalizeOption(option, allowedWordIndex);
+	});
+
+	const partial: Partial<Record<SelectorString, ReadonlyArray<NormalizedSelector>>> = {};
+	for (const key of SELECTOR_KEYS) {
+		partial[key] = sortConfigs(key, normalizedOptions);
+	}
+
+	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the loop above fills every selector key.
+	const sorted = partial as SortedConfigs;
+
+	if (first !== undefined) {
+		const entry: SortedConfigsEntry = {
+			options: [...options],
+			settingsAllowedWords:
+				settingsAllowedWords === undefined ? undefined : new WeakRef(settingsAllowedWords),
+			sorted,
+		};
+		// Drop the entries whose word list is gone; they can never match again.
+		const live = (entries ?? []).filter((existing) => {
+			return (
+				existing.settingsAllowedWords === undefined ||
+				existing.settingsAllowedWords.deref() !== undefined
+			);
+		});
+		sortedConfigsCache.set(first, [...live, entry]);
+	}
+
+	return sorted;
 }

@@ -30,7 +30,13 @@ import {
 } from "./shared.ts";
 import { symbolDeclaredIn } from "./symbol.ts";
 import { isInMatchingTypeArgument } from "./type-argument.ts";
-import type { Context, NormalizedSelector, TypeReference, ValidatorExtras } from "./types.ts";
+import type {
+	Context,
+	NormalizedSelector,
+	TypeReference,
+	ValidatorExtras,
+	ValidatorFunction,
+} from "./types.ts";
 
 // Flag tests avoid `checker.typeToString`, which prints the full structure of
 // object types only to compare the text against a primitive name.
@@ -42,11 +48,18 @@ const PRIMITIVE_FLAG = {
 
 type ValidatorNode = TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier;
 
-export function createValidator(
+/**
+ * Gathers the configs that apply to a selector, highest priority first. The
+ * result depends only on the options, so files that share options share it.
+ *
+ * @param type - The selector to gather configs for.
+ * @param allConfigs - Every normalized config.
+ * @returns The applicable configs, highest priority first.
+ */
+export function sortConfigs(
 	type: SelectorString,
-	context: Context,
-	allConfigs: Array<NormalizedSelector>,
-): (node: ValidatorNode) => void {
+	allConfigs: ReadonlyArray<NormalizedSelector>,
+): Array<NormalizedSelector> {
 	// make sure the "highest priority" configs are checked first
 	const selectorType = Selector[type];
 	// `objectStyleEnumMember` is a split-off of `enumMember`: a config written
@@ -57,50 +70,69 @@ export function createValidator(
 	const matchedSelectors =
 		// oxlint-disable-next-line oxc/bad-bitwise-operator -- selectors are bit flags; this matches either one
 		type === "objectStyleEnumMember" ? selectorType | Selector.enumMember : selectorType;
-	const configs = allConfigs
-		// gather all of the applicable selectors
-		.filter((configItem) => {
-			return (
-				(configItem.selector & matchedSelectors) !== 0 ||
-				configItem.selector === MetaSelector.default
-			);
-		})
-		.sort((a, b) => {
-			if (a.selector === b.selector) {
-				// in the event of the same selector, order by modifier weight
-				// sort descending - the type modifiers are "more important"
-				return b.modifierWeight - a.modifierWeight;
-			}
+	return (
+		allConfigs
+			// gather all of the applicable selectors
+			.filter((configItem) => {
+				return (
+					(configItem.selector & matchedSelectors) !== 0 ||
+					configItem.selector === MetaSelector.default
+				);
+			})
+			.sort((a, b) => {
+				if (a.selector === b.selector) {
+					// in the event of the same selector, order by modifier weight
+					// sort descending - the type modifiers are "more important"
+					return b.modifierWeight - a.modifierWeight;
+				}
 
-			const aIsMeta = isMetaSelector(a.selector);
-			const bIsMeta = isMetaSelector(b.selector);
+				const aIsMeta = isMetaSelector(a.selector);
+				const bIsMeta = isMetaSelector(b.selector);
 
-			// non-meta selectors should go ahead of meta selectors
-			if (aIsMeta && !bIsMeta) {
-				return 1;
-			}
+				// non-meta selectors should go ahead of meta selectors
+				if (aIsMeta && !bIsMeta) {
+					return 1;
+				}
 
-			if (!aIsMeta && bIsMeta) {
-				return -1;
-			}
+				if (!aIsMeta && bIsMeta) {
+					return -1;
+				}
 
-			const aIsMethodOrProperty = isMethodOrPropertySelector(a.selector);
-			const bIsMethodOrProperty = isMethodOrPropertySelector(b.selector);
+				const aIsMethodOrProperty = isMethodOrPropertySelector(a.selector);
+				const bIsMethodOrProperty = isMethodOrPropertySelector(b.selector);
 
-			// for backward compatibility, method and property have higher
-			// precedence than other meta selectors
-			if (aIsMethodOrProperty && !bIsMethodOrProperty) {
-				return -1;
-			}
+				// for backward compatibility, method and property have higher
+				// precedence than other meta selectors
+				if (aIsMethodOrProperty && !bIsMethodOrProperty) {
+					return -1;
+				}
 
-			if (!aIsMethodOrProperty && bIsMethodOrProperty) {
-				return 1;
-			}
+				if (!aIsMethodOrProperty && bIsMethodOrProperty) {
+					return 1;
+				}
 
-			// both aren't meta selectors
-			// sort descending - the meta selectors are "least important"
-			return b.selector - a.selector;
-		});
+				// both aren't meta selectors
+				// sort descending - the meta selectors are "least important"
+				return b.selector - a.selector;
+			})
+	);
+}
+
+/**
+ * Builds the validator of one selector for the file being linted.
+ *
+ * @param type - The selector to validate.
+ * @param context - The rule context of the file being linted.
+ * @param configs - The applicable configs, ordered by
+ *   {@linkcode sortConfigs}.
+ * @returns A function that validates one name and reports a violation.
+ */
+export function createValidator(
+	type: SelectorString,
+	context: Context,
+	configs: ReadonlyArray<NormalizedSelector>,
+): ValidatorFunction {
+	const selectorType = Selector[type];
 
 	// The exemption of the name under validation. A validator call is
 	// synchronous, so one slot serves every report site below.
