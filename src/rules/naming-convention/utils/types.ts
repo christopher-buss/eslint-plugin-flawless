@@ -137,6 +137,26 @@ export interface NormalizedSelector {
 	typeArgumentOf: Array<TypeArgumentReference> | undefined;
 	types: Array<TypeModifierType | TypeReference> | undefined;
 }
+
+/** The rarely needed inputs of a validator call. */
+export interface ValidatorExtras {
+	/**
+	 * Tells if the name is exempt from validation. It runs only when the name
+	 * would otherwise be reported, so a costly test (a type checker query) is
+	 * free for every name that passes.
+	 */
+	isExempt?: (() => boolean) | undefined;
+	/**
+	 * Node whose TypeScript type the selector's `types` matcher reads, when the
+	 * name being validated isn't itself the thing that carries that type. A
+	 * string-literal key in `Record<"EmitCount", T>` is such a case: the key's
+	 * own type is the string `"EmitCount"`, while `types` means the type of the
+	 * property it names, so the value type node is passed here. Defaults to
+	 * the validated node.
+	 */
+	typeNode?: TSESTree.Node | undefined;
+}
+
 export type ValidatorFunction = (
 	node: TSESTree.Identifier | TSESTree.Literal | TSESTree.PrivateIdentifier,
 	modifiers?: Set<ModifierType>,
@@ -148,14 +168,6 @@ export type ValidatorFunction = (
 	 * dictates the name a value is bound to.
 	 */
 	showForeignContractHint?: boolean,
-	/**
-	 * Node whose TypeScript type the selector's `types` matcher reads, when the
-	 * name being validated isn't itself the thing that carries that type. A
-	 * string-literal key in `Record<"EmitCount", T>` is such a case: the key's
-	 * own type is the string `"EmitCount"`, while `types` means the type of the
-	 * property it names, so the value type node is passed here. Defaults to
-	 * `node`.
-	 */
-	typeNode?: TSESTree.Node,
+	extras?: ValidatorExtras,
 ) => void;
 export type ParsedOptions = Record<SelectorString, ValidatorFunction>;
