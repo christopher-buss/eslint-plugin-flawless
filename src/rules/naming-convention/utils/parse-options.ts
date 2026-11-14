@@ -31,7 +31,12 @@ type SortedConfigs = Readonly<Record<SelectorString, ReadonlyArray<NormalizedSel
 
 interface SortedConfigsEntry {
 	readonly options: ReadonlyArray<NamingSelector>;
-	readonly settingsAllowedWords: unknown;
+	/**
+	 * Held weakly: the entry of the default options has a key that lives as
+	 * long as the plugin, so a strong reference would keep the word list of
+	 * every reloaded config alive.
+	 */
+	readonly settingsAllowedWords: undefined | WeakRef<ReadonlyArray<unknown>>;
 	readonly sorted: SortedConfigs;
 }
 
@@ -227,7 +232,12 @@ function getSortedConfigs(context: Context, options: Context["options"]): Sorted
 	const entries = first === undefined ? undefined : sortedConfigsCache.get(first);
 	const cached = entries?.find((entry) => {
 		return (
-			entry.settingsAllowedWords === settingsAllowedWords &&
+			// a dead reference gives undefined, which must not match the
+			// "no word list" case
+			(entry.settingsAllowedWords === undefined
+				? settingsAllowedWords === undefined
+				: settingsAllowedWords !== undefined &&
+					entry.settingsAllowedWords.deref() === settingsAllowedWords) &&
 			entry.options.length === options.length &&
 			entry.options.every((option, index) => option === options[index])
 		);
@@ -252,12 +262,20 @@ function getSortedConfigs(context: Context, options: Context["options"]): Sorted
 	const sorted = partial as SortedConfigs;
 
 	if (first !== undefined) {
-		const entry = { options: [...options], settingsAllowedWords, sorted };
-		if (entries === undefined) {
-			sortedConfigsCache.set(first, [entry]);
-		} else {
-			entries.push(entry);
-		}
+		const entry: SortedConfigsEntry = {
+			options: [...options],
+			settingsAllowedWords:
+				settingsAllowedWords === undefined ? undefined : new WeakRef(settingsAllowedWords),
+			sorted,
+		};
+		// Drop the entries whose word list is gone; they can never match again.
+		const live = (entries ?? []).filter((existing) => {
+			return (
+				existing.settingsAllowedWords === undefined ||
+				existing.settingsAllowedWords.deref() !== undefined
+			);
+		});
+		sortedConfigsCache.set(first, [...live, entry]);
 	}
 
 	return sorted;
