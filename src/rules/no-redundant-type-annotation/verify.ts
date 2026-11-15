@@ -70,6 +70,8 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 // removal, so one lint creates at most 2 * (MAX_PROGRAMS - 2) + 1 programs.
 const MAX_PROGRAMS = 12;
 // The most object types an exported value's `asserts` member search visits.
+// Library types are skipped, so only a type that expands without end, such
+// as a generic that nests itself, reaches this limit.
 const MAX_MEMBER_TYPES = 64;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
@@ -128,7 +130,7 @@ export function verifyAnnotations<C extends Candidate>(
 		const emitsDeclarations = options.declaration === true || options.composite === true;
 		const speculate = speculativeProgramFactory(program, source);
 		const print = createTypePrinter();
-		const assertionTargets = requiredAssertionTargets(checker, source, candidates);
+		const assertionTargets = requiredAssertionTargets(program, source, candidates);
 		// A removal that requires proof goes first, so other removals cannot
 		// push it past the work limit.
 		const eligible = [
@@ -486,16 +488,17 @@ function bindingNames(binding: ts.BindingName): Array<ts.Identifier> {
 
 /**
  * Declarations needed to meet assertion calls' syntactic requirements.
- * @param checker - The original checker, with the annotations still present.
+ * @param program - The original program, with the annotations still present.
  * @param source - The source whose assertion calls are inspected.
  * @param candidates - Variable and function-expression parameter removals.
  * @returns Declarations that must retain their explicit annotations.
  */
 function requiredAssertionTargets(
-	checker: ts.TypeChecker,
+	program: ts.Program,
 	source: ts.SourceFile,
 	candidates: ReadonlyArray<Candidate>,
 ): Set<ts.Node> {
+	const checker = program.getTypeChecker();
 	const required = new Set<ts.Node>();
 	const bindings = new Map<
 		string,
@@ -510,15 +513,20 @@ function requiredAssertionTargets(
 		);
 	}
 
-	let exported: Set<ts.Symbol> | undefined;
+	let exportedSymbols: Set<ts.Symbol> | undefined;
 	function isExported(owner: ts.VariableDeclaration): boolean {
-		if (exported === undefined) {
-			exported = new Set();
+		// A variable at the top of a script is global.
+		if (!ts.isExternalModule(source)) {
+			return owner.parent.parent.parent === source;
+		}
+
+		if (exportedSymbols === undefined) {
+			exportedSymbols = new Set();
 			const moduleSymbol = checker.getSymbolAtLocation(source);
 			const exports =
 				moduleSymbol === undefined ? [] : checker.getExportsOfModule(moduleSymbol);
 			for (const symbol of exports) {
-				exported.add(
+				exportedSymbols.add(
 					symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol,
 				);
 			}
@@ -527,7 +535,32 @@ function requiredAssertionTargets(
 		const symbol = ts.isIdentifier(owner.name)
 			? checker.getSymbolAtLocation(owner.name)
 			: undefined;
-		return symbol !== undefined && exported.has(symbol);
+		return symbol !== undefined && exportedSymbols.has(symbol);
+	}
+
+	/**
+	 * Reports whether the search should visit a member type. A library type
+	 * declares no `asserts` member, and a type without properties has no
+	 * members to visit.
+	 * @param type - A property's type.
+	 * @returns True when the type may lead to an `asserts` member.
+	 */
+	function isSearchable(type: ts.Type): boolean {
+		if ((type.flags & ts.TypeFlags.Object) === 0) {
+			return false;
+		}
+
+		const typeDeclarations = type.getSymbol()?.declarations ?? [];
+		if (
+			typeDeclarations.length > 0 &&
+			typeDeclarations.every((declaration) => {
+				return program.isSourceFileDefaultLibrary(declaration.getSourceFile());
+			})
+		) {
+			return false;
+		}
+
+		return checker.getPropertiesOfType(type).length > 0;
 	}
 
 	/**
@@ -562,7 +595,7 @@ function requiredAssertionTargets(
 				return true;
 			}
 
-			pending.push(...members.filter((member) => (member.flags & ts.TypeFlags.Object) !== 0));
+			pending.push(...members.filter(isSearchable));
 		}
 
 		// A search cut short cannot rule out an `asserts` member.

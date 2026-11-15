@@ -3614,6 +3614,7 @@ run({
 				}
 				declare function getAssertions(): Assertions;
 				const assertions: Assertions = getAssertions();
+				export {};
 			`,
 			output: unindent`
 				interface Assertions {
@@ -3621,6 +3622,52 @@ run({
 				}
 				declare function getAssertions(): Assertions;
 				const assertions = getAssertions();
+				export {};
+			`,
+			errors: [{ messageId }],
+		},
+		// Wide types and library types do not exhaust the search.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface P {
+					a: string[];
+					b: number[];
+					c: boolean[];
+				}
+				declare function g(): P;
+				export const p: P = g();
+			`,
+			output: unindent`
+				interface P {
+					a: string[];
+					b: number[];
+					c: boolean[];
+				}
+				declare function g(): P;
+				export const p = g();
+			`,
+			errors: [{ messageId }],
+		},
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Lib {
+					done: Promise<void>;
+					element: HTMLElement;
+					map: Map<string, number>;
+				}
+				declare function getLib(): Lib;
+				export const lib: Lib = getLib();
+			`,
+			output: unindent`
+				interface Lib {
+					done: Promise<void>;
+					element: HTMLElement;
+					map: Map<string, number>;
+				}
+				declare function getLib(): Lib;
+				export const lib = getLib();
 			`,
 			errors: [{ messageId }],
 		},
@@ -3699,6 +3746,22 @@ run({
 				declare function getTools(): Tools;
 				const tools: Tools = getTools();
 				export { tools };
+			`,
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
+				export default assertions;
+			`,
+			// A variable at the top of a script is global.
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
 			`,
 		].map((code) => ({ code, filename: path.join(declarationsDirectory, "case.ts") })),
 		{
