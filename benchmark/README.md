@@ -143,6 +143,36 @@ The usual cause is a per-node scan of something that grows with the file:
 - Regexes over `sourceCode.text`, or walks of `ast.body` / `scope.through`,
   per reported node. Compute once per file and cache.
 
+## CodSpeed (trial)
+
+`codspeed.ts` runs a few rules through tinybench with the CodSpeed plugin.
+`.github/workflows/codspeed.yaml` runs it in CodSpeed's simulation mode on each
+PR and on main, and CodSpeed comments on the PR with the change against main.
+
+Simulation mode counts CPU instructions under Valgrind, not wall time, so the
+numbers are stable on shared runners. V8 runs with optimization off there, so
+use the numbers to compare a PR with main, not as production speed.
+
+Each task times `linter.verify` on a `SourceCode` that a `beforeEach` hook
+parses first, so parse is excluded. Typed subjects also get a new program (and
+type checker) per iteration. Before timing, the script checks that each subject
+reports, and that the oxfmt worker returns a verdict.
+
+Subjects (`SUBJECTS` in `codspeed.ts`):
+
+- `naming-convention` and `no-ignored-return` (typed), from `COARSE`.
+- `arrow-return-style` on `realistic.ts` with `useOxfmt:false`.
+- `arrow-return-style` on `over-limit-distinct.ts` with `useOxfmt:true`. The
+  oxfmt cache is warm when timing starts.
+
+Locally, without CodSpeed, it runs as plain tinybench and prints a table:
+
+```sh
+pnpm bench:codspeed
+```
+
+This is a trial. `scaling.ts` stays the gate.
+
 ## CI
 
 `.github/workflows/benchmark.yaml` runs on PRs that touch `src/`, `benchmark/`,

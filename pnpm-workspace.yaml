@@ -69,8 +69,10 @@ catalogs:
     "@types/natural-compare": 1.4.3
     "@types/node": 24.0.13
   utils:
+    "@codspeed/tinybench-plugin": 6.1.1
     eslint-doc-generator: 3.6.0
     eslint-rule-benchmark: 0.8.0
+    tinybench: 6.2.3
 
 allowBuilds:
   esbuild: true

@@ -31,6 +31,8 @@
 	"scripts": {
 		"prebench": "nr build",
 		"bench": "eslint-rule-benchmark run --eslint-config benchmark/eslint.config.mjs",
+		"prebench:codspeed": "nr build",
+		"bench:codspeed": "node --import tsx benchmark/codspeed.ts",
 		"prebench:scaling": "nr build",
 		"bench:scaling": "tsx benchmark/scaling.ts",
 		"build": "tsdown --clean --dts",
@@ -65,6 +67,7 @@
 	},
 	"devDependencies": {
 		"@antfu/ni": "catalog:cli",
+		"@codspeed/tinybench-plugin": "catalog:utils",
 		"@eslint/markdown": "catalog:testing",
 		"@isentinel/eslint-config": "catalog:cli",
 		"@isentinel/tsconfig": "catalog:types",
@@ -91,6 +94,7 @@
 		"oxlint-tsgolint": "catalog:cli",
 		"publint": "catalog:testing",
 		"simple-git-hooks": "catalog:cli",
+		"tinybench": "catalog:utils",
 		"ts-api-utils": "catalog:cli",
 		"tsdown": "catalog:cli",
 		"tsx": "catalog:cli",
