@@ -3605,6 +3605,68 @@ run({
 			output: "declare function getDate(): Date; export const value = getDate();",
 			errors: [{ messageId }],
 		},
+		// No other file can call a local value's assertion members.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
+			`,
+			output: unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions = getAssertions();
+			`,
+			errors: [{ messageId }],
+		},
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Plain {
+					check(condition: unknown): boolean;
+					child: { name: string };
+				}
+				declare function getPlain(): Plain;
+				export const plain: Plain = getPlain();
+			`,
+			output: unindent`
+				interface Plain {
+					check(condition: unknown): boolean;
+					child: { name: string };
+				}
+				declare function getPlain(): Plain;
+				export const plain = getPlain();
+			`,
+			errors: [{ messageId }],
+		},
+		// A recursive type ends the walk.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Tree {
+					child: Tree;
+					list: Array<Tree>;
+					name: string;
+				}
+				declare function getTree(): Tree;
+				export const tree: Tree = getTree();
+			`,
+			output: unindent`
+				interface Tree {
+					child: Tree;
+					list: Array<Tree>;
+					name: string;
+				}
+				declare function getTree(): Tree;
+				export const tree = getTree();
+			`,
+			errors: [{ messageId }],
+		},
 	],
 	parserOptions: {
 		project: path.join(declarationsDirectory, "tsconfig.json"),
@@ -3613,6 +3675,32 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{ filename: path.join(declarationsDirectory, "case.ts"), code: declarationSource },
+		// Another file can call an exported value's assertion members, which
+		// need the declaration's annotation (TS2775).
+		...[
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				export const assertions: Assertions = getAssertions();
+			`,
+			unindent`
+				interface Guard {
+					ready(): asserts this is { ok: true };
+				}
+				declare function getGuard(): Guard;
+				export const guard: Guard = getGuard();
+			`,
+			unindent`
+				interface Tools {
+					nested: { inner: { check(condition: unknown): asserts condition } };
+				}
+				declare function getTools(): Tools;
+				const tools: Tools = getTools();
+				export { tools };
+			`,
+		].map((code) => ({ code, filename: path.join(declarationsDirectory, "case.ts") })),
 		{
 			filename: path.join(declarationsDirectory, "case.ts"),
 			code: `${declarationSource.replace(

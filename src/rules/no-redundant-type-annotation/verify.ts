@@ -69,6 +69,8 @@ function sharesCompiler(source: ts.SourceFile): boolean {
 // in which all removals fail, and each combined check restores at least one
 // removal, so one lint creates at most 2 * (MAX_PROGRAMS - 2) + 1 programs.
 const MAX_PROGRAMS = 12;
+// The most object types an exported value's `asserts` member search visits.
+const MAX_MEMBER_TYPES = 64;
 // Query order is compiler behavior, not a public contract. Validate new
 // versions against full diagnostics before enabling loop replay on them.
 const LOOP_REPLAY_VERSIONS = new Set(["5.9", "6.0"]);
@@ -508,14 +510,77 @@ function requiredAssertionTargets(
 		);
 	}
 
+	let exported: Set<ts.Symbol> | undefined;
+	function isExported(owner: ts.VariableDeclaration): boolean {
+		if (exported === undefined) {
+			exported = new Set();
+			const moduleSymbol = checker.getSymbolAtLocation(source);
+			const exports =
+				moduleSymbol === undefined ? [] : checker.getExportsOfModule(moduleSymbol);
+			for (const symbol of exports) {
+				exported.add(
+					symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol,
+				);
+			}
+		}
+
+		const symbol = ts.isIdentifier(owner.name)
+			? checker.getSymbolAtLocation(owner.name)
+			: undefined;
+		return symbol !== undefined && exported.has(symbol);
+	}
+
+	/**
+	 * Reports whether a property path from a type reaches a method with an
+	 * `asserts` predicate. A visited set ends the walk on a recursive type.
+	 * @param root - The type of the exported value.
+	 * @returns True when some property path calls an assertion.
+	 */
+	function hasAssertsMember(root: ts.Type): boolean {
+		const visited = new Set<ts.Type>();
+		const pending = [root];
+		let budget = MAX_MEMBER_TYPES;
+		while (pending.length > 0 && budget > 0) {
+			const type = pending.pop();
+			if (type === undefined || visited.has(type)) {
+				continue;
+			}
+
+			visited.add(type);
+			budget -= 1;
+			const members = checker.getPropertiesOfType(type).flatMap((property) => {
+				const declaration = property.valueDeclaration ?? property.declarations?.[0];
+				return declaration === undefined
+					? []
+					: [checker.getTypeOfSymbolAtLocation(property, declaration)];
+			});
+			if (
+				members.some((member) => {
+					return checker.getSignaturesOfType(member, ts.SignatureKind.Call).some(asserts);
+				})
+			) {
+				return true;
+			}
+
+			pending.push(...members.filter((member) => (member.flags & ts.TypeFlags.Object) !== 0));
+		}
+
+		// A search cut short cannot rule out an `asserts` member.
+		return pending.length > 0;
+	}
+
 	for (const { owner } of candidates) {
 		if (owner.name === undefined) {
 			continue;
 		}
 
 		const type = checker.getTypeAtLocation(owner.name);
-		if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).some(asserts)) {
-			// Exported assertion functions can also be called from other files.
+		// Exported assertion functions, and an exported value's assertion
+		// members, can also be called from other files.
+		if (
+			checker.getSignaturesOfType(type, ts.SignatureKind.Call).some(asserts) ||
+			(ts.isVariableDeclaration(owner) && isExported(owner) && hasAssertsMember(type))
+		) {
 			required.add(owner);
 		}
 
