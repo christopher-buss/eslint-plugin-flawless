@@ -564,6 +564,62 @@ const invalid: Array<InvalidTestCase<Options>> = [
 		errors: [{ messageId: explicitMessageId }],
 	},
 
+	// A TS directive on the line before the body would stop covering the
+	// expression once it moves to a new `return` line: report without a fix.
+	{
+		code: unindent`
+			export const merge = <T extends object, S extends object>(
+				data: T,
+				source: S,
+				// @ts-expect-error: spread is not inferred as T & S
+			): T & S & { merged: true } => ({ ...data, ...source });
+		`,
+		output: null,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
+	{
+		code: unindent`
+			// @ts-expect-error
+			export const fn = (): number => "bad";
+		`,
+		output: null,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
+	{
+		code: unindent`
+			// @ts-ignore
+			export const fn = (): number => "bad";
+		`,
+		output: null,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
+	{
+		code: unindent`
+			/* @ts-expect-error */
+			export const fn = (): number => "bad";
+		`,
+		output: null,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
+	{
+		code: unindent`
+			// plain comment
+			export const fn = (): number => "bad";
+		`,
+		output: unindent`
+			// plain comment
+			export const fn = (): number => {
+				return "bad";
+			};
+		`,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
+
 	// Unicode.
 	{
 		code: "const longUnicode测试 = () => '这是一个很长的中文字符串测试，应该触发显式返回，因为它超过了最大长度限制了吧应该是这样的，还要更长一些才能确保触发规则'",

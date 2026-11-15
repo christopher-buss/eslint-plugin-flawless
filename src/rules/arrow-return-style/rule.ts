@@ -147,6 +147,9 @@ function formatCacheSet(key: string, value: FormatResponse): void {
 	}
 }
 
+/** Comment text TS treats as a `@ts-expect-error` / `@ts-ignore` directive. */
+const TS_DIRECTIVE = /^[\s*/]*@ts-(?:expect-error|ignore)\b/;
+
 // --- measurement helpers ----------------------------------------------------
 
 /**
@@ -598,6 +601,20 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 		}
 
 		/**
+		 * Does a `@ts-expect-error` / `@ts-ignore` comment end on the
+		 * line before `line`? Moving the body to a new `return` line
+		 * would detach it from that directive.
+		 *
+		 * @param line - The 1-based line where the body starts.
+		 * @returns Whether a TS directive sits on the preceding line.
+		 */
+		function hasDirectiveOnLineBefore(line: number): boolean {
+			return sourceCode.getAllComments().some((comment) => {
+				return comment.loc.end.line === line - 1 && TS_DIRECTIVE.test(comment.value);
+			});
+		}
+
+		/**
 		 * Reports and fixes an implicit arrow into an explicit block body.
 		 *
 		 * @param node - The arrow function to convert.
@@ -644,6 +661,11 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			const replacement = ` {\n${[...commentLines, returnLine].join("\n")}\n${arrowIndent}}`;
 
 			const end = danglingCloser(node, bodyEnd)?.range[0] ?? bodyEnd.range[1];
+
+			if (hasDirectiveOnLineBefore(bodyStart.loc.start.line)) {
+				context.report({ messageId, node });
+				return;
+			}
 
 			context.report({
 				fix: (fixer) => fixer.replaceTextRange([arrowToken.range[1], end], replacement),
