@@ -1,16 +1,18 @@
 // One coarse run per rule, shared by config.ts (timing) and scaling.ts (growth
-// check). arrow-return-style and no-floating-point-equality are profiled in
+// check); codspeed.ts also takes a few entries. arrow-return-style and no-floating-point-equality are profiled in
 // detail in config.ts, so they are intentionally absent here. A rule needing
 // options (to report at all) passes them through, matching the shape it would
 // take in eslint config. A typed rule reports nothing without a program, so its
 // entry pins `expectedReports`: config.ts and scaling.ts fail when the count
 // differs, instead of timing a rule that did no type work.
-export const COARSE: Array<{
+export interface CoarseEntry {
 	expectedReports?: number;
 	options?: Array<unknown>;
 	ruleId: string;
 	testPath: string;
-}> = [
+}
+
+export const COARSE: Array<CoarseEntry> = [
 	{
 		options: [{ threshold: 2 }],
 		ruleId: "cognitive-complexity",

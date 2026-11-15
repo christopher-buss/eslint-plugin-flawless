@@ -4,6 +4,7 @@ import tsParser from "@typescript-eslint/parser";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createSyncFn } from "synckit";
 import { Bench } from "tinybench";
@@ -11,8 +12,9 @@ import ts from "typescript";
 
 import builtPlugin from "../dist/index.mjs";
 import type { FormatRequest, FormatResponse } from "../src/rules/arrow-return-style/worker";
+import type { CoarseEntry } from "./coarse";
 import { COARSE } from "./coarse";
-import { typedParserOptions } from "./eslint.config.mjs";
+import { checkReports, isTypedFixture, parseTypedProject, ruleConfig, throwOnFatal } from "./shared";
 
 // CodSpeed trial (see benchmark/README.md). Each task times one rule linting
 // one fixture, parse excluded: a `beforeEach` hook parses a fresh SourceCode
@@ -24,12 +26,8 @@ import { typedParserOptions } from "./eslint.config.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-interface Subject {
-	expectedReports?: number;
+interface Subject extends CoarseEntry {
 	label: string;
-	options?: Array<unknown>;
-	ruleId: string;
-	testPath: string;
 }
 
 function fromCoarse(ruleId: string): Subject {
@@ -63,23 +61,7 @@ const SUBJECTS: Array<Subject> = [
 	},
 ];
 
-const typedOptions = ((): ts.CompilerOptions => {
-	const parsed = ts.getParsedCommandLineOfConfigFile(
-		path.resolve(typedParserOptions.tsconfigRootDir, typedParserOptions.project),
-		{},
-		{
-			...ts.sys,
-			onUnRecoverableConfigFileDiagnostic(diagnostic) {
-				throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
-			},
-		},
-	);
-	if (parsed === undefined) {
-		throw new Error("Cannot read the typed benchmark project");
-	}
-
-	return parsed.options;
-})();
+const typedOptions = parseTypedProject().options;
 
 /**
  * A compiler host that caches every SourceFile except `filename`, so each
@@ -117,7 +99,7 @@ interface Prepared {
 function prepare(subject: Subject): Prepared {
 	const filename = path.resolve(HERE, subject.testPath);
 	const code = readFileSync(filename, "utf8");
-	const isTyped = subject.testPath.startsWith("./cases/typed/");
+	const isTyped = isTypedFixture(subject.testPath);
 	const ruleKey = `flawless/${subject.ruleId}`;
 	const host = isTyped ? cachingHost(filename) : undefined;
 	let program: ts.Program | undefined;
@@ -149,12 +131,7 @@ function prepare(subject: Subject): Prepared {
 		});
 	}
 
-	const config: Linter.Config = {
-		files: ["**/*.ts", "**/*.tsx"],
-		languageOptions: { parser: tsParser },
-		plugins: { flawless: builtPlugin },
-		rules: { [ruleKey]: ["error", ...(subject.options ?? [])] },
-	};
+	const config = ruleConfig(builtPlugin, ruleKey, subject.options);
 
 	return { config, filename, parse, ruleKey, subject };
 }
@@ -166,20 +143,11 @@ const prepared = SUBJECTS.map(prepare);
 // rule that does nothing (e.g. a typed rule without types, or a dead worker).
 for (const { config, filename, parse, ruleKey, subject } of prepared) {
 	const messages = linter.verify(parse(), config, filename);
-	const fatal = messages.find((message) => message.fatal === true);
-	if (fatal !== undefined) {
-		throw new Error(`${subject.ruleId}: ${fatal.message}`);
-	}
+	throwOnFatal(messages, subject.ruleId);
+	const label = `${subject.ruleId} (${subject.label})`;
+	const reports = checkReports(messages, ruleKey, subject.expectedReports, label);
 
-	const reports = messages.filter((message) => message.ruleId === ruleKey).length;
-	const expected = subject.expectedReports;
-	if (expected === undefined ? reports === 0 : reports !== expected) {
-		throw new Error(
-			`${subject.ruleId} (${subject.label}): expected ${expected ?? "> 0"} reports, received ${reports}`,
-		);
-	}
-
-	console.log(`${subject.ruleId} (${subject.label}): ${reports} reports`);
+	console.log(`${label}: ${reports} reports`);
 }
 
 // The rule treats a failed oxfmt call as "no verdict", and the over-limit
@@ -199,20 +167,15 @@ if (probe === undefined || probe.lineText === null) {
 const bench = withCodSpeed(new Bench({ iterations: 20, time: 500 }));
 
 for (const { config, filename, parse, subject } of prepared) {
-	let sourceCode: SourceCode | undefined;
+	// A fresh SourceCode per iteration: verify mutates it. Tinybench always runs
+	// beforeEach before the task, so the initial value is never timed.
+	let sourceCode = parse();
 	bench.add(
 		`${subject.ruleId}: ${subject.label}`,
 		() => {
-			if (sourceCode === undefined) {
-				throw new Error("beforeEach did not run");
-			}
-
 			linter.verify(sourceCode, config, filename);
 		},
 		{
-			afterEach() {
-				sourceCode = undefined;
-			},
 			beforeEach() {
 				sourceCode = parse();
 			},
@@ -221,4 +184,8 @@ for (const { config, filename, parse, subject } of prepared) {
 }
 
 await bench.run();
-console.table(bench.table());
+// Under CodSpeed the table holds only placeholder rows. @codspeed/core enables
+// itself when CODSPEED_ENV is set.
+if (process.env.CODSPEED_ENV === undefined) {
+	console.table(bench.table());
+}

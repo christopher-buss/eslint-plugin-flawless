@@ -9,7 +9,7 @@ import ts from "typescript";
 
 import builtPlugin from "../dist/index.mjs";
 import { COARSE } from "./coarse";
-import { typedParserOptions } from "./eslint.config.mjs";
+import { checkReports, isTypedFixture, parseTypedProject, ruleConfig, throwOnFatal } from "./shared";
 
 // Growth check: catches rules whose cost grows super-linearly with file size.
 // config.ts times each rule on one fixed-size fixture, so an O(n²) rule looks
@@ -71,19 +71,7 @@ function build(source: string, copies: number): string {
 
 /** A compiler program over the expanded typed fixture, preserving its imports. */
 function typedProgram(filename: string, code: string): ts.Program {
-	const parsed = ts.getParsedCommandLineOfConfigFile(
-		path.resolve(typedParserOptions.tsconfigRootDir, typedParserOptions.project),
-		{},
-		{
-			...ts.sys,
-			onUnRecoverableConfigFileDiagnostic(diagnostic) {
-				throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
-			},
-		},
-	);
-	if (parsed === undefined) {
-		throw new Error("Cannot read the typed benchmark project");
-	}
+	const parsed = parseTypedProject();
 	const host = ts.createCompilerHost(parsed.options, true);
 	const readSource = host.getSourceFile;
 	host.getSourceFile = (name, languageVersion, onError, shouldCreate) =>
@@ -99,17 +87,12 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 	const extension = path.extname(absolutePath);
 	const code = build(readFileSync(absolutePath, "utf8"), copies);
 	const ruleKey = `flawless/${subject.ruleId}`;
-	const isTyped = subject.testPath.startsWith("./cases/typed/");
+	const isTyped = isTypedFixture(subject.testPath);
 	const programs = isTyped ? [typedProgram(absolutePath, code)] : undefined;
-	const config: Linter.Config = {
-		files: ["**/*.ts", "**/*.tsx"],
-		languageOptions: {
-			parser: tsParser,
-			parserOptions: { ecmaFeatures: { jsx: extension === ".tsx" }, programs },
-		},
-		plugins: { flawless: builtPlugin },
-		rules: { [ruleKey]: ["error", ...(subject.options ?? [])] },
-	};
+	const config = ruleConfig(builtPlugin, ruleKey, subject.options, {
+		parser: tsParser,
+		parserOptions: { ecmaFeatures: { jsx: extension === ".tsx" }, programs },
+	});
 
 	const warmup = 2;
 	const iterations = Math.max(4, Math.round(100 / copies));
@@ -120,10 +103,7 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 			fix: false,
 			stats: true,
 		});
-		const fatal = messages.find((message) => message.fatal === true);
-		if (fatal !== undefined) {
-			throw new Error(`${subject.ruleId} x${copies}: ${fatal.message}`);
-		}
+		throwOnFatal(messages, `${subject.ruleId} x${copies}`);
 		if (
 			subject.ruleId === "no-redundant-type-annotation" &&
 			messages.filter((message) => message.ruleId === ruleKey && message.fix !== undefined)
@@ -132,12 +112,12 @@ function measure(subject: (typeof SUBJECTS)[number], copies: number): number {
 			throw new Error(`${subject.ruleId} x${copies}: expected 10 verified removals`);
 		}
 		if ("expectedReports" in subject && subject.expectedReports !== undefined) {
-			const reports = messages.filter((message) => message.ruleId === ruleKey).length;
-			if (reports !== subject.expectedReports * copies) {
-				throw new Error(
-					`${subject.ruleId} x${copies}: expected ${subject.expectedReports * copies} reports, received ${reports}`,
-				);
-			}
+			checkReports(
+				messages,
+				ruleKey,
+				subject.expectedReports * copies,
+				`${subject.ruleId} x${copies}`,
+			);
 		}
 
 		if (
