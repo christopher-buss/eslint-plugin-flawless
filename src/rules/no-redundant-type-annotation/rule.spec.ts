@@ -3605,6 +3605,115 @@ run({
 			output: "declare function getDate(): Date; export const value = getDate();",
 			errors: [{ messageId }],
 		},
+		// No other file can call a local value's assertion members.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
+				export {};
+			`,
+			output: unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions = getAssertions();
+				export {};
+			`,
+			errors: [{ messageId }],
+		},
+		// Wide types and library types do not exhaust the search.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface P {
+					a: string[];
+					b: number[];
+					c: boolean[];
+				}
+				declare function g(): P;
+				export const p: P = g();
+			`,
+			output: unindent`
+				interface P {
+					a: string[];
+					b: number[];
+					c: boolean[];
+				}
+				declare function g(): P;
+				export const p = g();
+			`,
+			errors: [{ messageId }],
+		},
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Lib {
+					done: Promise<void>;
+					element: HTMLElement;
+					map: Map<string, number>;
+				}
+				declare function getLib(): Lib;
+				export const lib: Lib = getLib();
+			`,
+			output: unindent`
+				interface Lib {
+					done: Promise<void>;
+					element: HTMLElement;
+					map: Map<string, number>;
+				}
+				declare function getLib(): Lib;
+				export const lib = getLib();
+			`,
+			errors: [{ messageId }],
+		},
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Plain {
+					check(condition: unknown): boolean;
+					child: { name: string };
+				}
+				declare function getPlain(): Plain;
+				export const plain: Plain = getPlain();
+			`,
+			output: unindent`
+				interface Plain {
+					check(condition: unknown): boolean;
+					child: { name: string };
+				}
+				declare function getPlain(): Plain;
+				export const plain = getPlain();
+			`,
+			errors: [{ messageId }],
+		},
+		// A recursive type ends the walk.
+		{
+			filename: path.join(declarationsDirectory, "case.ts"),
+			code: unindent`
+				interface Tree {
+					child: Tree;
+					list: Array<Tree>;
+					name: string;
+				}
+				declare function getTree(): Tree;
+				export const tree: Tree = getTree();
+			`,
+			output: unindent`
+				interface Tree {
+					child: Tree;
+					list: Array<Tree>;
+					name: string;
+				}
+				declare function getTree(): Tree;
+				export const tree = getTree();
+			`,
+			errors: [{ messageId }],
+		},
 	],
 	parserOptions: {
 		project: path.join(declarationsDirectory, "tsconfig.json"),
@@ -3613,6 +3722,48 @@ run({
 	rule: noRedundantTypeAnnotation,
 	valid: [
 		{ filename: path.join(declarationsDirectory, "case.ts"), code: declarationSource },
+		// Another file can call an exported value's assertion members, which
+		// need the declaration's annotation (TS2775).
+		...[
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				export const assertions: Assertions = getAssertions();
+			`,
+			unindent`
+				interface Guard {
+					ready(): asserts this is { ok: true };
+				}
+				declare function getGuard(): Guard;
+				export const guard: Guard = getGuard();
+			`,
+			unindent`
+				interface Tools {
+					nested: { inner: { check(condition: unknown): asserts condition } };
+				}
+				declare function getTools(): Tools;
+				const tools: Tools = getTools();
+				export { tools };
+			`,
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
+				export default assertions;
+			`,
+			// A variable at the top of a script is global.
+			unindent`
+				interface Assertions {
+					check(condition: unknown): asserts condition;
+				}
+				declare function getAssertions(): Assertions;
+				const assertions: Assertions = getAssertions();
+			`,
+		].map((code) => ({ code, filename: path.join(declarationsDirectory, "case.ts") })),
 		{
 			filename: path.join(declarationsDirectory, "case.ts"),
 			code: `${declarationSource.replace(
