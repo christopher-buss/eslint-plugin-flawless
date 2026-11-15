@@ -34,7 +34,7 @@ jobs:
     # Tokenless upload: CodSpeed accepts it for public repositories, needs no
     # repo secret, and works for fork PRs, which GitHub never grants an OIDC
     # token. CodSpeed posts the PR comment through its GitHub App, so the job
-    # only reads the repo.
+    # only reads the repo. (Stability check: comment-only change.)
     permissions:
       contents: read
     runs-on: ubuntu-latest
