@@ -6,3 +6,5 @@
   eslint-rule-benchmark structurally cannot run it. A typed rule puts its
   fixture in `benchmark/cases/typed/<rule>.ts` instead and sets
   `expectedReports`.
+- Triaging, labelling, or closing an issue or PR? Read
+  `docs/agents/issue-tracker.md` first.
