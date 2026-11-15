@@ -23,6 +23,10 @@ fixtures share one `config.ts`:
 - **Benchmarked rules** also get a growth check (`scaling.ts`) that fails on
   super-linear (e.g. O(n²)) rule time, which a fixed-size fixture cannot show.
 
+`shared.ts` holds helpers for `codspeed.ts`, `scaling.ts`, and
+`type-annotation.ts`: the tsconfig parse, the per-rule config, and the report
+check.
+
 ## Running
 
 ```sh
@@ -148,8 +152,9 @@ The usual cause is a per-node scan of something that grows with the file:
 ## CodSpeed (trial)
 
 `codspeed.ts` runs a few rules through tinybench with the CodSpeed plugin.
-`.github/workflows/codspeed.yaml` runs it in CodSpeed's simulation mode on each
-PR and on main, and CodSpeed comments on the PR with the change against main.
+`.github/workflows/codspeed.yaml` runs it in CodSpeed's simulation mode on every
+push to main, on PRs that change the paths in its filter, and on manual runs.
+CodSpeed comments on the PR with the change against main.
 
 Simulation mode counts CPU instructions under Valgrind, not wall time, so the
 numbers are stable on shared runners. V8 runs with optimization off there, so
@@ -189,8 +194,8 @@ maps each changed file to a rule: `src/rules/<rule>/**` and
 `benchmark/cases/all/<rule>.tsx` to that rule, `cases/floating-*.ts` to
 `no-floating-point-equality`, `cases/typed/annotation-*.ts` to
 `no-redundant-type-annotation`, `cases/typed/assertion-*.ts` to
-`no-incompatible-assertion-types`, other `cases/*.ts` to `arrow-return-style`. Specs
-and Markdown are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
+`no-incompatible-assertion-types`, other `cases/*.ts` to `arrow-return-style`. Specs,
+Markdown, and `benchmark/codspeed.ts` are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
 plugin entry, the benchmark config, the patch, dependencies) runs every rule.
 The result reaches `config.ts` as `BENCH_RULES`; when it names no benchmarked
 rule, `config.ts` exits after the coverage gate and the PR comment keeps its
