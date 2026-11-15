@@ -147,9 +147,6 @@ function formatCacheSet(key: string, value: FormatResponse): void {
 	}
 }
 
-/** Comment text TS treats as a `@ts-expect-error` / `@ts-ignore` directive. */
-const TS_DIRECTIVE = /^[\s*/]*@ts-(?:expect-error|ignore)\b/;
-
 // --- measurement helpers ----------------------------------------------------
 
 /**
@@ -173,6 +170,9 @@ const LEADING_WHITESPACE = /^[\t ]*/;
 function leadingWhitespace(line: string): string {
 	return LEADING_WHITESPACE.exec(line)?.[0] ?? "";
 }
+
+/** Comment text TS treats as a `@ts-expect-error` / `@ts-ignore` directive. */
+const TS_DIRECTIVE = /^[\s*/]*@ts-(?:expect-error|ignore)\b/;
 
 // --- AST helpers ------------------------------------------------------------
 
@@ -600,18 +600,32 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			return closer;
 		}
 
+		// End line -> start offset of the first TS directive ending there.
+		let directiveStarts: Map<number, number> | undefined;
+
 		/**
-		 * Does a `@ts-expect-error` / `@ts-ignore` comment end on the
-		 * line before `line`? Moving the body to a new `return` line
-		 * would detach it from that directive.
+		 * Does a `@ts-expect-error` / `@ts-ignore` comment before the arrow
+		 * end on the line before `line`? Moving the body to a new `return`
+		 * line would detach it from that directive. A directive after the
+		 * arrow moves above the `return`, so it still applies.
 		 *
 		 * @param line - The 1-based line where the body starts.
+		 * @param arrowToken - The arrow function's `=>` token.
 		 * @returns Whether a TS directive sits on the preceding line.
 		 */
-		function hasDirectiveOnLineBefore(line: number): boolean {
-			return sourceCode.getAllComments().some((comment) => {
-				return comment.loc.end.line === line - 1 && TS_DIRECTIVE.test(comment.value);
-			});
+		function hasDirectiveOnLineBefore(line: number, arrowToken: TSESTree.Token): boolean {
+			if (directiveStarts === undefined) {
+				directiveStarts = new Map();
+				for (const comment of sourceCode.getAllComments()) {
+					const endLine = comment.loc.end.line;
+					if (TS_DIRECTIVE.test(comment.value) && !directiveStarts.has(endLine)) {
+						directiveStarts.set(endLine, comment.range[0]);
+					}
+				}
+			}
+
+			const start = directiveStarts.get(line - 1);
+			return start !== undefined && start < arrowToken.range[0];
 		}
 
 		/**
@@ -628,6 +642,11 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			const parens = bodyParens(node, arrowToken);
 			const bodyStart = parens?.open ?? node.body;
 			const bodyEnd = parens?.close ?? node.body;
+			if (hasDirectiveOnLineBefore(bodyStart.loc.start.line, arrowToken)) {
+				context.report({ messageId, node });
+				return;
+			}
+
 			const comments = sourceCode.getCommentsBefore(bodyStart);
 
 			const arrowIndent = leadingWhitespace(lineOf(node.loc.start.line));
@@ -661,11 +680,6 @@ export const arrowReturnStyle: FlawlessRuleModule<Options, MessageIds> = createF
 			const replacement = ` {\n${[...commentLines, returnLine].join("\n")}\n${arrowIndent}}`;
 
 			const end = danglingCloser(node, bodyEnd)?.range[0] ?? bodyEnd.range[1];
-
-			if (hasDirectiveOnLineBefore(bodyStart.loc.start.line)) {
-				context.report({ messageId, node });
-				return;
-			}
 
 			context.report({
 				fix: (fixer) => fixer.replaceTextRange([arrowToken.range[1], end], replacement),

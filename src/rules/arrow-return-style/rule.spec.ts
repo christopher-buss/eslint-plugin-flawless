@@ -605,6 +605,22 @@ const invalid: Array<InvalidTestCase<Options>> = [
 		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
 		errors: [{ messageId: explicitMessageId }],
 	},
+	// A directive after the arrow moves with the body, so it still covers it.
+	{
+		code: unindent`
+			export const fn = (): number =>
+				// @ts-expect-error
+				"bad";
+		`,
+		output: unindent`
+			export const fn = (): number => {
+				// @ts-expect-error
+				return "bad";
+			};
+		`,
+		options: [{ namedExportsAlwaysUseExplicitReturn: true }],
+		errors: [{ messageId: explicitMessageId }],
+	},
 	{
 		code: unindent`
 			// plain comment
