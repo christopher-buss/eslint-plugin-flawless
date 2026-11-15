@@ -1,8 +1,9 @@
 # flawless rule benchmarks
 
 Wall-clock benchmarks for the plugin's rules, driven by
-[`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark).
-All fixtures share one `config.ts`:
+[`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark),
+plus a CodSpeed trial (`codspeed.ts`, see below). All `eslint-rule-benchmark`
+fixtures share one `config.ts`:
 
 - **`arrow-return-style`** gets a detailed, multi-case profile. Its predecessor
   (`eslint-plugin-arrow-return-style-x`) had pathological performance from
@@ -27,6 +28,7 @@ All fixtures share one `config.ts`:
 ```sh
 pnpm bench           # `prebench` builds first; see below for why that matters
 pnpm bench:scaling   # growth check; also builds first
+pnpm bench:codspeed  # CodSpeed trial as plain tinybench; also builds first
 ```
 
 For annotation timings over a real project, a separate runner is available:
@@ -155,7 +157,10 @@ use the numbers to compare a PR with main, not as production speed.
 
 Each task times `linter.verify` on a `SourceCode` that a `beforeEach` hook
 parses first, so parse is excluded. Typed subjects also get a new program (and
-type checker) per iteration. Before timing, the script checks that each subject
+type checker) per iteration. The timed `linter.verify` call also normalizes and
+validates the plain config object on each call (ESLint does not export
+`FlatConfigArray` for pre-building); that cost is constant and the same for
+base and PR, so it only dilutes the percentage. Before timing, the script checks that each subject
 reports, and that the oxfmt worker returns a verdict.
 
 Subjects (`SUBJECTS` in `codspeed.ts`):

@@ -23,8 +23,10 @@ on:
       - main
   workflow_dispatch:
 
+# Cancel superseded runs on a ref, but give each main push its own group so
+# no baseline run is cancelled.
 concurrency:
-  group: codspeed-${{ github.ref }}
+  group: codspeed-${{ github.event_name == 'push' && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:

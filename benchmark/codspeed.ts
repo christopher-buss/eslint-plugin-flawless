@@ -63,8 +63,7 @@ const SUBJECTS: Array<Subject> = [
 	},
 ];
 
-/** A compiler program over the typed project; `previous` reuses its parsed files. */
-function typedProgram(filename: string, previous?: ts.Program): ts.Program {
+const typedOptions = ((): ts.CompilerOptions => {
 	const parsed = ts.getParsedCommandLineOfConfigFile(
 		path.resolve(typedParserOptions.tsconfigRootDir, typedParserOptions.project),
 		{},
@@ -79,7 +78,32 @@ function typedProgram(filename: string, previous?: ts.Program): ts.Program {
 		throw new Error("Cannot read the typed benchmark project");
 	}
 
-	return ts.createProgram([filename], parsed.options, undefined, previous);
+	return parsed.options;
+})();
+
+/**
+ * A compiler host that caches every SourceFile except `filename`, so each
+ * program re-parses only the fixture, not the lib files.
+ */
+function cachingHost(filename: string): ts.CompilerHost {
+	const host = ts.createCompilerHost(typedOptions);
+	const cache = new Map<string, ts.SourceFile | undefined>();
+	const getSourceFile = host.getSourceFile.bind(host);
+	const fixture = path.normalize(filename);
+
+	host.getSourceFile = (fileName, ...rest) => {
+		if (path.normalize(fileName) === fixture) {
+			return getSourceFile(fileName, ...rest);
+		}
+
+		if (!cache.has(fileName)) {
+			cache.set(fileName, getSourceFile(fileName, ...rest));
+		}
+
+		return cache.get(fileName);
+	};
+
+	return host;
 }
 
 interface Prepared {
@@ -95,14 +119,14 @@ function prepare(subject: Subject): Prepared {
 	const code = readFileSync(filename, "utf8");
 	const isTyped = subject.testPath.startsWith("./cases/typed/");
 	const ruleKey = `flawless/${subject.ruleId}`;
+	const host = isTyped ? cachingHost(filename) : undefined;
 	let program: ts.Program | undefined;
 
 	// A new Program has a new type checker, so type caches never carry over
-	// between iterations; reusing the previous program only skips re-reading
-	// lib and fixture files.
+	// between iterations; the host only skips re-parsing lib files.
 	function parse(): SourceCode {
-		if (isTyped) {
-			program = typedProgram(filename, program);
+		if (host !== undefined) {
+			program = ts.createProgram([filename], typedOptions, host);
 		}
 
 		const { ast, scopeManager, services, visitorKeys } = tsParser.parseForESLint(code, {

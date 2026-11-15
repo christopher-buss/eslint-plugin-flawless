@@ -43,6 +43,7 @@ describe(affectedRules, () => {
 				"src/rules/test.ts",
 				"src/oxlint.ts",
 				"benchmark/README.md",
+				"benchmark/codspeed.ts",
 				"README.md",
 				".github/workflows/ci.yaml",
 			]),

@@ -21,6 +21,8 @@ const IGNORED = [
 	/(?:^|\/)\.gitkeep$/,
 	/^src\/rules\/test\.ts$/,
 	/^src\/oxlint[^/]*\.ts$/,
+	// The CodSpeed trial; its own workflow runs it.
+	/^benchmark\/codspeed\.ts$/,
 ];
 
 // Files outside a single rule that can shift every rule's timings: shared rule
