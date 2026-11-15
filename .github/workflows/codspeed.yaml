@@ -1,0 +1,67 @@
+name: CodSpeed
+
+on:
+  pull_request:
+    branches:
+      - main
+    # Same list as benchmark.yaml, plus this file.
+    paths:
+      - .github/workflows/benchmark.yaml
+      - .github/workflows/codspeed.yaml
+      - "benchmark/**"
+      - package.json
+      - "patches/**"
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - "src/**"
+      - tsconfig.json
+      - tsdown.config.ts
+  # No paths filter on main, so every main commit has a baseline to compare
+  # PRs against.
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Cancel superseded PR runs on a ref, but give each push and manual run its own
+# group so no baseline run is cancelled.
+concurrency:
+  group: codspeed-${{ github.event_name != 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codspeed:
+    # Tokenless upload: CodSpeed accepts it for public repositories, needs no
+    # repo secret, and works for fork PRs, which GitHub never grants an OIDC
+    # token. CodSpeed posts the PR comment through its GitHub App, so the job
+    # only reads the repo.
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          cache: pnpm
+          node-version: lts/*
+
+      - run: pnpm i -g @antfu/ni
+      - run: nci
+
+      # The bench imports the built plugin, and the oxfmt worker resolves from
+      # dist.
+      - run: nr build
+
+      # Simulation mode counts CPU instructions under Valgrind, so results
+      # compare across runs on noisy shared runners. `node --import tsx`, not
+      # the tsx CLI: the CLI spawns a child process, which CodSpeed does not
+      # measure.
+      - uses: CodSpeedHQ/action@af75f77f17a054769abefaa42fe8dc2975469b5f # v5.6.3
+        with:
+          mode: simulation
+          run: node --import tsx benchmark/codspeed.ts

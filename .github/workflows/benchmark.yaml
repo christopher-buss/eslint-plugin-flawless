@@ -5,7 +5,8 @@ on:
     branches:
       - main
     # Keep in sync with GLOBAL in benchmark/affected-rules.mjs, which narrows
-    # the run to the rules a change can affect.
+    # the run to the rules a change can affect, and with the paths list in
+    # .github/workflows/codspeed.yaml.
     paths:
       - .github/workflows/benchmark.yaml
       - "benchmark/**"

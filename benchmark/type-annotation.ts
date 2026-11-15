@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 import { noRedundantTypeAnnotation } from "../src/rules/no-redundant-type-annotation/rule";
+import { parseTsconfig } from "./shared";
 
 // Real-project profiling complements the synthetic typed fixtures in config.ts.
 // This measures the complete rule using ESLint's rule-only timings.
@@ -99,19 +100,7 @@ if (projectPath === "--scaling") {
 		throw new Error("Pass a tsconfig path or --scaling");
 	}
 	const configPath = path.resolve(projectPath);
-	const parsed = ts.getParsedCommandLineOfConfigFile(
-		configPath,
-		{},
-		{
-			...ts.sys,
-			onUnRecoverableConfigFileDiagnostic(diagnostic) {
-				throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
-			},
-		},
-	);
-	if (parsed === undefined) {
-		throw new Error(`Cannot read ${configPath}`);
-	}
+	const parsed = parseTsconfig(configPath, `Cannot read ${configPath}`);
 	const start = performance.now();
 	const program = ts.createProgram({
 		rootNames: parsed.fileNames,

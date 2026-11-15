@@ -1,8 +1,9 @@
 # flawless rule benchmarks
 
 Wall-clock benchmarks for the plugin's rules, driven by
-[`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark).
-All fixtures share one `config.ts`:
+[`eslint-rule-benchmark`](https://github.com/azat-io/eslint-rule-benchmark),
+plus a CodSpeed trial (`codspeed.ts`, see below). All `eslint-rule-benchmark`
+fixtures share one `config.ts`:
 
 - **`arrow-return-style`** gets a detailed, multi-case profile. Its predecessor
   (`eslint-plugin-arrow-return-style-x`) had pathological performance from
@@ -22,11 +23,16 @@ All fixtures share one `config.ts`:
 - **Benchmarked rules** also get a growth check (`scaling.ts`) that fails on
   super-linear (e.g. O(n²)) rule time, which a fixed-size fixture cannot show.
 
+`shared.ts` holds helpers for `codspeed.ts`, `scaling.ts`, and
+`type-annotation.ts`: the tsconfig parse, the per-rule config, and the report
+check.
+
 ## Running
 
 ```sh
 pnpm bench           # `prebench` builds first; see below for why that matters
 pnpm bench:scaling   # growth check; also builds first
+pnpm bench:codspeed  # CodSpeed trial as plain tinybench; also builds first
 ```
 
 For annotation timings over a real project, a separate runner is available:
@@ -143,6 +149,40 @@ The usual cause is a per-node scan of something that grows with the file:
 - Regexes over `sourceCode.text`, or walks of `ast.body` / `scope.through`,
   per reported node. Compute once per file and cache.
 
+## CodSpeed (trial)
+
+`codspeed.ts` runs a few rules through tinybench with the CodSpeed plugin.
+`.github/workflows/codspeed.yaml` runs it in CodSpeed's simulation mode on every
+push to main, on PRs that change the paths in its filter, and on manual runs.
+CodSpeed comments on the PR with the change against main.
+
+Simulation mode counts CPU instructions under Valgrind, not wall time, so the
+numbers are stable on shared runners. V8 runs with optimization off there, so
+use the numbers to compare a PR with main, not as production speed.
+
+Each task times `linter.verify` on a `SourceCode` that a `beforeEach` hook
+parses first, so parse is excluded. Typed subjects also get a new program (and
+type checker) per iteration. The timed `linter.verify` call also normalizes and
+validates the plain config object on each call (ESLint does not export
+`FlatConfigArray` for pre-building); that cost is constant and the same for
+base and PR, so it only dilutes the percentage. Before timing, the script checks that each subject
+reports, and that the oxfmt worker returns a verdict.
+
+Subjects (`SUBJECTS` in `codspeed.ts`):
+
+- `naming-convention` and `no-ignored-return` (typed), from `COARSE`.
+- `arrow-return-style` on `realistic.ts` with `useOxfmt:false`.
+- `arrow-return-style` on `over-limit-distinct.ts` with `useOxfmt:true`. The
+  oxfmt cache is warm when timing starts.
+
+Locally, without CodSpeed, it runs as plain tinybench and prints a table:
+
+```sh
+pnpm bench:codspeed
+```
+
+This is a trial. `scaling.ts` stays the gate.
+
 ## CI
 
 `.github/workflows/benchmark.yaml` runs on PRs that touch `src/`, `benchmark/`,
@@ -154,8 +194,8 @@ maps each changed file to a rule: `src/rules/<rule>/**` and
 `benchmark/cases/all/<rule>.tsx` to that rule, `cases/floating-*.ts` to
 `no-floating-point-equality`, `cases/typed/annotation-*.ts` to
 `no-redundant-type-annotation`, `cases/typed/assertion-*.ts` to
-`no-incompatible-assertion-types`, other `cases/*.ts` to `arrow-return-style`. Specs
-and Markdown are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
+`no-incompatible-assertion-types`, other `cases/*.ts` to `arrow-return-style`. Specs,
+Markdown, and `benchmark/codspeed.ts` are ignored. Anything shared (`src/rules/shared`, `src/utils`, the
 plugin entry, the benchmark config, the patch, dependencies) runs every rule.
 The result reaches `config.ts` as `BENCH_RULES`; when it names no benchmarked
 rule, `config.ts` exits after the coverage gate and the PR comment keeps its
