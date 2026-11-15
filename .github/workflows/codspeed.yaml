@@ -4,9 +4,10 @@ on:
   pull_request:
     branches:
       - main
-    # Same list as benchmark.yaml.
+    # Same list as benchmark.yaml, plus this file.
     paths:
       - .github/workflows/benchmark.yaml
+      - .github/workflows/codspeed.yaml
       - "benchmark/**"
       - package.json
       - "patches/**"
