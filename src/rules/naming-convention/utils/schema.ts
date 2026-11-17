@@ -12,7 +12,6 @@ import {
 
 const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	allowedWordsConfig: {
-		additionalItems: false,
 		description:
 			"Words that may keep their own casing inside a name when checking `strictCamelCase` / `StrictPascalCase`, so an identifier can mirror an API spelling such as `CFrame`. A word only matches at a hump boundary, and the rest of the name is still checked normally. Replaces `settings.flawless.namingConvention.allowedWords` for this selector.",
 		items: {
@@ -31,7 +30,6 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	formatOptionsConfig: {
 		oneOf: [
 			{
-				additionalItems: false,
 				items: {
 					$ref: "#/$defs/predefinedFormats",
 				},
@@ -58,7 +56,6 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	},
 
 	prefixSuffixConfig: {
-		additionalItems: false,
 		items: {
 			minLength: 1,
 			type: "string",
@@ -66,7 +63,6 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 		type: "array",
 	},
 	typeArgumentOfConfig: {
-		additionalItems: false,
 		description:
 			"Restricts the selector to declarations written inside the explicit type arguments of a call to one of the listed functions, e.g. the `LogLevel` property in `withAttributes<{ LogLevel: Level }>(instance)`. Where `types` describes the declaration's value type, this describes where the declaration is written.",
 		items: {
@@ -77,8 +73,8 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	typeArgumentReferenceMatcher: {
 		additionalProperties: false,
 		anyOf: [
-			{ required: ["name"], type: "object" },
-			{ required: ["from"], type: "object" },
+			{ additionalProperties: true, required: ["name"], type: "object" },
+			{ additionalProperties: true, required: ["from"], type: "object" },
 		],
 		description:
 			"Callee matcher. The callee is resolved through TypeScript's symbol table, so a renamed import still matches. `from` on its own matches every function the module declares.",
@@ -113,9 +109,9 @@ const $DEFS: Record<string, JSONSchema.JSONSchema4> = {
 	typeReferenceMatcher: {
 		additionalProperties: false,
 		anyOf: [
-			{ required: ["name"], type: "object" },
-			{ required: ["returns"], type: "object" },
-			{ required: ["from"], type: "object" },
+			{ additionalProperties: true, required: ["name"], type: "object" },
+			{ additionalProperties: true, required: ["returns"], type: "object" },
+			{ additionalProperties: true, required: ["from"], type: "object" },
 		],
 		description:
 			"Type-reference matcher. Matches when the variable's type resolves to a symbol with the given `name`; if `from` is supplied, the symbol's declaration must also live in a file the specifier resolves to. `from` on its own matches every type the module declares, whatever its name. `returns` instead (or additionally) matches callable types by the return type of their call signatures.",
@@ -216,7 +212,6 @@ function selectorSchema(
 
 	if (modifiers && modifiers.length > 0) {
 		selector["modifiers"] = {
-			additionalItems: false,
 			items: {
 				enum: modifiers,
 				type: "string",
@@ -227,7 +222,6 @@ function selectorSchema(
 
 	if (allowType) {
 		selector["types"] = {
-			additionalItems: false,
 			items: {
 				$ref: "#/$defs/typeMatcher",
 			},
@@ -268,7 +262,6 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 				],
 			},
 			modifiers: {
-				additionalItems: false,
 				items: {
 					enum: Object.keys(Modifier),
 					type: "string",
@@ -276,7 +269,6 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 				type: "array",
 			},
 			selector: {
-				additionalItems: false,
 				items: {
 					enum: [...Object.keys(MetaSelector), ...Object.keys(Selector)],
 					type: "string",
@@ -287,7 +279,6 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 				$ref: "#/$defs/typeArgumentOfConfig",
 			},
 			types: {
-				additionalItems: false,
 				items: {
 					$ref: "#/$defs/typeMatcher",
 				},
@@ -301,7 +292,6 @@ function selectorsSchema(): JSONSchema.JSONSchema4 {
 
 export const SCHEMA: JSONSchema.JSONSchema4 = {
 	$defs: $DEFS,
-	additionalItems: false,
 	items: {
 		oneOf: [
 			selectorsSchema(),
