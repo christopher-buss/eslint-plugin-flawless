@@ -1741,6 +1741,39 @@ const invalid: Array<InvalidTestCase> = [
 		].join("\n"),
 		errors: Array.from({ length: 10 }, () => ({ messageId })),
 	},
+	// Past the work limit, a variable inside a loop is not verified, so it is
+	// not reported: only a replay of the loop can show its removal is safe.
+	{
+		code: [
+			"declare function read(): number;",
+			...Array.from({ length: 10 }, (_, index) => `const n${index}: number = read();`),
+			unindent`
+			interface Page { readonly next: null | string }
+			declare function request<T extends { after: null | string }>(variables: T): { page: Page };
+			let after: null | string = null;
+			while (after !== null) {
+				const reply = request({ after });
+				const page: Page = reply.page;
+				after = page.next;
+			}
+			`,
+		].join("\n"),
+		output: [
+			"declare function read(): number;",
+			...Array.from({ length: 10 }, (_, index) => `const n${index} = read();`),
+			unindent`
+			interface Page { readonly next: null | string }
+			declare function request<T extends { after: null | string }>(variables: T): { page: Page };
+			let after: null | string = null;
+			while (after !== null) {
+				const reply = request({ after });
+				const page: Page = reply.page;
+				after = page.next;
+			}
+			`,
+		].join("\n"),
+		errors: Array.from({ length: 10 }, () => ({ messageId })),
+	},
 	// A callback inside a generic argument of a callee that is not generic
 	// still needs proof.
 	{

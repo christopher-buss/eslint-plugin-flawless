@@ -108,6 +108,20 @@ export function verifyAnnotations<C extends Candidate>(
 		rejected.push({ candidate, reason });
 	}
 
+	/**
+	 * Leaves a removal unchecked. One inside a loop is rejected: it can form a
+	 * cycle through a variable the loop assigns, which only a replay finds.
+	 * @param candidate - The removal left unchecked.
+	 * @param reason - Why it was not checked.
+	 */
+	function leaveUnchecked(candidate: C, reason: string): void {
+		if (insideLoop(candidate.owner)) {
+			recordRejection(candidate, reason);
+		} else {
+			unverified.push({ candidate, reason });
+		}
+	}
+
 	if (candidates.length === 0) {
 		return { accepted: [], acceptedAlone: [], rejected, unverified };
 	}
@@ -336,7 +350,7 @@ export function verifyAnnotations<C extends Candidate>(
 		// fix pass verifies them once earlier fixes are applied.
 		const overLimit = eligible.slice(MAX_PROGRAMS - 2);
 		for (const candidate of overLimit) {
-			unverified.push({ candidate, reason: "The verification work limit was reached" });
+			leaveUnchecked(candidate, "The verification work limit was reached");
 		}
 
 		// An editor applies one fix at a time. Removals that cannot influence
@@ -377,7 +391,7 @@ export function verifyAnnotations<C extends Candidate>(
 			if (safeAlone.has(candidate)) {
 				acceptedAlone.push(candidate);
 			} else {
-				unverified.push({ candidate, reason });
+				leaveUnchecked(candidate, reason);
 			}
 		}
 
