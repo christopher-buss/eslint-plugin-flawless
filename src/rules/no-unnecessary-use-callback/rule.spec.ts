@@ -10,6 +10,17 @@ const valid: Array<ValidTestCase> = [
 	{
 		filename,
 		code: tsx`
+			import { useCallback, useEffect } from "react";
+
+			export function Component({ id }: { id: string }) {
+				const log = useCallback(() => console.log(id), [id]);
+				return <button onClick={log} />;
+			}
+		`,
+	},
+	{
+		filename,
+		code: tsx`
 			import { useState } from "react";
 
 			const Comp = () => {
