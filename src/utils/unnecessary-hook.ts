@@ -143,7 +143,7 @@ export function createUnnecessaryHookRule<MessageIds extends string>({
 function findEnclosingEffect(node: TSESTree.Node): null | TSESTree.Node {
 	let current: TSESTree.Node | undefined = node.parent;
 	while (current !== undefined) {
-		if (core.isUseEffectLikeCall(current)) {
+		if (current.type === AST_NODE_TYPES.CallExpression && core.isUseEffectLikeCall(current)) {
 			return current;
 		}
 

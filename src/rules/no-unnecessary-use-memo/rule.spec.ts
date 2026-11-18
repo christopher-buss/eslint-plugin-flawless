@@ -10,6 +10,17 @@ const valid: Array<ValidTestCase> = [
 	{
 		filename,
 		code: tsx`
+			import { useEffect, useMemo } from "react";
+
+			export function Component({ id }: { id: string }) {
+				const label = useMemo(() => id.toUpperCase(), [id]);
+				return <span title={label} />;
+			}
+		`,
+	},
+	{
+		filename,
+		code: tsx`
 			function Component() {
 				const foo = "foo";
 				const bar = useMemo(() => foo, [foo]);
