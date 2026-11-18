@@ -55,6 +55,20 @@ export function spaces(text: string): void {
 }`,
 	},
 	{
+		name: "loop generic call cycle",
+		code: `
+interface Page { readonly next: null | string }
+declare function request<T extends { after: null | string }>(variables: T): { page: Page };
+export function last(): void {
+	let after: null | string = null;
+	while (after !== null) {
+		const reply = request({ after });
+		const page: Page = reply.page;
+		after = page.next;
+	}
+}`,
+	},
+	{
 		name: "loop assertion cycle",
 		code: `
 declare function assert<T>(condition: T, message?: string): asserts condition;
