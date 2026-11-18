@@ -1,6 +1,6 @@
 {
 	"name": "eslint-plugin-flawless",
-	"version": "1.18.0",
+	"version": "1.18.1",
 	"description": "A personal, opinionated set of ESLint rules",
 	"keywords": [
 		"eslint",
