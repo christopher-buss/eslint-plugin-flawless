@@ -29,10 +29,11 @@ The rule reports only when removing the annotation leaves the variable with
 general: an annotation that widens, narrows, names, or protects anything is left
 alone.
 
-Three positions are checked: a variable declaration with an initializer, a
-parameter of a function expression that has a contextual type, and a catch
-clause variable. A function's return type is checked only when an option asks
-for it; see [Return types](#return-types).
+Four positions are checked: a variable declaration with an initializer, a
+parameter of a function expression that has a contextual type, a catch clause
+variable, and an explicit type argument list; see
+[Type arguments](#type-arguments). A function's return type is checked only when
+an option asks for it; see [Return types](#return-types).
 
 ### When an annotation is doing work
 
@@ -138,11 +139,12 @@ const value: string = pick(); // NOT reported — without the annotation, `T` is
 
 The rule skips any call, `new` expression, or tagged template whose signature is
 generic and whose return type involves one of its own type parameters, unless
-the call site writes its type arguments out, or every type parameter appears in
-one of the signature's parameter types that receives an argument other than an
-object or array literal. Such a literal can leave out what infers the type
-parameter, as `Array.from({ length })` does. The arguments then infer the type
-parameters before the context is consulted, so
+the call site writes its type arguments out (that list can itself get a
+`redundantTypeArguments` report; see [Type arguments](#type-arguments)), or
+every type parameter appears in one of the signature's parameter types that
+receives an argument other than an object or array literal. Such a literal can
+leave out what infers the type parameter, as `Array.from({ length })` does. The
+arguments then infer the type parameters before the context is consulted, so
 `const value: string = first(items)` is checked. A mention behind an alias, a
 mapped type, or a conditional type is not seen, so such a call is still skipped.
 
@@ -496,6 +498,9 @@ identity<string>("a"); // NOT reported — without it, `T` is `"a"`
 declare function listen<T>(handler: (event: T) => void, sample: T): void;
 listen<number | string>((event) => String(event), label); // NOT reported — without it, `event` is `string`
 ```
+
+A list equal to what inference gives through a type parameter default is also
+reported; this overlaps typescript-eslint's `no-unnecessary-type-arguments`.
 
 A list that contains `any`, or an alias that TypeScript erases, is left alone,
 as for an annotation.
