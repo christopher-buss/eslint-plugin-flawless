@@ -463,6 +463,58 @@ Under `isolatedDeclarations` the emitter reads an exported function's return
 type, so a function that is exported, that an exported declaration reads (see
 below), or that is a method of an exported class keeps it (TS9007).
 
+## Type arguments
+
+An explicit type argument list on a call, a `new` expression, a tagged template,
+or a JSX element is reported when inference gives exactly the same types without
+it:
+
+```ts
+declare function identity<T>(value: T): T;
+declare function useState<S>(initial: S): [S, (next: S) => void];
+declare const label: string;
+declare const labels: Array<string>;
+
+identity<string>(label); // reported — `identity(label)` is also `string`
+useState<boolean>(false); // reported — `S` infers `boolean`
+const set = new Set<string>(labels); // reported — infers `Set<string>`
+labels.map<number>((text) => text.length); // reported — infers `number`
+```
+
+The fix removes the whole list, because TypeScript cannot infer only some of the
+type arguments. The check compares exact types, not assignability: a type
+argument that narrows or widens the inferred type is doing work. It compares the
+signature the expression resolves to, the expression's own type, and the types
+inside its arguments, such as a callback's parameters. So these are not
+reported:
+
+```ts
+useState<null | string>(null); // NOT reported — without it, `S` is `null`
+const empty = new Set<string>(); // NOT reported — without it, `Set<unknown>`
+identity<string>("a"); // NOT reported — without it, `T` is `"a"`
+
+declare function listen<T>(handler: (event: T) => void, sample: T): void;
+listen<number | string>((event) => String(event), label); // NOT reported — without it, `event` is `string`
+```
+
+A list that contains `any`, or an alias that TypeScript erases, is left alone,
+as for an annotation.
+
+A type argument list can pin a callback's parameter type that is also annotated.
+Each removal alone can keep every type, but not both:
+
+```ts
+declare function apply<T>(callback: (value: T) => T): void;
+
+apply<number>((value: number) => value); // both reported; the fix removes only `: number`
+```
+
+Both are reported, and the fix removes only the parameter annotation, so the
+combined fix never makes `value` implicitly `any`.
+
+Type arguments in type positions, such as `Array<string>` in an annotation, are
+not checked.
+
 ## Exported variables under `isolatedDeclarations`
 
 The `isolatedDeclarations` compiler option makes the declaration emitter work

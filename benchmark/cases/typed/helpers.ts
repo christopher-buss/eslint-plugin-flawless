@@ -1,3 +1,4 @@
+export declare function identity<T>(value: T): T;
 export declare function read(): string;
 export declare function run(use: (value: string) => string): void;
 

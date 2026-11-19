@@ -16,8 +16,8 @@ export const TYPE_ANNOTATION_CASES = [
 		testPath: "./cases/typed/annotation-dense.ts",
 	},
 	{
-		expectedIssues: 8,
-		name: "8 contextual parameter removals",
+		expectedIssues: 9,
+		name: "8 contextual parameter removals, 1 type argument removal",
 		testPath: "./cases/typed/annotation-parameters.ts",
 	},
 	{
