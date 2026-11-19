@@ -139,14 +139,14 @@ const value: string = pick(); // NOT reported — without the annotation, `T` is
 
 The rule skips any call, `new` expression, or tagged template whose signature is
 generic and whose return type involves one of its own type parameters, unless
-the call site writes its type arguments out (that list can itself get a
-`redundantTypeArguments` report; see [Type arguments](#type-arguments)), or
-every type parameter appears in one of the signature's parameter types that
-receives an argument other than an object or array literal. Such a literal can
-leave out what infers the type parameter, as `Array.from({ length })` does. The
-arguments then infer the type parameters before the context is consulted, so
-`const value: string = first(items)` is checked. A mention behind an alias, a
-mapped type, or a conditional type is not seen, so such a call is still skipped.
+the call site writes its type arguments out (that list is then kept; see
+[Type arguments](#type-arguments)), or every type parameter appears in one of
+the signature's parameter types that receives an argument other than an object
+or array literal. Such a literal can leave out what infers the type parameter,
+as `Array.from({ length })` does. The arguments then infer the type parameters
+before the context is consulted, so `const value: string = first(items)` is
+checked. A mention behind an alias, a mapped type, or a conditional type is not
+seen, so such a call is still skipped.
 
 Such a call as an argument is checked when the outer callee has no generic
 signature, or the outer call writes its type arguments out. The parameter type
@@ -497,7 +497,13 @@ identity<string>("a"); // NOT reported — without it, `T` is `"a"`
 
 declare function listen<T>(handler: (event: T) => void, sample: T): void;
 listen<number | string>((event) => String(event), label); // NOT reported — without it, `event` is `string`
+
+export const names: Set<string> = new Set<string>(labels); // list NOT reported — the annotation is checked instead
 ```
+
+A list on the initializer of an annotated declaration (a variable, a parameter
+default, or a class property) is not reported; the annotation is checked
+instead, which agrees with `consistent-generic-constructors`.
 
 A list equal to what inference gives through a type parameter default is also
 reported; this overlaps typescript-eslint's `no-unnecessary-type-arguments`.

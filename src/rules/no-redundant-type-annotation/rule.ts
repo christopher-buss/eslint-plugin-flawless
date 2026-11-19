@@ -186,6 +186,34 @@ const messages = {
 type ContextDependence = "dependent" | "independent" | "unproven";
 
 /**
+ * Tells if the node is the initializer of a declaration with its own
+ * annotation. The annotation is checked instead, which also agrees with
+ * `consistent-generic-constructors`.
+ *
+ * @param node - The call, `new` expression, tagged template, or element.
+ * @returns True when the parent declaration has an annotation.
+ */
+function isAnnotatedInitializer(node: CallLike): boolean {
+	const { parent } = node;
+	if (
+		parent.type === AST_NODE_TYPES.AccessorProperty ||
+		parent.type === AST_NODE_TYPES.PropertyDefinition
+	) {
+		return parent.value === node && parent.typeAnnotation !== undefined;
+	}
+
+	if (parent.type === AST_NODE_TYPES.AssignmentPattern) {
+		return parent.right === node && parent.left.typeAnnotation !== undefined;
+	}
+
+	return (
+		parent.type === AST_NODE_TYPES.VariableDeclarator &&
+		parent.init === node &&
+		parent.id.typeAnnotation !== undefined
+	);
+}
+
+/**
  * Reports whether a parameter carries no type annotation of its own.
  *
  * An untyped parameter takes its type from the surrounding contextual type,
@@ -3072,7 +3100,7 @@ function create(
 	 */
 	function checkTypeArguments(node: CallLike): void {
 		const list = node.typeArguments;
-		if (list === undefined) {
+		if (list === undefined || isAnnotatedInitializer(node)) {
 			return;
 		}
 

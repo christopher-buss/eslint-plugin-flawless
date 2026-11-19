@@ -1405,7 +1405,7 @@ const invalid: Array<InvalidTestCase> = [
 			const value = pick<string>();
 		`,
 		// Without both, `T` is its default.
-		errors: [{ messageId }, { messageId: typeArgumentsMessageId }],
+		errors: [{ messageId }],
 	},
 	{
 		code: unindent`
@@ -1416,7 +1416,7 @@ const invalid: Array<InvalidTestCase> = [
 			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
 			const value = tag<string>\`\`;
 		`,
-		errors: [{ messageId }, { messageId: typeArgumentsMessageId }],
+		errors: [{ messageId }],
 	},
 	// More than one signature means the arguments may pick one, but here the
 	// list picks the same one as inference.
@@ -2554,6 +2554,18 @@ const typeArgumentsInvalid: Array<InvalidTestCase> = [
 		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
 		output: withGenerics("apply<number>((value) => value);"),
 	},
+	{
+		// The list on an annotated initializer is kept; only the annotation
+		// is checked.
+		code: "function g() { const s: Set<string> = new Set<string>(); return s; }",
+		errors: [{ messageId }],
+		output: "function g() { const s = new Set<string>(); return s; }",
+	},
+	{
+		code: "function h() { let m: Map<string, number> = new Map<string, number>(); return m; }",
+		errors: [{ messageId }],
+		output: "function h() { let m = new Map<string, number>(); return m; }",
+	},
 ];
 
 run({
@@ -2573,6 +2585,11 @@ run({
 		withGenerics(unindent`tag<string | number>\`\${label}\`;`),
 		// `any` is never restated.
 		withGenerics("identity<any>(label);"),
+		// A list on the initializer of an annotated declaration is kept.
+		"export const s: Set<string> = new Set<string>();",
+		"export function f(m: Set<string> = new Set<string>()): void {}",
+		"export class C { p: Set<string> = new Set<string>(); }",
+		withGenerics("export const value: string = identity<string>(label);"),
 	],
 });
 
