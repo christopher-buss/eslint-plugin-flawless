@@ -8,7 +8,7 @@ import ts from "typescript";
 import type { EslintRuleModule } from "../../util.ts";
 import { createEslintRule } from "../../util.ts";
 import { pushChildNodes } from "../../utils/nested-expressions.ts";
-import { verifyAnnotations } from "./verify.ts";
+import { isTypeArgumentOwner, verifyAnnotations } from "./verify.ts";
 import type { Candidate } from "./verify.ts";
 
 const {
@@ -1143,13 +1143,7 @@ function create(
 		const { annotation, requiresProof } = removal;
 		if (annotation.type === AST_NODE_TYPES.TSTypeParameterInstantiation) {
 			const owner = services.esTreeNodeToTSNodeMap.get(annotation.parent);
-			if (
-				ts.isCallExpression(owner) ||
-				ts.isNewExpression(owner) ||
-				ts.isTaggedTemplateExpression(owner) ||
-				ts.isJsxOpeningElement(owner) ||
-				ts.isJsxSelfClosingElement(owner)
-			) {
+			if (isTypeArgumentOwner(owner)) {
 				candidates.push({ ...removal, owner, range: annotation.range });
 			}
 

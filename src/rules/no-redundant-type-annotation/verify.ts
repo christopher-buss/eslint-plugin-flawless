@@ -74,7 +74,12 @@ interface Observation {
 	readonly original: () => string;
 }
 
-function isTypeArgumentOwner(owner: Candidate["owner"]): owner is TypeArgumentOwner {
+/**
+ * Tells whether an owner holds a type argument list.
+ * @param owner - The owner to test.
+ * @returns Whether it is a call, `new` expression, tagged template, or element.
+ */
+export function isTypeArgumentOwner(owner: ts.Node): owner is TypeArgumentOwner {
 	return (
 		ts.isCallExpression(owner) ||
 		ts.isNewExpression(owner) ||
@@ -1417,7 +1422,7 @@ function typeArgumentOperands(owner: TypeArgumentOwner): Array<ts.Node> {
 
 /**
  * Describes the signature an expression resolves to, with each parameter
- * and the return type.
+ * the return type, and the type predicate.
  * @param checker - The checker to resolve with.
  * @param node - A call, `new` expression, tagged template, or element.
  * @param printType - Prints a type of the signature.
@@ -1438,7 +1443,14 @@ function printSignature(
 	const parameters = signature.getParameters().map((parameter) => {
 		return `${parameter.name}: ${printType(checker.getTypeOfSymbolAtLocation(parameter, node))}`;
 	});
-	return `(${parameters.join(", ")}) => ${printType(signature.getReturnType())}`;
+	const predicate = checker.getTypePredicateOfSignature(signature);
+	let narrows = "";
+	if (predicate !== undefined) {
+		const narrowed = predicate.type === undefined ? "none" : printType(predicate.type);
+		narrows = ` ${predicate.kind} ${predicate.parameterName ?? "this"}@${predicate.parameterIndex ?? -1} is ${narrowed}`;
+	}
+
+	return `(${parameters.join(", ")}) => ${printType(signature.getReturnType())}${narrows}`;
 }
 
 function observedNodes(

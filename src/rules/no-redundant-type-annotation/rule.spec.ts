@@ -930,6 +930,20 @@ const valid: Array<ValidTestCase> = [
 		declare function on2<E = string>(cb: (e: E) => void): E;
 		const v6: number = on2((e) => {});
 	`,
+	// The type arguments set what an assertion or a type guard narrows to.
+	unindent`
+		declare function assertIs<T>(value: unknown): asserts value is T;
+		declare const x: unknown;
+		assertIs<string>(x);
+		x;
+	`,
+	unindent`
+		declare function is<T>(value: unknown): value is T;
+		declare const x: unknown;
+		if (is<string>(x)) {
+			const y = x;
+		}
+	`,
 ];
 
 const invalid: Array<InvalidTestCase> = [
@@ -1403,6 +1417,21 @@ const invalid: Array<InvalidTestCase> = [
 			const value = tag<string>\`\`;
 		`,
 		errors: [{ messageId }, { messageId: typeArgumentsMessageId }],
+	},
+	// More than one signature means the arguments may pick one, but here the
+	// list picks the same one as inference.
+	{
+		code: unindent`
+			declare function f<T>(fn: (value: T) => void): void;
+			declare function f<T>(fn: (value: T) => void, extra: number): void;
+			f<string>((value: string) => {});
+		`,
+		output: unindent`
+			declare function f<T>(fn: (value: T) => void): void;
+			declare function f<T>(fn: (value: T) => void, extra: number): void;
+			f((value: string) => {});
+		`,
+		errors: [{ messageId: typeArgumentsMessageId }],
 	},
 	// A tag that is not generic has nothing to infer.
 	{
