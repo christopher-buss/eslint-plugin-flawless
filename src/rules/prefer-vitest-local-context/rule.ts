@@ -1192,7 +1192,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 			members.push({ key: parent.property.name, node: parent });
 		}
 
-		const keys = new Set<string>([...fixtures, ...members.map(({ key }) => key)]);
+		const keys = new Set([...fixtures, ...members.map(({ key }) => key)]);
 		if ([...keys].some((key) => RESERVED_WORDS.has(key))) {
 			return null;
 		}

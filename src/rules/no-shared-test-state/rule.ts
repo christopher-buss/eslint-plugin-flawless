@@ -437,7 +437,7 @@ function createOnce(context: FlawlessRuleContext<MessageIds, Options>): Flawless
 	 * @param found - Receives each binding declared outside the callback.
 	 */
 	function collectWrites(callback: FunctionNode, found: Set<Variable>): void {
-		const visited = new Set<FunctionNode>([callback]);
+		const visited = new Set([callback]);
 		const pending = [callback];
 		for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
 			const { helpers, variables } = getDirectWrites(next);
