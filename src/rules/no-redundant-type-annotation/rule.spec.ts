@@ -13,6 +13,7 @@ import { noRedundantTypeAnnotation, RULE_NAME } from "./rule.ts";
 const catchMessageId = "redundantCatch";
 const messageId = "redundant";
 const parameterMessageId = "redundantParameter";
+const typeArgumentsMessageId = "redundantTypeArguments";
 
 const valid: Array<ValidTestCase> = [
 	...regressions.map(({ code }) => code),
@@ -696,13 +697,6 @@ const valid: Array<ValidTestCase> = [
 		const make: () => Generator<(s: string) => string> = function* () {
 			yield* [(s: string) => s];
 		};
-	`,
-	// More than one signature means the arguments may pick one, even with type
-	// arguments written out.
-	unindent`
-		declare function f<T>(fn: (value: T) => void): void;
-		declare function f<T>(fn: (value: T) => void, extra: number): void;
-		f<string>((value: string) => {});
 	`,
 	// A generic class declares its type parameters on the class, not on the
 	// constructor, and `new` infers them all the same.
@@ -1396,7 +1390,8 @@ const invalid: Array<InvalidTestCase> = [
 			declare function pick<T = number>(): T;
 			const value = pick<string>();
 		`,
-		errors: [{ messageId }],
+		// Without both, `T` is its default.
+		errors: [{ messageId }, { messageId: typeArgumentsMessageId }],
 	},
 	{
 		code: unindent`
@@ -1407,7 +1402,7 @@ const invalid: Array<InvalidTestCase> = [
 			declare function tag<T>(strings: TemplateStringsArray): Array<T>;
 			const value = tag<string>\`\`;
 		`,
-		errors: [{ messageId }],
+		errors: [{ messageId }, { messageId: typeArgumentsMessageId }],
 	},
 	// A tag that is not generic has nothing to infer.
 	{
@@ -2049,7 +2044,8 @@ const invalid: Array<InvalidTestCase> = [
 			declare function wrap<T>(callback: (value: T) => T): void;
 			wrap<number>((value) => value);
 		`,
-		errors: [{ messageId: parameterMessageId }],
+		// Each removal alone keeps every type, but not both.
+		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
 	},
 	{
 		code: unindent`
@@ -2064,7 +2060,7 @@ const invalid: Array<InvalidTestCase> = [
 			}
 			new Box<(s: string) => string>((s) => s);
 		`,
-		errors: [{ messageId: parameterMessageId }],
+		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
 	},
 	// Without a type parameter, a tag or a generator's yield type is the
 	// context the annotation restates.
@@ -2381,7 +2377,7 @@ const jsxInvalid: Array<InvalidTestCase> = [
 			declare function One<T>(props: { a: T }): JSX.Element;
 			<One<(s: string) => string> a={(s: string) => s} />;
 		`),
-		errors: [{ messageId: parameterMessageId }],
+		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
 		filename: jsxFilename,
 		output: withJsx(unindent`
 			declare function One<T>(props: { a: T }): JSX.Element;
@@ -2460,6 +2456,140 @@ run({
 			code: withJsx(unindent`
 				declare function Render<T>(props: { children: T }): JSX.Element;
 				<Render>{(s: string) => s}</Render>;
+			`),
+		},
+	],
+});
+
+// A type argument list is redundant when inference gives every observed type
+// exactly: the expression's own type and its operands' contextual types.
+const typeArgumentDeclarations = unindent`
+	declare function identity<T>(value: T): T;
+	declare function useState<S>(initial: S): [S, (next: S) => void];
+	declare function listen<T>(handler: (event: T) => void, sample: T): void;
+	declare function apply<T>(callback: (value: T) => T): void;
+	declare function tag<T>(strings: TemplateStringsArray, ...values: Array<T>): Array<T>;
+	declare const label: string;
+	declare const labels: Array<string>;
+`;
+
+/**
+ * Declares the generic functions and values the type argument cases use.
+ *
+ * @param code - The test source.
+ * @returns The source with the declarations above it.
+ */
+function withGenerics(code: string): string {
+	return `${typeArgumentDeclarations}\n${code}`;
+}
+
+const typeArgumentsInvalid: Array<InvalidTestCase> = [
+	{
+		code: withGenerics("identity<string>(label);"),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		output: withGenerics("identity(label);"),
+	},
+	{
+		// `S` infers `boolean`, not `false`.
+		code: withGenerics("useState<boolean>(false);"),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		output: withGenerics("useState(false);"),
+	},
+	{
+		code: withGenerics("new Set<string>(labels);"),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		output: withGenerics("new Set(labels);"),
+	},
+	{
+		// The callback's `text` keeps its type from the array.
+		code: withGenerics("labels.map<number>((text) => text.length);"),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		output: withGenerics("labels.map((text) => text.length);"),
+	},
+	{
+		code: withGenerics(unindent`tag<string>\`\${label}\`;`),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		output: withGenerics(unindent`tag\`\${label}\`;`),
+	},
+	{
+		// The parameter's context comes from the array, not from `U`, so
+		// the fix removes both.
+		code: withGenerics("labels.map<number>((text: string) => text.length);"),
+		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
+		output: withGenerics("labels.map((text) => text.length);"),
+	},
+	{
+		// Each removal alone keeps every type, but together they make
+		// `value` implicitly `any`. The fix removes only the annotation.
+		code: withGenerics("apply<number>((value: number) => value);"),
+		errors: [{ messageId: typeArgumentsMessageId }, { messageId: parameterMessageId }],
+		output: withGenerics("apply<number>((value) => value);"),
+	},
+];
+
+run({
+	name: `${RULE_NAME}/type-arguments`,
+	invalid: typeArgumentsInvalid,
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		// Without the list, `S` is `null`.
+		withGenerics("useState<string | null>(null);"),
+		// Without the list, `T` is `unknown`.
+		"new Set<string>();",
+		// Without the list, `T` is `"a"`.
+		withGenerics('identity<string>("a");'),
+		// Only the callback's contextual type changes: `event` is `string`
+		// without the list. The call's type stays `void`.
+		withGenerics("listen<string | number>((event) => {}, label);"),
+		withGenerics(unindent`tag<string | number>\`\${label}\`;`),
+		// `any` is never restated.
+		withGenerics("identity<any>(label);"),
+	],
+});
+
+const typeArgumentsJsxInvalid: Array<InvalidTestCase> = [
+	{
+		code: withJsx(unindent`
+			declare function Show<T>(props: { value: T }): JSX.Element;
+			declare const label: string;
+			<Show<string> value={label} />;
+		`),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		filename: jsxFilename,
+		output: withJsx(unindent`
+			declare function Show<T>(props: { value: T }): JSX.Element;
+			declare const label: string;
+			<Show value={label} />;
+		`),
+	},
+	{
+		code: withJsx(unindent`
+			declare function Show<T>(props: { value: T; children?: unknown }): JSX.Element;
+			declare const label: string;
+			<Show<string> value={label}></Show>;
+		`),
+		errors: [{ messageId: typeArgumentsMessageId }],
+		filename: jsxFilename,
+		output: withJsx(unindent`
+			declare function Show<T>(props: { value: T; children?: unknown }): JSX.Element;
+			declare const label: string;
+			<Show value={label}></Show>;
+		`),
+	},
+];
+
+run({
+	name: `${RULE_NAME}/type-arguments-jsx`,
+	invalid: typeArgumentsJsxInvalid,
+	rule: noRedundantTypeAnnotation,
+	valid: [
+		{
+			filename: jsxFilename,
+			// Without the list, `T` is `string`.
+			code: withJsx(unindent`
+				declare function Show<T>(props: { value: T }): JSX.Element;
+				declare const label: string;
+				<Show<string | number> value={label} />;
 			`),
 		},
 	],
@@ -3856,6 +3986,8 @@ describe(`${RULE_NAME}/fix-safety`, () => {
 		const failures = checkFixes([
 			...toFixedSnippets(invalid, "file.ts"),
 			...toFixedSnippets(jsxInvalid, jsxFilename),
+			...toFixedSnippets(typeArgumentsInvalid, "file.ts"),
+			...toFixedSnippets(typeArgumentsJsxInvalid, jsxFilename),
 			...toFixedSnippets(looseNullInvalid, "file.ts"),
 			...toFixedSnippets(looseNullReturnInvalid, "file.ts"),
 			...toFixedSnippets(isolatedDeclarationsInvalid, "file.ts"),

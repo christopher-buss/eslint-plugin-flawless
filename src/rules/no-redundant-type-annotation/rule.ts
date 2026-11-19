@@ -36,12 +36,14 @@ const CATCH_MESSAGE_ID = "redundantCatch";
 const MESSAGE_ID = "redundant";
 const PARAMETER_MESSAGE_ID = "redundantParameter";
 const RETURN_MESSAGE_ID = "redundantReturn";
+const TYPE_ARGUMENTS_MESSAGE_ID = "redundantTypeArguments";
 
 export type MessageIds =
 	| typeof CATCH_MESSAGE_ID
 	| typeof MESSAGE_ID
 	| typeof PARAMETER_MESSAGE_ID
-	| typeof RETURN_MESSAGE_ID;
+	| typeof RETURN_MESSAGE_ID
+	| typeof TYPE_ARGUMENTS_MESSAGE_ID;
 
 export interface NoRedundantTypeAnnotationOptions {
 	/**
@@ -93,14 +95,17 @@ type FunctionExpressionNode = TSESTree.ArrowFunctionExpression | TSESTree.Functi
 
 /** A redundant annotation, with what its report shows. */
 interface Removal {
-	/** The annotation to remove. */
-	readonly annotation: TSESTree.TSTypeAnnotation;
+	/** The annotation or type argument list to remove. */
+	readonly annotation: TSESTree.TSTypeAnnotation | TSESTree.TSTypeParameterInstantiation;
 	/** The report's message identifier. */
 	readonly messageId: MessageIds;
 	/** Report only when the verifier accepts the removal. */
 	readonly requiresProof?: boolean;
-	/** The annotated type to show in the report. */
-	readonly type: Type;
+	/**
+	 * The annotated type, or the type argument list's text, to show in the
+	 * report.
+	 */
+	readonly type: string | Type;
 }
 
 /** A signature's trailing rest parameter whose type is a tuple. */
@@ -169,6 +174,8 @@ const messages = {
 		"The `{{typeName}}` annotation restates the type this parameter already gets from its context. Remove it and let inference carry the type.",
 	[RETURN_MESSAGE_ID]:
 		"The `{{typeName}}` return type restates the type the function already returns. Remove it and let inference carry the type.",
+	[TYPE_ARGUMENTS_MESSAGE_ID]:
+		"The `{{typeName}}` type arguments restate the types the compiler already infers. Remove them and let inference carry the types.",
 };
 
 /**
@@ -1134,6 +1141,21 @@ function create(
 	 */
 	function collect(removal: Removal): void {
 		const { annotation, requiresProof } = removal;
+		if (annotation.type === AST_NODE_TYPES.TSTypeParameterInstantiation) {
+			const owner = services.esTreeNodeToTSNodeMap.get(annotation.parent);
+			if (
+				ts.isCallExpression(owner) ||
+				ts.isNewExpression(owner) ||
+				ts.isTaggedTemplateExpression(owner) ||
+				ts.isJsxOpeningElement(owner) ||
+				ts.isJsxSelfClosingElement(owner)
+			) {
+				candidates.push({ ...removal, owner, range: annotation.range });
+			}
+
+			return;
+		}
+
 		const owner = services.esTreeNodeToTSNodeMap.get(annotation.typeAnnotation).parent;
 		if (
 			isVariableDeclaration(owner) ||
@@ -1161,7 +1183,7 @@ function create(
 	 */
 	function report({ annotation, messageId, type }: Removal, fixable: boolean): void {
 		context.report({
-			data: { typeName: display(type) },
+			data: { typeName: typeof type === "string" ? type : display(type) },
 			fix: fixable ? (fixer) => removeAnnotation(fixer, annotation) : null,
 			messageId,
 			node: annotation,
@@ -1177,7 +1199,7 @@ function create(
 	 */
 	function removeAnnotation(
 		fixer: TSESLint.RuleFixer,
-		annotation: TSESTree.TSTypeAnnotation,
+		annotation: TSESTree.TSTypeAnnotation | TSESTree.TSTypeParameterInstantiation,
 	): Array<TSESLint.RuleFix> | TSESLint.RuleFix {
 		const { sourceCode } = context;
 		const comments = sourceCode.getCommentsInside(annotation);
@@ -3048,11 +3070,41 @@ function create(
 		}
 	}
 
+	/**
+	 * Collects an explicit type argument list. Only the verifier can show that
+	 * inference gives the same types, so the removal requires proof. The list
+	 * is removed whole, as TypeScript cannot infer only some type arguments.
+	 * @param node - The call, `new` expression, tagged template, or element.
+	 */
+	function checkTypeArguments(node: CallLike): void {
+		const list = node.typeArguments;
+		if (list === undefined) {
+			return;
+		}
+
+		for (const argument of list.params) {
+			const type = services.getTypeFromTypeNode(argument);
+			// `any` is never restated, and an alias that inference erases is
+			// documentation, as for an annotation.
+			if (containsAny(type) || namesAnErasedAlias(argument, type)) {
+				return;
+			}
+		}
+
+		collect({
+			annotation: list,
+			messageId: TYPE_ARGUMENTS_MESSAGE_ID,
+			requiresProof: true,
+			type: context.sourceCode.getText(list),
+		});
+	}
+
 	return {
 		"ArrowFunctionExpression": function (node): void {
 			checkFunctionParameters(node);
 			checkReturnType(node);
 		},
+		"CallExpression": checkTypeArguments,
 		"CatchClause": function ({ param }): void {
 			if (!catchVariablesAreUnknown) {
 				return;
@@ -3090,6 +3142,8 @@ function create(
 			checkFunctionParameters(node);
 			checkReturnType(node);
 		},
+		"JSXOpeningElement": checkTypeArguments,
+		"NewExpression": checkTypeArguments,
 		"Program:exit": function (node): void {
 			const source = services.esTreeNodeToTSNodeMap.get(node);
 			const { accepted, acceptedAlone, unverified } = verifyAnnotations(
@@ -3118,6 +3172,7 @@ function create(
 				report(candidate, false);
 			}
 		},
+		"TaggedTemplateExpression": checkTypeArguments,
 		"VariableDeclarator": function (node): void {
 			const { kind } = node.parent;
 			if (kind !== "const" && kind !== "let") {

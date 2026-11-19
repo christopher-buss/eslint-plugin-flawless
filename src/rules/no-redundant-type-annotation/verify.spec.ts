@@ -10,6 +10,20 @@ import { noRedundantTypeAnnotation } from "./rule.ts";
 import { COMPILER_FAILURE, FOREIGN_COMPILER, verifyAnnotations } from "./verify.ts";
 import type { Candidate } from "./verify.ts";
 
+/**
+ * The name of a declaration candidate's owner.
+ * @param owner - The owner, which must have a name.
+ * @param source - The file of the owner.
+ * @returns The name's text.
+ */
+function ownerName(owner: Candidate["owner"], source: ts.SourceFile): string {
+	if (!("name" in owner)) {
+		throw new Error("The owner has no name");
+	}
+
+	return owner.name.getText(source);
+}
+
 const directory = path.resolve(__dirname, "../../../fixtures");
 
 // With `CI=true`, typescript-eslint infers a single run, and a single run
@@ -255,7 +269,7 @@ function outer(): void {
 		const { candidates, program, source } = project(code);
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
 		expect(rejected).toStrictEqual([]);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual(["value"]);
 	});
 
 	it("distinguishes types that print the same name", () => {
@@ -288,10 +302,10 @@ export function inner(): void {
 }`;
 		const { candidates, program, source } = project(code, extra, { declaration: true });
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
-		expect(
-			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
-		).toStrictEqual(["outer"]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual(["value"]);
+		expect(rejected.map(({ candidate }) => ownerName(candidate.owner, source))).toStrictEqual([
+			"outer",
+		]);
 	});
 
 	it("skips the declaration naming check inside static blocks", () => {
@@ -311,7 +325,7 @@ export class C {
 }`;
 		const { candidates, program, source } = project(code, extra, { declaration: true });
 		const { accepted } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["value"]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual(["value"]);
 	});
 
 	it("leaves annotations alone when the edit cannot be verified", () => {
@@ -357,10 +371,11 @@ const kept: string = read();
 const second: string = json();`;
 		const { candidates, program, source } = project(code);
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["kept"]);
-		expect(
-			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
-		).toStrictEqual(["first", "second"]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual(["kept"]);
+		expect(rejected.map(({ candidate }) => ownerName(candidate.owner, source))).toStrictEqual([
+			"first",
+			"second",
+		]);
 		expect(compilerProblems(code, accepted)).toStrictEqual([]);
 	});
 
@@ -376,10 +391,10 @@ const c: string = get();
 const d: string = c;`;
 		const { candidates, program, source } = project(code);
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(
-			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
-		).toStrictEqual(["a"]);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual([
+		expect(rejected.map(({ candidate }) => ownerName(candidate.owner, source))).toStrictEqual([
+			"a",
+		]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual([
 			"a2",
 			"c",
 			"d",
@@ -438,10 +453,10 @@ const isNum: boolean = typeof v === "number";
 if (isNum) { console.log(v); }`;
 		const { candidates, program, source } = project(code);
 		const { accepted, rejected } = verifyAnnotations(program, source, candidates);
-		expect(accepted.map(({ owner }) => owner.name!.getText(source))).toStrictEqual(["ok"]);
-		expect(
-			rejected.map(({ candidate }) => candidate.owner.name!.getText(source)),
-		).toStrictEqual(["isNum"]);
+		expect(accepted.map(({ owner }) => ownerName(owner, source))).toStrictEqual(["ok"]);
+		expect(rejected.map(({ candidate }) => ownerName(candidate.owner, source))).toStrictEqual([
+			"isNum",
+		]);
 	});
 
 	it("checks parameters that share generic inference one at a time", () => {
@@ -525,7 +540,7 @@ const flat = list.flatMap(((item: string) => [item]));`;
 		const { candidates, program, source } = project(code);
 		const { accepted } = verifyAnnotations(program, source, candidates);
 		expect(accepted).toHaveLength(1);
-		expect(accepted[0]!.owner.name!.getText(source)).toBe("safe");
+		expect(ownerName(accepted[0]!.owner, source)).toBe("safe");
 	});
 
 	it("bounds work in files with many candidates", () => {

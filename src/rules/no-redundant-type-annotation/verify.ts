@@ -5,13 +5,7 @@ import ts from "typescript";
 
 /** An annotation that has already passed the rule's inexpensive checks. */
 export interface Candidate {
-	readonly owner:
-		| ts.ArrowFunction
-		| ts.FunctionDeclaration
-		| ts.FunctionExpression
-		| ts.MethodDeclaration
-		| ts.ParameterDeclaration
-		| ts.VariableDeclaration;
+	readonly owner: DeclarationOwner | TypeArgumentOwner;
 	readonly range: readonly [number, number];
 	/**
 	 * The removal is reported only when it is proven safe alone. It is
@@ -39,12 +33,56 @@ export interface Verification<C extends Candidate> {
 	readonly unverified: ReadonlyArray<{ readonly candidate: C; readonly reason: string }>;
 }
 
+/** A declaration whose type annotation may be removed. */
+type DeclarationOwner =
+	| ts.ArrowFunction
+	| ts.FunctionDeclaration
+	| ts.FunctionExpression
+	| ts.MethodDeclaration
+	| ts.ParameterDeclaration
+	| ts.VariableDeclaration;
+
+/** An expression whose type argument list may be removed. It has no name. */
+type TypeArgumentOwner =
+	| ts.CallExpression
+	| ts.JsxOpeningElement
+	| ts.JsxSelfClosingElement
+	| ts.NewExpression
+	| ts.TaggedTemplateExpression;
+
 /** The rejection reason prefix when the compiler fails during verification. */
 export const COMPILER_FAILURE = "The compiler could not verify this removal";
 
 /** The unverified reason when the parser loaded another TypeScript copy. */
 export const FOREIGN_COMPILER =
 	"The parser uses another copy of TypeScript, so removals cannot be verified";
+
+/**
+ * Describes what a checker observes at a node, so that two programs compare.
+ */
+type Describe = (
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	locate: (declaration: ts.Node) => string,
+) => string;
+
+/** A node whose description a removal must keep. */
+interface Observation {
+	readonly describe: Describe;
+	readonly node: ts.Node;
+	/** The description in the original program, made on first use. */
+	readonly original: () => string;
+}
+
+function isTypeArgumentOwner(owner: Candidate["owner"]): owner is TypeArgumentOwner {
+	return (
+		ts.isCallExpression(owner) ||
+		ts.isNewExpression(owner) ||
+		ts.isTaggedTemplateExpression(owner) ||
+		ts.isJsxOpeningElement(owner) ||
+		ts.isJsxSelfClosingElement(owner)
+	);
+}
 
 let sourceFileConstructor: unknown;
 
@@ -180,23 +218,40 @@ export function verifyAnnotations<C extends Candidate>(
 				const ownerReferences = references.get(candidate.owner) ?? [];
 				const aliasNodes = aliasNarrowedNodes(checker, candidate.owner, ownerReferences);
 				narrowed.set(candidate, aliasNodes);
-				return [
-					candidate,
-					[...observedNodes(candidate, ownerReferences, receiving), ...aliasNodes].map(
-						(node) => {
-							let type: string | undefined;
-							const omitThis = receiving?.arrows.has(node) === true;
-							return {
-								node,
-								omitThis,
-								original: (): string => {
-									type ??= print(checker, node, declarationKey, omitThis);
-									return type;
-								},
-							};
+				function observe(node: ts.Node, describe: Describe): Observation {
+					let type: string | undefined;
+					return {
+						describe,
+						node,
+						original: (): string => {
+							type ??= describe(checker, node, declarationKey);
+							return type;
 						},
-					),
-				];
+					};
+				}
+
+				const observations = [
+					...observedNodes(candidate, ownerReferences, receiving),
+					...aliasNodes,
+				].map((node) => {
+					const omitThis = receiving?.arrows.has(node) === true;
+					return observe(node, (current, target, locate) => {
+						return print(current, typeAt(current, target), locate, omitThis);
+					});
+				});
+				// The resolved signature shows the inferred type arguments, also
+				// those that no argument or result type shows.
+				if (isTypeArgumentOwner(candidate.owner)) {
+					observations.unshift(
+						observe(candidate.owner, (current, target, locate) => {
+							return printSignature(current, target, (type) => {
+								return print(current, type, locate);
+							});
+						}),
+					);
+				}
+
+				return [candidate, observations];
 			}),
 		);
 		function check(group: ReadonlyArray<C>): Map<C, string> {
@@ -238,12 +293,12 @@ export function verifyAnnotations<C extends Candidate>(
 			 */
 			function findObservedChange(candidate: C): string | undefined {
 				const observed = snapshots.get(candidate) ?? [];
-				for (const { node, omitThis, original } of observed) {
+				for (const { describe, node, original } of observed) {
 					const replacement = mapped(node);
 					const inferred =
 						replacement === undefined
 							? undefined
-							: print(fresh, replacement, originalKey, omitThis);
+							: describe(fresh, replacement, originalKey);
 					const type = original();
 					if (inferred !== type) {
 						return `Removing the annotation changes an observed type: ${type} -> ${inferred ?? "missing node"}`;
@@ -415,6 +470,20 @@ export function verifyAnnotations<C extends Candidate>(
 				}
 			}
 
+			/**
+			 * A type argument list changes its expression's type, which flows
+			 * to removals that the coupling analysis does not link with it.
+			 * While one has a problem, restore only type argument lists, and
+			 * check the other removals again without them.
+			 * @param candidate - A removal in the combined check.
+			 * @returns True when it is a type argument list with a problem.
+			 */
+			function typeArgumentProblem(candidate: C): boolean {
+				return problems.has(candidate) && isTypeArgumentOwner(candidate.owner);
+			}
+
+			const typeArgumentsChanged = accepted.some(typeArgumentProblem);
+
 			// The coupling analysis does not follow all data flow, so another
 			// removal can cause the problem of an uncoupled removal that
 			// requires proof. Check such a removal alone before it is
@@ -441,20 +510,24 @@ export function verifyAnnotations<C extends Candidate>(
 
 			accepted = accepted.filter((candidate) => !unchecked.includes(candidate));
 
-			// Other removals cannot cause the problem of an uncoupled
-			// candidate, so restore all of those at once. Among coupled
-			// candidates, restore one annotation first: restoring a context
-			// provider can make the other removals safe.
-			const independent = accepted.filter((candidate) => {
-				return problems.has(candidate) && !coupled.has(candidate);
-			});
-			const restored =
-				accepted.find((candidate) => {
-					return problems.has(candidate) && ts.isVariableDeclaration(candidate.owner);
-				}) ?? accepted.find((candidate) => problems.has(candidate));
-			let restoring = independent;
-			if (restored !== undefined && restoring.length === 0) {
-				restoring = [restored];
+			let restoring: Array<C>;
+			if (typeArgumentsChanged) {
+				restoring = accepted.filter(typeArgumentProblem);
+			} else {
+				// Other removals cannot cause the problem of an uncoupled
+				// candidate, so restore all of those at once. Among coupled
+				// candidates, restore one annotation first: restoring a
+				// context provider can make the other removals safe.
+				restoring = accepted.filter((candidate) => {
+					return problems.has(candidate) && !coupled.has(candidate);
+				});
+				const restored =
+					accepted.find((candidate) => {
+						return problems.has(candidate) && ts.isVariableDeclaration(candidate.owner);
+					}) ?? accepted.find((candidate) => problems.has(candidate));
+				if (restored !== undefined && restoring.length === 0) {
+					restoring = [restored];
+				}
 			}
 
 			for (const candidate of restoring) {
@@ -617,7 +690,8 @@ function requiredAssertionTargets(
 	}
 
 	for (const { owner } of candidates) {
-		if (owner.name === undefined) {
+		// A type argument list is not an assertion target.
+		if (isTypeArgumentOwner(owner) || owner.name === undefined) {
 			continue;
 		}
 
@@ -1042,6 +1116,12 @@ function isEmitterBoundary(node: ts.Node): boolean {
  * @returns False when the owner is inside a function body or static block.
  */
 function affectsDeclarationEmit(owner: Candidate["owner"]): boolean {
+	// Declaration emit never prints an expression. A declaration that infers
+	// its type from the expression keeps it, as the observed types show.
+	if (isTypeArgumentOwner(owner)) {
+		return false;
+	}
+
 	for (let node: ts.Node = owner; !ts.isSourceFile(node.parent); node = node.parent) {
 		if (isEmitterBoundary(node)) {
 			return false;
@@ -1064,9 +1144,14 @@ function referencesByOwner(
 	source: ts.SourceFile,
 	candidates: ReadonlyArray<Candidate>,
 ): Map<ts.Node, Array<ts.Identifier>> {
-	const owners = new Map<ts.Symbol, Candidate["owner"]>();
+	const owners = new Map<ts.Symbol, DeclarationOwner>();
 	const names = new Set<string>();
 	for (const { owner } of candidates) {
+		// A type argument list binds no name.
+		if (isTypeArgumentOwner(owner)) {
+			continue;
+		}
+
 		const binding =
 			owner.name ??
 			(ts.isVariableDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent)
@@ -1129,11 +1214,17 @@ function enclosingStatement(node: ts.Node): ts.Node {
 /**
  * The region a removal can influence. A parameter influences its function,
  * or, through generic inference, the call or element that receives it.
- * Object and array literals between them do not isolate the inference.
- * @param owner - The candidate's declaration.
+ * Object and array literals between them do not isolate the inference. A
+ * type argument list influences its expression's statement, as the
+ * expression's type can flow to an outer call or a declaration there.
+ * @param owner - The candidate's declaration or expression.
  * @returns The node whose types the removal may change.
  */
 function influenceScope(owner: Candidate["owner"]): ts.Node {
+	if (isTypeArgumentOwner(owner)) {
+		return enclosingStatement(owner);
+	}
+
 	if (
 		ts.isVariableDeclaration(owner) ||
 		ts.isFunctionDeclaration(owner) ||
@@ -1303,6 +1394,53 @@ function receivingCall(owner: Candidate["owner"]): ReceivingCall | undefined {
 	return { arrows, call };
 }
 
+/**
+ * The nodes that take a context from an expression's type arguments.
+ * @param owner - The call, `new` expression, tagged template, or element.
+ * @returns Its arguments, template, or attributes and children.
+ */
+function typeArgumentOperands(owner: TypeArgumentOwner): Array<ts.Node> {
+	if (ts.isCallExpression(owner) || ts.isNewExpression(owner)) {
+		return [...(owner.arguments ?? [])];
+	}
+
+	if (ts.isTaggedTemplateExpression(owner)) {
+		return [owner.template];
+	}
+
+	if (ts.isJsxOpeningElement(owner)) {
+		return [owner.attributes, ...owner.parent.children];
+	}
+
+	return [owner.attributes];
+}
+
+/**
+ * Describes the signature an expression resolves to, with each parameter
+ * and the return type.
+ * @param checker - The checker to resolve with.
+ * @param node - A call, `new` expression, tagged template, or element.
+ * @param printType - Prints a type of the signature.
+ * @returns The description.
+ */
+function printSignature(
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	printType: (type: ts.Type) => string,
+): string {
+	const signature = ts.isCallLikeExpression(node)
+		? checker.getResolvedSignature(node)
+		: undefined;
+	if (signature === undefined) {
+		return "no signature";
+	}
+
+	const parameters = signature.getParameters().map((parameter) => {
+		return `${parameter.name}: ${printType(checker.getTypeOfSymbolAtLocation(parameter, node))}`;
+	});
+	return `(${parameters.join(", ")}) => ${printType(signature.getReturnType())}`;
+}
+
 function observedNodes(
 	candidate: Candidate,
 	references: ReadonlyArray<ts.Identifier>,
@@ -1337,7 +1475,12 @@ function observedNodes(
 	// lose the return type as their context, like an initializer loses the
 	// variable's annotation.
 	const roots: Array<ts.Node> = [];
-	if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
+	if (isTypeArgumentOwner(owner)) {
+		// Without the list, the operands lose the type arguments as their
+		// context, as in the parameter of a `map` callback.
+		roots.push(...typeArgumentOperands(owner));
+		nodes.push(...roots);
+	} else if (ts.isVariableDeclaration(owner) || ts.isParameter(owner)) {
 		if (owner.initializer !== undefined) {
 			roots.push(owner.initializer);
 		}
@@ -1623,6 +1766,20 @@ function declarations(
 }
 
 /**
+ * The type of a node, or of the name a declaration binds.
+ * @param checker - The checker to read with.
+ * @param node - The observed node.
+ * @returns The node's type.
+ */
+function typeAt(checker: ts.TypeChecker, node: ts.Node): ts.Type {
+	return checker.getTypeAtLocation(
+		ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
+			? node.name
+			: node,
+	);
+}
+
+/**
  * Normalize property ordering, preserving every overload and intersection.
  * Names are qualified with their declarations, so two types that print the
  * same, such as a shadowed `Options`, compare as different.
@@ -1630,18 +1787,13 @@ function declarations(
  */
 function createTypePrinter(): (
 	checker: ts.TypeChecker,
-	node: ts.Node,
+	type: ts.Type,
 	locate: (declaration: ts.Node) => string,
 	omitThis?: boolean,
 ) => string {
 	const cache = new Map<string, string>();
 	const printer = ts.createPrinter({ removeComments: true });
-	return (checker, node, locate, omitThis = false) => {
-		const target =
-			ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
-				? node.name
-				: node;
-		const type = checker.getTypeAtLocation(target);
+	return (checker, type, locate, omitThis = false) => {
 		const text = checker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation);
 		const suffix = ` [${declarations(checker, type, locate, omitThis)}]`;
 		const key = omitThis ? `omit-this ${text}` : text;
